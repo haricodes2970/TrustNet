@@ -1,0 +1,133 @@
+{
+  "info": {
+    "name": "TrustNet API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000/api/v1" },
+    { "key": "accessToken", "value": "" },
+    { "key": "userId", "value": "" },
+    { "key": "startupId", "value": "" },
+    { "key": "communityId", "value": "" },
+    { "key": "postId", "value": "" },
+    { "key": "commentId", "value": "" },
+    { "key": "likeId", "value": "" },
+    { "key": "collaborationId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Auth - Register",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/auth/register",
+        "body": { "mode": "raw", "raw": "{\n  \"fullName\": \"Asha Rao\",\n  \"username\": \"asharao\",\n  \"email\": \"asha@example.com\",\n  \"password\": \"Password123\",\n  \"role\": \"founder\"\n}" }
+      }
+    },
+    {
+      "name": "Auth - Login",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/auth/login",
+        "body": { "mode": "raw", "raw": "{\n  \"email\": \"asha@example.com\",\n  \"password\": \"Password123\",\n  \"rememberMe\": true\n}" }
+      }
+    },
+    {
+      "name": "Auth - Me",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+        "url": "{{baseUrl}}/auth/me"
+      }
+    },
+    {
+      "name": "Users - List",
+      "request": { "method": "GET", "url": "{{baseUrl}}/users?page=1&limit=10" }
+    },
+    {
+      "name": "Startups - Create",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": "{{baseUrl}}/startups",
+        "body": { "mode": "raw", "raw": "{\n  \"name\": \"TrustNet Labs\",\n  \"slug\": \"trustnet-labs\",\n  \"description\": \"A collaboration platform for verified startup founders and trusted builders.\",\n  \"category\": \"SaaS\",\n  \"stage\": \"idea\"\n}" }
+      }
+    },
+    {
+      "name": "Communities - Create",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": "{{baseUrl}}/communities",
+        "body": { "mode": "raw", "raw": "{\n  \"name\": \"Founder Circle\",\n  \"slug\": \"founder-circle\",\n  \"description\": \"A private group for startup founders.\",\n  \"category\": \"startup\"\n}" }
+      }
+    },
+    {
+      "name": "Posts - Create",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": "{{baseUrl}}/posts",
+        "body": { "mode": "raw", "raw": "{\n  \"community\": \"{{communityId}}\",\n  \"content\": \"Looking for feedback on our launch plan.\",\n  \"postType\": \"discussion\"\n}" }
+      }
+    },
+    {
+      "name": "Comments - Create",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": "{{baseUrl}}/comments",
+        "body": { "mode": "raw", "raw": "{\n  \"post\": \"{{postId}}\",\n  \"content\": \"This looks promising.\"\n}" }
+      }
+    },
+    {
+      "name": "Likes - Create",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": "{{baseUrl}}/likes",
+        "body": { "mode": "raw", "raw": "{\n  \"targetType\": \"Post\",\n  \"targetId\": \"{{postId}}\"\n}" }
+      }
+    },
+    {
+      "name": "Collaborations - Send Request",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": "{{baseUrl}}/collaborations/request",
+        "body": { "mode": "raw", "raw": "{\n  \"recipient\": \"{{userId}}\",\n  \"message\": \"I would like to collaborate on this idea.\",\n  \"type\": \"partnership\"\n}" }
+      }
+    },
+    {
+      "name": "Auth - Refresh",
+      "request": { "method": "POST", "url": "{{baseUrl}}/auth/refresh" }
+    },
+    {
+      "name": "Auth - Logout",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+        "url": "{{baseUrl}}/auth/logout"
+      }
+    }
+  ]
+}
