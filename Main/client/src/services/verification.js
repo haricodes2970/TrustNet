@@ -8,3 +8,22 @@ export async function resendVerification() {
   const { data } = await api.post("/v1/auth/resend-verification");
   return data;
 }
+
+export async function getVerification() {
+  const { data } = await api.get("/v1/verification");
+  return data?.data ?? data;
+}
+
+export async function uploadVerificationDocument(type, file) {
+  const form = new FormData();
+  form.append("document", file);
+  const { data } = await api.post(`/v1/verification/documents/${type}`, form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data?.data ?? data;
+}
+
+export async function submitVerification() {
+  const { data } = await api.post("/v1/verification/submit");
+  return data?.data ?? data;
+}

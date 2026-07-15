@@ -19,7 +19,7 @@ async function resolveUser(email) {
 
 function mapProfileInput(body = {}) {
   const update = {};
-  const fields = ["fullName", "username", "email", "designation", "location", "bio", "linkedin"];
+  const fields = ["fullName", "username", "email", "designation", "location", "bio", "linkedin", "role", "onboardingCompleted"];
 
   for (const key of fields) {
     if (body[key] !== undefined) update[key] = body[key];

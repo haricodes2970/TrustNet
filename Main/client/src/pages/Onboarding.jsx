@@ -1,13 +1,49 @@
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { ArrowLeft, ArrowRight, Briefcase, Building2, Check, CheckCircle2, FileText, Globe, IdCard, Linkedin, Rocket, TrendingUp, UploadCloud, } from "lucide-react";
 import { cn } from "../lib/utils";
 import { Logo } from "../components/common/logo";
+import api from "../services/api";
+import { useAuth } from "../hooks/useAuth";
 const steps = ["Create Account", "Verify Email", "Choose Role", "Profile Setup", "Verification Upload", "Finish"];
 export default function OnboardingPage() {
     const navigate = useNavigate();
+    const { setUser } = useAuth();
     const [step, setStep] = useState(2); // Account + email already done
     const [role, setRole] = useState(null);
+    const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState("");
+
+    const handleRoleContinue = async () => {
+        if (!role) return;
+        setSaving(true);
+        setSaveError("");
+        try {
+            const res = await api.put("/v1/profile", { role });
+            setUser((u) => (u ? { ...u, role: res.data?.data?.role ?? role } : u));
+            setStep(3);
+        } catch (err) {
+            setSaveError(err?.response?.data?.message || "Couldn't save your role. Please try again.");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleFinish = async () => {
+        setSaving(true);
+        setSaveError("");
+        try {
+            await api.put("/v1/profile", { onboardingCompleted: true });
+            setUser((u) => (u ? { ...u, onboardingCompleted: true } : u));
+        } catch (err) {
+            // Even if this last save fails, don't trap the user on this screen —
+            // they've already picked a role, which is the part that matters most.
+        } finally {
+            setSaving(false);
+            navigate("/dashboard");
+        }
+    };
+
     return (<div className="min-h-screen bg-background">
       <header className="border-b border-border bg-card">
         <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-4">
@@ -40,10 +76,11 @@ export default function OnboardingPage() {
       </div>
 
       <main className="mx-auto max-w-4xl px-6 py-10">
-        {step === 2 && <RoleStep role={role} setRole={setRole} onNext={() => setStep(3)}/>}
+        {saveError && (<p className="mb-4 rounded-lg bg-destructive/10 px-4 py-2 text-sm font-medium text-destructive">{saveError}</p>)}
+        {step === 2 && <RoleStep role={role} setRole={setRole} onNext={handleRoleContinue} saving={saving}/>}
         {step === 3 && <ProfileStep role={role ?? "entrepreneur"} onBack={() => setStep(2)} onNext={() => setStep(4)}/>}
         {step === 4 && <UploadStep onBack={() => setStep(3)} onNext={() => setStep(5)}/>}
-        {step === 5 && <FinishStep onDone={() => navigate("/dashboard")}/>}
+        {step === 5 && <FinishStep onDone={handleFinish} saving={saving}/>}
       </main>
     </div>);
 }
@@ -53,7 +90,7 @@ const roles = [
     { id: "investor", icon: TrendingUp, title: "Investor", text: "Discover verified, high-quality startups matching your thesis." },
     { id: "client", icon: Briefcase, title: "Client", text: "Find trusted startups and vendors to solve your business needs." },
 ];
-function RoleStep({ role, setRole, onNext }) {
+function RoleStep({ role, setRole, onNext, saving }) {
     return (<div className="animate-fade-in">
       <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">How will you use TrustNet?</h1>
       <p className="mt-2 text-muted-foreground">Choose your role — this personalizes your entire experience.</p>
@@ -70,8 +107,8 @@ function RoleStep({ role, setRole, onNext }) {
           </button>))}
       </div>
       <div className="mt-8 flex justify-end">
-        <button onClick={onNext} disabled={!role} className="inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-40">
-          Continue <ArrowRight className="h-4 w-4"/>
+        <button onClick={onNext} disabled={!role || saving} className="inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-40">
+          {saving ? "Saving…" : "Continue"} <ArrowRight className="h-4 w-4"/>
         </button>
       </div>
     </div>);
@@ -173,8 +210,12 @@ const docs = [
 ];
 function UploadStep({ onBack, onNext }) {
     const [uploaded, setUploaded] = useState({});
+    const [fileNames, setFileNames] = useState({});
     const [notRegistered, setNotRegistered] = useState(false);
-    const simulateUpload = (id) => {
+    const fileInputs = useRef({});
+
+    const simulateUpload = (id, file) => {
+        setFileNames((n) => ({ ...n, [id]: file.name }));
         setUploaded((u) => ({ ...u, [id]: 0 }));
         let p = 0;
         const timer = setInterval(() => {
@@ -184,6 +225,13 @@ function UploadStep({ onBack, onNext }) {
                 clearInterval(timer);
         }, 180);
     };
+
+    const handleFileChosen = (id, e) => {
+        const file = e.target.files?.[0];
+        e.target.value = ""; // allow re-selecting the same file later
+        if (file) simulateUpload(id, file);
+    };
+
     return (<div className="animate-fade-in">
       <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Verify your identity</h1>
       <p className="mt-2 text-muted-foreground">Upload documents so we can verify you. This keeps TrustNet trusted for everyone.</p>
@@ -203,12 +251,19 @@ function UploadStep({ onBack, onNext }) {
                 </div>
                 {progress === 100 && <CheckCircle2 className="h-5 w-5 shrink-0 text-success"/>}
               </div>
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                ref={(el) => { fileInputs.current[d.id] = el; }}
+                onChange={(e) => handleFileChosen(d.id, e)}
+                className="hidden"
+              />
               {progress !== undefined && progress < 100 ? (<div className="mt-4">
                   <div className="h-2 overflow-hidden rounded-full bg-muted">
                     <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${progress}%` }}/>
                   </div>
-                  <p className="mt-1.5 text-xs text-muted-foreground">Uploading… {progress}%</p>
-                </div>) : progress === 100 ? (<p className="mt-4 rounded-lg bg-brand-soft px-3 py-2 text-xs font-medium text-success">document.pdf uploaded</p>) : (<button onClick={() => !disabled && simulateUpload(d.id)} disabled={disabled} className="mt-4 flex w-full flex-col items-center gap-1.5 rounded-xl border-2 border-dashed border-border py-5 text-sm text-muted-foreground transition-colors hover:border-brand hover:text-primary disabled:cursor-not-allowed">
+                  <p className="mt-1.5 text-xs text-muted-foreground">Uploading {fileNames[d.id]}… {progress}%</p>
+                </div>) : progress === 100 ? (<p className="mt-4 rounded-lg bg-brand-soft px-3 py-2 text-xs font-medium text-success">{fileNames[d.id] || "document"} uploaded</p>) : (<button type="button" onClick={() => !disabled && fileInputs.current[d.id]?.click()} disabled={disabled} className="mt-4 flex w-full flex-col items-center gap-1.5 rounded-xl border-2 border-dashed border-border py-5 text-sm text-muted-foreground transition-colors hover:border-brand hover:text-primary disabled:cursor-not-allowed">
                   <UploadCloud className="h-5 w-5"/>
                   Drag &amp; drop or click to upload
                 </button>)}
@@ -232,7 +287,7 @@ function UploadStep({ onBack, onNext }) {
     </div>);
 }
 /* ---------- Step 6: Finish ---------- */
-function FinishStep({ onDone }) {
+function FinishStep({ onDone, saving }) {
     return (<div className="animate-scale-in mx-auto max-w-lg rounded-2xl border border-border bg-card p-10 text-center shadow-elevated">
       <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-brand-soft">
         <CheckCircle2 className="animate-scale-in h-11 w-11 text-success"/>
@@ -251,8 +306,8 @@ function FinishStep({ onDone }) {
       <p className="mt-5 text-sm text-muted-foreground">
         You can explore TrustNet while we review your documents. Some features unlock after approval.
       </p>
-      <button onClick={onDone} className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover">
-        Go To Dashboard <ArrowRight className="h-4 w-4"/>
+      <button onClick={onDone} disabled={saving} className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60">
+        {saving ? "Finishing…" : "Go To Dashboard"} <ArrowRight className="h-4 w-4"/>
       </button>
     </div>);
 }

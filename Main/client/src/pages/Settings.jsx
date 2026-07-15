@@ -1,8 +1,19 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Bell, Laptop, Loader2, Lock, LogOut, Monitor, Palette, Shield, Smartphone, Trash2, User, Users } from "lucide-react";
 import { cn } from "../lib/utils";
 import { useTheme } from "../hooks/useTheme";
 import { Switch } from "../components/ui/switch";
+import { useAuth } from "../hooks/useAuth";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../components/ui/alert-dialog";
 import {
   getSettings,
   updateProfileSettings,
@@ -11,6 +22,12 @@ import {
   updateAppearance,
   getSessions,
   deleteSession,
+  deleteAccount,
+  changePassword,
+  getTwoFactorStatus,
+  setupTwoFactor,
+  enableTwoFactor,
+  disableTwoFactor,
 } from "../services/settings";
 
 const sections = [
@@ -35,6 +52,8 @@ const EMPTY_PROFILE = {
 };
 
 export default function SettingsPage() {
+  const navigate = useNavigate();
+  const { logout } = useAuth();
   const [section, setSection] = useState("profile");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -60,11 +79,24 @@ export default function SettingsPage() {
   const [savingPrefs, setSavingPrefs] = useState(false);
   const [savingPrivacy, setSavingPrivacy] = useState(false);
   const [savingAppearance, setSavingAppearance] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
+  const [twoFactor, setTwoFactor] = useState({ enabled: false, setupInProgress: false });
+  const [twoFactorSetup, setTwoFactorSetup] = useState(null);
+  const [twoFactorMode, setTwoFactorMode] = useState(null);
+  const [twoFactorCode, setTwoFactorCode] = useState("");
+  const [twoFactorPassword, setTwoFactorPassword] = useState("");
+  const [twoFactorLoading, setTwoFactorLoading] = useState(false);
   const [message, setMessage] = useState(null);
 
   const [sessions, setSessions] = useState([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [revokingId, setRevokingId] = useState(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const [deleteSuccess, setDeleteSuccess] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -120,6 +152,15 @@ export default function SettingsPage() {
     return () => {
       active = false;
     };
+  }, [section]);
+
+  useEffect(() => {
+    if (section !== "security") return;
+    let active = true;
+    getTwoFactorStatus()
+      .then((data) => active && setTwoFactor(data))
+      .catch((err) => active && setMessage({ type: "error", text: err?.response?.data?.message || "Failed to load two-factor settings." }));
+    return () => { active = false; };
   }, [section]);
 
   const handleProfileChange = (e) => {
@@ -216,6 +257,118 @@ export default function SettingsPage() {
       });
     } finally {
       setRevokingId(null);
+    }
+  };
+
+  const handlePasswordChange = (event) => {
+    const { name, value } = event.target;
+    setPasswordForm((form) => ({ ...form, [name]: value }));
+    setMessage(null);
+  };
+
+  const handlePasswordSave = async (event) => {
+    event.preventDefault();
+    const { currentPassword, newPassword, confirmPassword } = passwordForm;
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setMessage({ type: "error", text: "All password fields are required." });
+      return;
+    }
+    if (newPassword.length < 8 || !/[a-z]/.test(newPassword) || !/[A-Z]/.test(newPassword) || !/\d/.test(newPassword)) {
+      setMessage({ type: "error", text: "New password must be at least 8 characters and include uppercase, lowercase, and a number." });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setMessage({ type: "error", text: "New password and confirmation do not match." });
+      return;
+    }
+
+    setSavingPassword(true);
+    setMessage(null);
+    try {
+      await changePassword(passwordForm);
+      setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+      setMessage({ type: "success", text: "Password changed successfully." });
+    } catch (err) {
+      setMessage({ type: "error", text: err?.response?.data?.message || "Unable to change password. Please try again." });
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
+  const beginTwoFactorSetup = async () => {
+    setTwoFactorLoading(true);
+    setMessage(null);
+    try {
+      const data = await setupTwoFactor();
+      setTwoFactorSetup(data);
+      setTwoFactorMode("setup");
+      setTwoFactorCode("");
+    } catch (err) {
+      setMessage({ type: "error", text: err?.response?.data?.message || "Unable to start two-factor setup." });
+    } finally {
+      setTwoFactorLoading(false);
+    }
+  };
+
+  const confirmTwoFactorSetup = async () => {
+    if (!/^\d{6}$/.test(twoFactorCode)) {
+      setMessage({ type: "error", text: "Enter the 6-digit code from your authenticator app." });
+      return;
+    }
+    setTwoFactorLoading(true);
+    setMessage(null);
+    try {
+      await enableTwoFactor(twoFactorCode);
+      setTwoFactor({ enabled: true, setupInProgress: false });
+      setTwoFactorSetup(null);
+      setTwoFactorMode(null);
+      setTwoFactorCode("");
+      setMessage({ type: "success", text: "Two-factor authentication enabled." });
+    } catch (err) {
+      setMessage({ type: "error", text: err?.response?.data?.message || "Unable to enable two-factor authentication." });
+    } finally {
+      setTwoFactorLoading(false);
+    }
+  };
+
+  const confirmTwoFactorDisable = async () => {
+    if (!twoFactorPassword || !/^\d{6}$/.test(twoFactorCode)) {
+      setMessage({ type: "error", text: "Enter your current password and a valid 6-digit authentication code." });
+      return;
+    }
+    setTwoFactorLoading(true);
+    setMessage(null);
+    try {
+      await disableTwoFactor(twoFactorPassword, twoFactorCode);
+      setTwoFactor({ enabled: false, setupInProgress: false });
+      setTwoFactorMode(null);
+      setTwoFactorCode("");
+      setTwoFactorPassword("");
+      setMessage({ type: "success", text: "Two-factor authentication disabled." });
+    } catch (err) {
+      setMessage({ type: "error", text: err?.response?.data?.message || "Unable to disable two-factor authentication." });
+    } finally {
+      setTwoFactorLoading(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!currentPassword) {
+      setDeleteError("Enter your current password to confirm account deletion.");
+      return;
+    }
+
+    setDeletingAccount(true);
+    setDeleteError("");
+    try {
+      await deleteAccount(currentPassword);
+      setDeleteSuccess("Account deleted. Redirecting to the home page…");
+      await logout();
+      navigate("/", { replace: true });
+    } catch (err) {
+      setDeleteError(err?.response?.data?.message || "Unable to delete your account. Please try again.");
+    } finally {
+      setDeletingAccount(false);
     }
   };
 
@@ -332,13 +485,15 @@ export default function SettingsPage() {
           {section === "security" && (
             <>
               <Card title="Change Password" subtitle="Use a strong, unique password.">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <SettingsInput label="Current Password" type="password" />
-                  <div className="hidden sm:block" />
-                  <SettingsInput label="New Password" type="password" />
-                  <SettingsInput label="Confirm New Password" type="password" />
-                </div>
-                <SaveButton label="Update Password" />
+                <form onSubmit={handlePasswordSave} noValidate>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <SettingsInput label="Current Password" name="currentPassword" type="password" value={passwordForm.currentPassword} onChange={handlePasswordChange} />
+                    <div className="hidden sm:block" />
+                    <SettingsInput label="New Password" name="newPassword" type="password" value={passwordForm.newPassword} onChange={handlePasswordChange} />
+                    <SettingsInput label="Confirm New Password" name="confirmPassword" type="password" value={passwordForm.confirmPassword} onChange={handlePasswordChange} />
+                  </div>
+                  <SaveButton label="Update Password" saving={savingPassword} />
+                </form>
               </Card>
               <Card
                 title="Two-Factor Authentication"
@@ -347,9 +502,28 @@ export default function SettingsPage() {
                 <ToggleRow
                   label="Enable 2FA"
                   description="Require a code from your authenticator app when signing in."
-                  checked={false}
-                  onCheckedChange={() => {}}
+                  checked={twoFactor.enabled}
+                  onCheckedChange={(checked) => {
+                    if (checked) beginTwoFactorSetup();
+                    else { setTwoFactorMode("disable"); setTwoFactorCode(""); setTwoFactorPassword(""); }
+                  }}
                 />
+                {twoFactorMode === "setup" && twoFactorSetup && (
+                  <div className="mt-3 space-y-3 rounded-xl border border-border p-4">
+                    <p className="text-sm text-muted-foreground">Scan this code with Google Authenticator, Microsoft Authenticator, or Authy, then enter the generated code.</p>
+                    <img src={twoFactorSetup.qrCodeDataUrl} alt="Two-factor authentication QR code" className="h-40 w-40 rounded-lg bg-white p-2" />
+                    <p className="break-all text-xs text-muted-foreground">Manual key: {twoFactorSetup.manualEntryKey}</p>
+                    <SettingsInput label="Authentication Code" name="twoFactorCode" value={twoFactorCode} onChange={(event) => setTwoFactorCode(event.target.value.replace(/\D/g, "").slice(0, 6))} />
+                    <SaveButton label="Confirm and Enable 2FA" saving={twoFactorLoading} onClick={confirmTwoFactorSetup} />
+                  </div>
+                )}
+                {twoFactorMode === "disable" && (
+                  <div className="mt-3 grid gap-4 rounded-xl border border-border p-4 sm:grid-cols-2">
+                    <SettingsInput label="Current Password" name="twoFactorPassword" type="password" value={twoFactorPassword} onChange={(event) => setTwoFactorPassword(event.target.value)} />
+                    <SettingsInput label="Authentication Code" name="twoFactorDisableCode" value={twoFactorCode} onChange={(event) => setTwoFactorCode(event.target.value.replace(/\D/g, "").slice(0, 6))} />
+                    <div className="sm:col-span-2"><SaveButton label="Disable 2FA" saving={twoFactorLoading} onClick={confirmTwoFactorDisable} /></div>
+                  </div>
+                )}
               </Card>
               <Card title="Login History" subtitle="Recent sign-ins to your account.">
                 <ul className="space-y-2 text-sm">
@@ -560,13 +734,42 @@ export default function SettingsPage() {
                 This action is irreversible. Your profile, connections, messages, and verification
                 records will be permanently deleted.
               </p>
-              <button className="mt-4 inline-flex items-center gap-2 rounded-xl bg-destructive px-4 py-2 text-sm font-semibold text-destructive-foreground hover:opacity-90">
+              <button onClick={() => { setCurrentPassword(""); setDeleteError(""); setDeleteSuccess(""); setDeleteDialogOpen(true); }} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-destructive px-4 py-2 text-sm font-semibold text-destructive-foreground hover:opacity-90">
                 <Trash2 className="h-4 w-4" /> Delete My Account
               </button>
             </Card>
           )}
         </div>
       </div>
+      <AlertDialog open={deleteDialogOpen} onOpenChange={(open) => !deletingAccount && setDeleteDialogOpen(open)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete your account?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action is permanent. Enter your current password to confirm deletion.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-foreground" htmlFor="delete-account-password">Current password</label>
+            <input
+              id="delete-account-password"
+              type="password"
+              value={currentPassword}
+              onChange={(event) => setCurrentPassword(event.target.value)}
+              disabled={deletingAccount}
+              className="w-full rounded-xl border border-border bg-input px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+            />
+            {deleteError && <p className="mt-2 text-xs font-medium text-destructive">{deleteError}</p>}
+            {deleteSuccess && <p className="mt-2 text-xs font-medium text-success">{deleteSuccess}</p>}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingAccount}>Cancel</AlertDialogCancel>
+            <button type="button" onClick={handleDeleteAccount} disabled={deletingAccount} className="inline-flex items-center justify-center rounded-md bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground hover:opacity-90 disabled:opacity-60">
+              {deletingAccount ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting…</> : "Delete account"}
+            </button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

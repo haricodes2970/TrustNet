@@ -7,6 +7,27 @@ import { Field } from "./Register";
 export default function ForgotPasswordPage() {
   const [sent, setSent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    const email = String(new FormData(event.currentTarget).get("email") || "").trim();
+    if (!/^\S+@\S+\.\S+$/.test(email)) {
+      setError("Enter a valid email address.");
+      return;
+    }
+
+    setSubmitting(true);
+    setError("");
+    try {
+      await api.post("/v1/auth/forgot-password", { email });
+      setSent(true);
+    } catch (err) {
+      setError(err?.response?.data?.message || "Unable to send a reset link. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <AuthShell
@@ -20,37 +41,18 @@ export default function ForgotPasswordPage() {
     >
       {sent ? (
         <div className="rounded-xl bg-brand-soft p-4 text-sm font-medium text-success">
-          Reset link sent! Check your inbox.{" "}
-          <Link to="/reset-password" className="underline">
-            (Demo: open reset page)
-          </Link>
+          Reset link sent! Check your inbox.
         </div>
       ) : (
-        <form
-          onSubmit={async (e) => {
-            e.preventDefault();
-            const fd = new FormData(e.currentTarget);
-            setSubmitting(true);
-            try {
-              await api.post("/v1/auth/forgot-password", {
-                email: String(fd.get("email")),
-              });
-            } catch (err) {
-              // Endpoint always reports success; surface nothing disruptive.
-            } finally {
-              setSubmitting(false);
-              setSent(true);
-            }
-          }}
-          className="space-y-4"
-        >
+        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+          {error && <p className="text-xs font-medium text-destructive">{error}</p>}
           <Field label="Email" name="email" type="email" placeholder="sarah@company.com" />
           <button
             type="submit"
             disabled={submitting}
             className="w-full rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover disabled:opacity-60"
           >
-            Send Reset Link
+            {submitting ? "Sending…" : "Send Reset Link"}
           </button>
         </form>
       )}

@@ -10,6 +10,8 @@ const profileUpdate = Joi.object({
   linkedin: Joi.string().uri().allow(""),
   bio: Joi.string().trim().max(500).allow(""),
   avatar: Joi.string().uri().allow(""),
+  role: Joi.string().valid("founder", "entrepreneur", "investor", "client", "mentor", "builder", "admin"),
+  onboardingCompleted: Joi.boolean(),
 }).unknown(true);
 
 module.exports = { profileUpdate };

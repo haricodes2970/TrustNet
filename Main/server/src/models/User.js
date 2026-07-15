@@ -23,6 +23,26 @@ const userSchema = new mongoose.Schema(
       type: String,
       select: false,
     },
+    resetPasswordToken: {
+      type: String,
+      select: false,
+    },
+    resetPasswordExpires: {
+      type: Date,
+      select: false,
+    },
+    twoFactorEnabled: {
+      type: Boolean,
+      default: false,
+    },
+    twoFactorSecret: {
+      type: String,
+      select: false,
+    },
+    twoFactorPendingSecret: {
+      type: String,
+      select: false,
+    },
     googleId: {
       type: String,
       unique: true,
@@ -74,8 +94,12 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ["founder", "investor", "mentor", "builder", "admin"],
+      enum: ["founder", "entrepreneur", "investor", "client", "mentor", "builder", "admin"],
       default: "builder",
+    },
+    onboardingCompleted: {
+      type: Boolean,
+      default: false,
     },
     linkedin: {
       type: String,
@@ -91,6 +115,53 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    verificationStatus: {
+      type: String,
+      enum: ["not_submitted", "draft", "pending", "approved", "rejected"],
+      default: "draft",
+    },
+    verificationSubmittedAt: {
+      type: Date,
+    },
+    verificationReviewedAt: {
+      type: Date,
+    },
+    verificationDocuments: [
+      {
+        type: {
+          type: String,
+          enum: ["government_id", "company_registration", "business_website", "linkedin", "startup_registration"],
+          required: true,
+        },
+        name: {
+          type: String,
+          required: true,
+          trim: true,
+        },
+        url: {
+          type: String,
+          required: true,
+        },
+        publicId: {
+          type: String,
+          required: true,
+        },
+        status: {
+          type: String,
+          enum: ["draft", "pending", "approved", "rejected"],
+          default: "draft",
+        },
+        rejectionReason: {
+          type: String,
+          trim: true,
+          maxlength: 500,
+        },
+        uploadedAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
     isActive: {
       type: Boolean,
       default: true,

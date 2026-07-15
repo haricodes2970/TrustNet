@@ -2,10 +2,16 @@ const express = require('express');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const speakeasy = require('speakeasy');
+const QRCode = require('qrcode');
 const User = require('../models/User');
 const jwtConfig = require('../config/jwt');
 const oauthConfig = require('../config/oauth');
 const env = require('../config/env');
+const { sendPasswordResetEmail } = require('../services/email.service');
+const { authenticate } = require('../middlewares/auth');
+const cloudinary = require('../services/cloudinary.service');
+const { encryptTwoFactorSecret, decryptTwoFactorSecret } = require('../services/twoFactor.service');
 
 const router = express.Router();
 
@@ -28,6 +34,8 @@ function toUserResponse(user) {
     websiteUrl: obj.websiteUrl || '',
     role: obj.role,
     isVerified: obj.isVerified || false,
+    verificationStatus: obj.verificationStatus || 'draft',
+    onboardingCompleted: obj.onboardingCompleted || false,
     interests: obj.interests || [],
     skills: obj.skills || [],
     followersCount: obj.followersCount || 0,
@@ -49,6 +57,23 @@ function signRefreshToken(user) {
     jwtConfig.refreshSecret,
     { expiresIn: jwtConfig.refreshExpiresIn }
   );
+}
+
+function signTwoFactorChallenge(user) {
+  return jwt.sign(
+    { sub: user._id.toString(), email: user.email, type: 'two_factor_login' },
+    jwtConfig.accessSecret,
+    { expiresIn: '5m' }
+  );
+}
+
+function isValidTotp(secret, token) {
+  return /^\d{6}$/.test(String(token || '')) && speakeasy.totp.verify({
+    secret,
+    encoding: 'base32',
+    token: String(token),
+    window: 1,
+  });
 }
 
 function setRefreshCookie(res, token) {
@@ -78,6 +103,15 @@ function sendAuthResponse(res, user, statusCode = 200) {
       user: toUserResponse(user),
     },
   });
+}
+
+function redirectAfterOAuth(res, user) {
+  if (user.twoFactorEnabled) {
+    return res.redirect(`${env.CLIENT_URL}/login?twoFactorToken=${encodeURIComponent(signTwoFactorChallenge(user))}`);
+  }
+  const accessToken = signAccessToken(user);
+  setRefreshCookie(res, signRefreshToken(user));
+  return res.redirect(`${env.CLIENT_URL}/oauth/callback?token=${accessToken}`);
 }
 
 async function generateUniqueUsername(email) {
@@ -158,6 +192,40 @@ router.post('/login', async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Invalid email or password.' });
     }
 
+    if (user.twoFactorEnabled) {
+      return res.json({
+        success: true,
+        data: { requiresTwoFactor: true, twoFactorToken: signTwoFactorChallenge(user) },
+      });
+    }
+
+    return sendAuthResponse(res, user);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+router.post('/login/2fa', async (req, res, next) => {
+  try {
+    const challenge = String(req.body?.twoFactorToken || '');
+    const token = String(req.body?.token || '');
+    let payload;
+    try {
+      payload = jwt.verify(challenge, jwtConfig.accessSecret);
+    } catch (error) {
+      return res.status(401).json({ success: false, message: 'Your two-factor login session is invalid or has expired.' });
+    }
+    if (payload?.type !== 'two_factor_login' || !payload.sub) {
+      return res.status(401).json({ success: false, message: 'Your two-factor login session is invalid or has expired.' });
+    }
+
+    const user = await User.findById(payload.sub).select('+twoFactorSecret');
+    if (!user || !user.twoFactorEnabled || !user.twoFactorSecret) {
+      return res.status(401).json({ success: false, message: 'Two-factor authentication is not available for this account.' });
+    }
+    if (!isValidTotp(decryptTwoFactorSecret(user.twoFactorSecret), token)) {
+      return res.status(401).json({ success: false, message: 'Invalid or expired authentication code.' });
+    }
     return sendAuthResponse(res, user);
   } catch (err) {
     return next(err);
@@ -249,9 +317,7 @@ router.get('/google/callback', async (req, res) => {
       await user.save();
     }
 
-    const accessToken = signAccessToken(user);
-    setRefreshCookie(res, signRefreshToken(user));
-    return res.redirect(`${env.CLIENT_URL}/oauth/callback?token=${accessToken}`);
+    return redirectAfterOAuth(res, user);
   } catch (err) {
     console.error('[DBG][google oauth] callback failed:', err.message);
     return res.redirect(`${env.CLIENT_URL}/login?oauthError=google`);
@@ -333,9 +399,7 @@ router.get('/linkedin/callback', async (req, res) => {
       await user.save();
     }
 
-    const accessToken = signAccessToken(user);
-    setRefreshCookie(res, signRefreshToken(user));
-    return res.redirect(`${env.CLIENT_URL}/oauth/callback?token=${accessToken}`);
+    return redirectAfterOAuth(res, user);
   } catch (err) {
     return res.redirect(`${env.CLIENT_URL}/login?oauthError=linkedin`);
   }
@@ -369,6 +433,113 @@ router.post('/refresh', async (req, res) => {
 router.post('/logout', (req, res) => {
   clearRefreshCookie(res);
   return res.json({ success: true, message: 'Logged out successfully.' });
+});
+
+async function deleteVerificationAssets(documents = []) {
+  for (const document of documents) {
+    if (!document.publicId) continue;
+    await Promise.all([
+      cloudinary.uploader.destroy(document.publicId, { resource_type: 'image', invalidate: true }),
+      cloudinary.uploader.destroy(document.publicId, { resource_type: 'raw', invalidate: true }),
+    ]);
+  }
+}
+
+router.delete('/account', authenticate, async (req, res, next) => {
+  try {
+    const currentPassword = String(req.body?.currentPassword || '');
+    if (!currentPassword) {
+      return res.status(400).json({ success: false, message: 'Current password is required.' });
+    }
+
+    const user = await User.findById(req.user.id).select('+password');
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Your account is no longer available.' });
+    }
+    if (!user.password || !(await bcrypt.compare(currentPassword, user.password))) {
+      return res.status(400).json({ success: false, message: 'Current password is incorrect.' });
+    }
+
+    await deleteVerificationAssets(user.verificationDocuments);
+    await User.findByIdAndDelete(user._id);
+    clearRefreshCookie(res);
+    return res.json({ success: true, message: 'Account deleted successfully.' });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+router.get('/2fa', authenticate, async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.id).select('+twoFactorPendingSecret');
+    if (!user) return res.status(401).json({ success: false, message: 'Your account is no longer available.' });
+    return res.json({ success: true, data: { enabled: user.twoFactorEnabled, setupInProgress: Boolean(user.twoFactorPendingSecret) } });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+router.post('/2fa/setup', authenticate, async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.id).select('+twoFactorPendingSecret');
+    if (!user) return res.status(401).json({ success: false, message: 'Your account is no longer available.' });
+    if (user.twoFactorEnabled) return res.status(400).json({ success: false, message: 'Two-factor authentication is already enabled.' });
+
+    const secret = speakeasy.generateSecret({ name: `TrustNet (${user.email})` });
+    user.twoFactorPendingSecret = encryptTwoFactorSecret(secret.base32);
+    await user.save();
+    return res.json({
+      success: true,
+      data: {
+        qrCodeDataUrl: await QRCode.toDataURL(secret.otpauth_url),
+        manualEntryKey: secret.base32,
+      },
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+router.post('/2fa/enable', authenticate, async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.id).select('+twoFactorPendingSecret +twoFactorSecret');
+    if (!user) return res.status(401).json({ success: false, message: 'Your account is no longer available.' });
+    if (!user.twoFactorPendingSecret) return res.status(400).json({ success: false, message: 'Start two-factor setup before confirming a code.' });
+    if (!isValidTotp(decryptTwoFactorSecret(user.twoFactorPendingSecret), req.body?.token)) {
+      return res.status(400).json({ success: false, message: 'Invalid or expired authentication code.' });
+    }
+
+    user.twoFactorSecret = user.twoFactorPendingSecret;
+    user.twoFactorPendingSecret = undefined;
+    user.twoFactorEnabled = true;
+    await user.save();
+    return res.json({ success: true, message: 'Two-factor authentication enabled.', data: { enabled: true } });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+router.post('/2fa/disable', authenticate, async (req, res, next) => {
+  try {
+    const currentPassword = String(req.body?.currentPassword || '');
+    const user = await User.findById(req.user.id).select('+password +twoFactorSecret +twoFactorPendingSecret');
+    if (!user) return res.status(401).json({ success: false, message: 'Your account is no longer available.' });
+    if (!user.twoFactorEnabled || !user.twoFactorSecret) return res.status(400).json({ success: false, message: 'Two-factor authentication is not enabled.' });
+    if (!currentPassword || !user.password || !(await bcrypt.compare(currentPassword, user.password))) {
+      return res.status(400).json({ success: false, message: 'Current password is incorrect.' });
+    }
+    if (!isValidTotp(decryptTwoFactorSecret(user.twoFactorSecret), req.body?.token)) {
+      return res.status(400).json({ success: false, message: 'Invalid or expired authentication code.' });
+    }
+
+    user.twoFactorEnabled = false;
+    user.twoFactorSecret = undefined;
+    user.twoFactorPendingSecret = undefined;
+    await user.save();
+    return res.json({ success: true, message: 'Two-factor authentication disabled.', data: { enabled: false } });
+  } catch (err) {
+    return next(err);
+  }
 });
 
 router.get('/me', async (req, res) => {
@@ -408,16 +579,98 @@ router.post('/resend-verification', (req, res) => {
   res.json({ success: true, message: 'Verification email sent.' });
 });
 
-router.post('/forgot-password', (req, res) => {
-  res.json({ success: true, message: 'Password reset email sent.' });
+router.post('/forgot-password', async (req, res, next) => {
+  try {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    if (!/^\S+@\S+\.\S+$/.test(email)) {
+      return res.status(400).json({ success: false, message: 'Enter a valid email address.' });
+    }
+
+    const successMessage = 'If an account exists for that email, a password reset link has been sent.';
+    const user = await User.findOne({ email }).select('+resetPasswordToken +resetPasswordExpires');
+    if (!user) return res.json({ success: true, message: successMessage });
+
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    user.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+    user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000);
+    await user.save();
+
+    const resetUrl = `${env.CLIENT_URL.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(resetToken)}`;
+    try {
+      await sendPasswordResetEmail({ to: user.email, resetUrl });
+    } catch (emailError) {
+      user.resetPasswordToken = undefined;
+      user.resetPasswordExpires = undefined;
+      await user.save();
+      return res.status(503).json({ success: false, message: 'Unable to send the password reset email. Please try again later.' });
+    }
+
+    return res.json({ success: true, message: successMessage });
+  } catch (err) {
+    return next(err);
+  }
 });
 
-router.post('/reset-password', (req, res) => {
-  res.json({ success: true, message: 'Password reset successfully.' });
+router.post('/reset-password', async (req, res, next) => {
+  try {
+    const token = String(req.body?.token || '');
+    const password = String(req.body?.password || '');
+    const confirmPassword = String(req.body?.confirmPassword || '');
+    if (!token) return res.status(400).json({ success: false, message: 'Password reset token is required.' });
+    if (password.length < 8) return res.status(400).json({ success: false, message: 'Password must be at least 8 characters.' });
+    if (password !== confirmPassword) return res.status(400).json({ success: false, message: 'Passwords do not match.' });
+
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+    const user = await User.findOne({
+      resetPasswordToken: hashedToken,
+      resetPasswordExpires: { $gt: new Date() },
+    }).select('+password +resetPasswordToken +resetPasswordExpires');
+    if (!user) {
+      return res.status(400).json({ success: false, message: 'This password reset link is invalid or has expired.' });
+    }
+
+    user.password = await bcrypt.hash(password, 10);
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+    return res.json({ success: true, message: 'Your password has been reset. You can now sign in.' });
+  } catch (err) {
+    return next(err);
+  }
 });
 
-router.put('/change-password', (req, res) => {
-  res.json({ success: true, message: 'Password changed successfully.' });
+router.put('/change-password', authenticate, async (req, res, next) => {
+  try {
+    const currentPassword = String(req.body?.currentPassword || '');
+    const newPassword = String(req.body?.newPassword || '');
+    const confirmPassword = String(req.body?.confirmPassword || '');
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      return res.status(400).json({ success: false, message: 'All password fields are required.' });
+    }
+    if (newPassword.length < 8 || !/[a-z]/.test(newPassword) || !/[A-Z]/.test(newPassword) || !/\d/.test(newPassword)) {
+      return res.status(400).json({ success: false, message: 'New password must be at least 8 characters and include uppercase, lowercase, and a number.' });
+    }
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ success: false, message: 'New password and confirmation do not match.' });
+    }
+
+    const user = await User.findById(req.user.id).select('+password');
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Your account is no longer available.' });
+    }
+    if (!user.password || !(await bcrypt.compare(currentPassword, user.password))) {
+      return res.status(400).json({ success: false, message: 'Current password is incorrect.' });
+    }
+    if (await bcrypt.compare(newPassword, user.password)) {
+      return res.status(400).json({ success: false, message: 'New password must be different from your current password.' });
+    }
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    await user.save();
+    return res.json({ success: true, message: 'Password changed successfully.' });
+  } catch (err) {
+    return next(err);
+  }
 });
 
 module.exports = router;

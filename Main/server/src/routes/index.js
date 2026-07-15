@@ -14,6 +14,7 @@ const notificationRoutes = require('./notification.routes');
 const settingsRoutes = require('./settings.routes');
 const searchRoutes = require('./search.routes');
 const recommendationRoutes = require('./recommendation.routes');
+const verificationRoutes = require('./verification.routes');
 
 const router = express.Router();
 
@@ -31,5 +32,6 @@ router.use('/notifications', notificationRoutes);
 router.use('/settings', settingsRoutes);
 router.use('/search', searchRoutes);
 router.use('/recommendations', recommendationRoutes);
+router.use('/verification', verificationRoutes);
 
 module.exports = router;

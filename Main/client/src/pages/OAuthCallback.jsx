@@ -21,7 +21,7 @@ export default function OAuthCallback() {
     }
 
     loginWithToken(token)
-      .then(() => navigate("/dashboard", { replace: true }))
+      .then((user) => navigate(user?.onboardingCompleted ? (user?.verificationStatus === "approved" ? "/dashboard" : "/verification") : "/onboarding", { replace: true }))
       .catch(() => navigate("/login?oauthError=session", { replace: true }));
   }, [params, navigate, loginWithToken]);
 

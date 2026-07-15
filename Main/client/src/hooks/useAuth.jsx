@@ -88,6 +88,16 @@ export function AuthProvider({ children }) {
   const login = async (email, password) => {
     sessionRef.current += 1;
     const response = await api.post("/v1/auth/login", { email, password });
+    if (response.data?.data?.requiresTwoFactor) {
+      return response.data;
+    }
+    applyToken(response.data.data.accessToken);
+    setUser(response.data.data.user);
+    return response.data;
+  };
+
+  const completeTwoFactorLogin = async (twoFactorToken, token) => {
+    const response = await api.post("/v1/auth/login/2fa", { twoFactorToken, token });
     applyToken(response.data.data.accessToken);
     setUser(response.data.data.user);
     return response.data;
@@ -122,7 +132,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, login, loginWithToken, register, logout, refresh, setUser }}
+      value={{ user, loading, login, completeTwoFactorLogin, loginWithToken, register, logout, refresh, setUser }}
     >
       {children}
     </AuthContext.Provider>

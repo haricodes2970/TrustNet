@@ -44,3 +44,33 @@ export async function deleteSession(id) {
   const { data } = await api.delete(`/v1/settings/sessions/${id}`);
   return data?.data ?? data;
 }
+
+export async function deleteAccount(currentPassword) {
+  const { data } = await api.delete("/v1/auth/account", { data: { currentPassword } });
+  return data?.data ?? data;
+}
+
+export async function changePassword(payload) {
+  const { data } = await api.put("/v1/auth/change-password", payload);
+  return data?.data ?? data;
+}
+
+export async function getTwoFactorStatus() {
+  const { data } = await api.get("/v1/auth/2fa");
+  return data?.data ?? data;
+}
+
+export async function setupTwoFactor() {
+  const { data } = await api.post("/v1/auth/2fa/setup");
+  return data?.data ?? data;
+}
+
+export async function enableTwoFactor(token) {
+  const { data } = await api.post("/v1/auth/2fa/enable", { token });
+  return data?.data ?? data;
+}
+
+export async function disableTwoFactor(currentPassword, token) {
+  const { data } = await api.post("/v1/auth/2fa/disable", { currentPassword, token });
+  return data?.data ?? data;
+}

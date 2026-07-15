@@ -20,6 +20,7 @@ import Posts from "./pages/Posts";
 import Settings from "./pages/Settings";
 import Notifications from "./pages/Notifications";
 import Verification from "./pages/Verification";
+import VerificationInProgress from "./pages/VerificationInProgress";
 
 function ProtectedLayout() {
   const { user, loading } = useAuth();
@@ -33,7 +34,31 @@ function ProtectedLayout() {
   if (!user) {
     return <Navigate to="/login" replace />;
   }
+  if (user.verificationStatus === "pending") {
+    return <Navigate to="/verification-in-progress" replace />;
+  }
+  if (user.verificationStatus !== "approved") {
+    return <Navigate to="/verification" replace />;
+  }
   return <AppLayout />;
+}
+
+function VerificationRoute() {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.verificationStatus === "pending") return <Navigate to="/verification-in-progress" replace />;
+  if (user.verificationStatus === "approved") return <Navigate to="/dashboard" replace />;
+  return <Verification />;
+}
+
+function VerificationInProgressRoute() {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.verificationStatus === "approved") return <Navigate to="/dashboard" replace />;
+  if (user.verificationStatus !== "pending") return <Navigate to="/verification" replace />;
+  return <VerificationInProgress />;
 }
 
 function NotFound() {
@@ -68,6 +93,8 @@ export default function App() {
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/verify-email" element={<VerifyEmail />} />
+            <Route path="/verification" element={<VerificationRoute />} />
+            <Route path="/verification-in-progress" element={<VerificationInProgressRoute />} />
             <Route path="/oauth/callback" element={<OAuthCallback />} />
             <Route path="/onboarding" element={<Onboarding />} />
 
