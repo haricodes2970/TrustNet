@@ -1,7 +1,3 @@
-const dns = require("dns");
-
-// Force Node.js to use Google DNS (workaround for this laptop)
-dns.setServers(["8.8.8.8", "1.1.1.1"]);
 
 require("dotenv").config();
 
