@@ -7,12 +7,19 @@ const postService = require("./postService");
 async function getDashboard(email) {
   const user = await userService.getUserByEmail(email);
 
-  const [startups, communities, collaborations, posts, recentStartups] = await Promise.all([
+  const [startups, communities, collaborations, posts, recentStartups, trendingPosts] = await Promise.all([
     startupService.listStartups({}, {}),
     communityService.listCommunities({}, {}),
     collaborationService.listCollaborationRequests({}, {}),
     postService.listPosts({}, { limit: 5, sort: "-createdAt" }),
     startupService.listStartups({}, { sort: "-createdAt", limit: 5 }),
+    postService.listPosts(
+      {},
+      {
+        sort: "-likeCount",
+        limit: 5,
+      }
+    ),
   ]);
 
   const stats = {
@@ -42,7 +49,28 @@ async function getDashboard(email) {
     createdAt: startup.createdAt,
   }));
 
-  return { user, stats, recentActivity, recentStartups: recentStartupsMapped };
+  const trendingPostsMapped = trendingPosts.map((post) => {
+    const content = post.content || "";
+    const excerpt = content.length > 180 ? `${content.slice(0, 180).trimEnd()}…` : content;
+
+    return {
+      _id: post._id,
+      title: post.title || "",
+      excerpt,
+      postType: post.postType,
+      likeCount: post.likeCount,
+      author: post.author,
+      createdAt: post.createdAt,
+    };
+  });
+
+  return {
+    user,
+    stats,
+    recentActivity,
+    recentStartups: recentStartupsMapped,
+    trendingPosts: trendingPostsMapped,
+  };
 }
 
 module.exports = { getDashboard };
