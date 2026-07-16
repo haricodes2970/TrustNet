@@ -71,6 +71,15 @@ async function listStartups(filter = {}, options = {}) {
   }
 }
 
+async function listMyStartups(founderId, options = {}) {
+  try {
+    const query = Startup.find({ founder: founderId });
+    return applyQueryOptions(query, options).lean();
+  } catch (error) {
+    throw handleServiceError(error, "Failed to list your startups.");
+  }
+}
+
 module.exports = {
   createStartup,
   getStartupById,
@@ -78,4 +87,5 @@ module.exports = {
   updateStartup,
   deleteStartup,
   listStartups,
+  listMyStartups,
 };
