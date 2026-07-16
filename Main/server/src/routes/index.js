@@ -15,6 +15,7 @@ const settingsRoutes = require('./settings.routes');
 const searchRoutes = require('./search.routes');
 const recommendationRoutes = require('./recommendation.routes');
 const verificationRoutes = require('./verification.routes');
+const adminRoutes = require('./admin.routes');
 
 const router = express.Router();
 
@@ -33,5 +34,6 @@ router.use('/settings', settingsRoutes);
 router.use('/search', searchRoutes);
 router.use('/recommendations', recommendationRoutes);
 router.use('/verification', verificationRoutes);
+router.use('/admin', adminRoutes);
 
 module.exports = router;
