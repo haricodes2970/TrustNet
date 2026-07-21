@@ -15,6 +15,9 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Local document storage (storageService.js local provider — dev/test only)
+Main/server/storage/
+
 # Environment variables
 .env
 .env.*
