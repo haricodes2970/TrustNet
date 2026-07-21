@@ -16,6 +16,14 @@ const searchRoutes = require('./search.routes');
 const recommendationRoutes = require('./recommendation.routes');
 const verificationRoutes = require('./verification.routes');
 const adminRoutes = require('./admin.routes');
+const teamRoutes = require('./team.routes');
+const workspaceRoutes = require('./workspace.routes');
+const projectRoutes = require('./project.routes');
+const taskRoutes = require('./task.routes');
+const milestoneRoutes = require('./milestone.routes');
+const documentRoutes = require('./document.routes');
+const jobRoutes = require('./job.routes');
+const applicationRoutes = require('./application.routes');
 
 const router = express.Router();
 
@@ -35,5 +43,13 @@ router.use('/search', searchRoutes);
 router.use('/recommendations', recommendationRoutes);
 router.use('/verification', verificationRoutes);
 router.use('/admin', adminRoutes);
+router.use('/teams', teamRoutes);
+router.use('/workspaces', workspaceRoutes);
+router.use('/projects', projectRoutes);
+router.use('/tasks', taskRoutes);
+router.use('/milestones', milestoneRoutes);
+router.use('/documents', documentRoutes);
+router.use('/jobs', jobRoutes);
+router.use('/applications', applicationRoutes);
 
 module.exports = router;
