@@ -48,9 +48,28 @@ function assertOwner(resourceOwnerId, userId, message, statusCode) {
   }
 }
 
+// Pure, database-independent: workspace-level role ('owner'/'admin') always
+// grants mutation rights; a 'contributor' may only mutate a resource they
+// created or are assigned to. Reusable by any resource shaped with
+// createdBy/assignedTo fields (Tasks today, expected reuse by future
+// collaboration modules) — does not itself resolve workspace role, callers
+// must supply it from workspaceService.resolveWorkspaceAccess().
+function canMutateTask(task, userId, workspaceRole) {
+  if (workspaceRole === "owner" || workspaceRole === "admin") {
+    return true;
+  }
+  if (workspaceRole === "contributor") {
+    const isCreator = task.createdBy && String(task.createdBy) === String(userId);
+    const isAssignee = task.assignedTo && String(task.assignedTo) === String(userId);
+    return Boolean(isCreator || isAssignee);
+  }
+  return false;
+}
+
 module.exports = {
   normalizeFilter,
   applyQueryOptions,
   handleServiceError,
   assertOwner,
+  canMutateTask,
 };
