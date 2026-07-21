@@ -7,7 +7,9 @@
     "start": "node server.js",
     "dev": "node server.js",
     "build": "node -e \"require('./app'); console.log('Build OK')\"",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "test:integration": "node --test test/integration/*.test.js",
+    "test:all": "node --test test/*.test.js test/integration/*.test.js"
   },
   "keywords": [],
   "author": "TrustNet Team",
@@ -35,6 +37,7 @@
     "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
+    "mongodb-memory-server": "^11.2.0",
     "nodemon": "^3.1.14"
   }
 }
