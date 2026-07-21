@@ -7,7 +7,7 @@
     "start": "node server.js",
     "dev": "node server.js",
     "build": "node -e \"require('./app'); console.log('Build OK')\"",
-    "test": "echo \"No tests configured yet\""
+    "test": "node --test test/*.test.js"
   },
   "keywords": [],
   "author": "TrustNet Team",

@@ -38,8 +38,19 @@ function handleServiceError(error, fallbackMessage) {
   return new Error(fallbackMessage);
 }
 
+function assertOwner(resourceOwnerId, userId, message, statusCode) {
+  if (String(resourceOwnerId) !== String(userId)) {
+    if (statusCode) {
+      const ApiError = require("../utils/ApiError");
+      throw new ApiError(statusCode, message);
+    }
+    throw new Error(message);
+  }
+}
+
 module.exports = {
   normalizeFilter,
   applyQueryOptions,
   handleServiceError,
+  assertOwner,
 };

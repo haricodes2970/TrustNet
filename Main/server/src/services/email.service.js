@@ -28,4 +28,15 @@ async function sendPasswordResetEmail({ to, resetUrl }) {
   });
 }
 
-module.exports = { sendPasswordResetEmail };
+async function sendEmail({ to, subject, text, html }) {
+  const transporter = createTransporter();
+  await transporter.sendMail({
+    from: env.SMTP_FROM,
+    to,
+    subject,
+    text,
+    html,
+  });
+}
+
+module.exports = { sendPasswordResetEmail, sendEmail };

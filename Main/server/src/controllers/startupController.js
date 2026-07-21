@@ -1,5 +1,6 @@
 ﻿const startupService = require("../services/startupService");
 const ApiError = require("../utils/ApiError");
+const { assertOwner } = require("../services/serviceUtils");
 
 async function createStartup(req, res) {
   try {
@@ -42,9 +43,7 @@ async function getMyStartups(req, res) {
 async function updateStartup(req, res) {
   try {
     const existing = await startupService.getStartupById(req.params.id);
-    if (String(existing.founder) !== String(req.user.id)) {
-      throw new ApiError(403, "You are not authorized to update this startup.");
-    }
+    assertOwner(existing.founder, req.user.id, "You are not authorized to update this startup.", 403);
     const startup = await startupService.updateStartup(req.params.id, req.body);
     return res.status(200).json({ success: true, data: startup });
   } catch (error) {
@@ -56,9 +55,7 @@ async function updateStartup(req, res) {
 async function deleteStartup(req, res) {
   try {
     const existing = await startupService.getStartupById(req.params.id);
-    if (String(existing.founder) !== String(req.user.id)) {
-      throw new ApiError(403, "You are not authorized to delete this startup.");
-    }
+    assertOwner(existing.founder, req.user.id, "You are not authorized to delete this startup.", 403);
     const startup = await startupService.deleteStartup(req.params.id);
     return res.status(200).json({ success: true, data: startup });
   } catch (error) {
