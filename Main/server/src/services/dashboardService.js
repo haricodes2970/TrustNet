@@ -7,7 +7,16 @@ const postService = require("./postService");
 async function getDashboard(email) {
   const user = await userService.getUserByEmail(email);
 
-  const [startups, communities, collaborations, posts, recentStartups, trendingPosts] = await Promise.all([
+  const [
+    startups,
+    communities,
+    collaborations,
+    posts,
+    recentStartups,
+    trendingPosts,
+    suggestedCommunities,
+    suggestedPeople,
+  ] = await Promise.all([
     startupService.listStartups({}, {}),
     communityService.listCommunities({}, {}),
     collaborationService.listCollaborationRequests({}, {}),
@@ -19,6 +28,11 @@ async function getDashboard(email) {
         sort: "-likeCount",
         limit: 5,
       }
+    ),
+    communityService.listCommunities({}, { sort: "-memberCount", limit: 5 }),
+    userService.listUsers(
+      { _id: { $ne: user._id }, role: { $ne: "admin" }, isActive: true },
+      { sort: "-followersCount", limit: 5 }
     ),
   ]);
 
@@ -64,12 +78,34 @@ async function getDashboard(email) {
     };
   });
 
+  const suggestedCommunitiesMapped = suggestedCommunities.map((community) => ({
+    _id: community._id,
+    name: community.name,
+    slug: community.slug,
+    description: community.description,
+    logoUrl: community.coverImageUrl,
+    memberCount: community.memberCount,
+    createdAt: community.createdAt,
+  }));
+
+  const suggestedPeopleMapped = suggestedPeople.map((person) => ({
+    _id: person._id,
+    fullName: person.fullName,
+    username: person.username,
+    avatarUrl: person.avatarUrl,
+    designation: person.designation,
+    isVerified: person.isVerified,
+    followersCount: person.followersCount,
+  }));
+
   return {
     user,
     stats,
     recentActivity,
     recentStartups: recentStartupsMapped,
     trendingPosts: trendingPostsMapped,
+    suggestedCommunities: suggestedCommunitiesMapped,
+    suggestedPeople: suggestedPeopleMapped,
   };
 }
 

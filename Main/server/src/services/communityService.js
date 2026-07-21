@@ -71,6 +71,47 @@ async function listCommunities(filter = {}, options = {}) {
   }
 }
 
+async function joinCommunity(id, userId) {
+  try {
+    const community = await Community.findByIdAndUpdate(
+      id,
+      { $addToSet: { members: userId }, $inc: { memberCount: 1 } },
+      { new: true }
+    ).lean();
+
+    if (!community) {
+      throw new Error("Community not found.");
+    }
+
+    return community;
+  } catch (error) {
+    throw handleServiceError(error, "Failed to join community.");
+  }
+}
+
+async function leaveCommunity(id, userId) {
+  try {
+    const community = await Community.findByIdAndUpdate(
+      id,
+      { $pull: { members: userId }, $inc: { memberCount: -1 } },
+      { new: true }
+    ).lean();
+
+    if (!community) {
+      throw new Error("Community not found.");
+    }
+
+    if (community.memberCount < 0) {
+      await Community.findByIdAndUpdate(id, { memberCount: 0 });
+      community.memberCount = 0;
+    }
+
+    return community;
+  } catch (error) {
+    throw handleServiceError(error, "Failed to leave community.");
+  }
+}
+
 module.exports = {
   createCommunity,
   getCommunityById,
@@ -78,4 +119,6 @@ module.exports = {
   updateCommunity,
   deleteCommunity,
   listCommunities,
+  joinCommunity,
+  leaveCommunity,
 };
