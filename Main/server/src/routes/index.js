@@ -24,6 +24,16 @@ const milestoneRoutes = require('./milestone.routes');
 const documentRoutes = require('./document.routes');
 const jobRoutes = require('./job.routes');
 const applicationRoutes = require('./application.routes');
+const investorRoutes = require('./investor.routes');
+const investmentInterestRoutes = require('./investmentInterest.routes');
+const fundingRoundRoutes = require('./fundingRound.routes');
+const fundingContributionRoutes = require('./fundingContribution.routes');
+const providerProfileRoutes = require('./providerProfile.routes');
+const serviceListingRoutes = require('./serviceListing.routes');
+const engagementRequestRoutes = require('./engagementRequest.routes');
+const analyticsRoutes = require('./analytics.routes');
+const reportRoutes = require('./report.routes');
+const aiRoutes = require('./ai.routes');
 
 const router = express.Router();
 
@@ -51,5 +61,15 @@ router.use('/milestones', milestoneRoutes);
 router.use('/documents', documentRoutes);
 router.use('/jobs', jobRoutes);
 router.use('/applications', applicationRoutes);
+router.use('/investors', investorRoutes);
+router.use('/investment-interests', investmentInterestRoutes);
+router.use('/funding-rounds', fundingRoundRoutes);
+router.use('/funding-contributions', fundingContributionRoutes);
+router.use('/provider-profiles', providerProfileRoutes);
+router.use('/service-listings', serviceListingRoutes);
+router.use('/engagement-requests', engagementRequestRoutes);
+router.use('/analytics', analyticsRoutes);
+router.use('/reports', reportRoutes);
+router.use('/ai', aiRoutes);
 
 module.exports = router;

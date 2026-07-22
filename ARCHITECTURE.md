@@ -98,6 +98,12 @@ Each backend module below has its own doc in [docs/modules/](docs/modules/):
 | Documents | `/api/v1/documents` | [docs/modules/documents.md](docs/modules/documents.md) |
 | Hiring | `/api/v1/jobs` | [docs/modules/hiring.md](docs/modules/hiring.md) |
 | Applications | `/api/v1/applications` | [docs/modules/applications.md](docs/modules/applications.md) |
+| Investors | `/api/v1/investors`, `/api/v1/investment-interests` | [docs/modules/investors.md](docs/modules/investors.md) |
+| Funding | `/api/v1/funding-rounds`, `/api/v1/funding-contributions` | [docs/modules/funding.md](docs/modules/funding.md) |
+| Marketplace | `/api/v1/provider-profiles`, `/api/v1/service-listings`, `/api/v1/engagement-requests` | [docs/modules/marketplace.md](docs/modules/marketplace.md) |
+| Analytics | `/api/v1/analytics` | [docs/modules/analytics.md](docs/modules/analytics.md) |
+| Reports | `/api/v1/reports` | [docs/modules/reports.md](docs/modules/reports.md) |
+| AI | `/api/v1/ai` | [docs/modules/ai.md](docs/modules/ai.md) |
 | Collaborations | `/api/v1/collaborations` | [docs/modules/collaborations.md](docs/modules/collaborations.md) |
 | Messages | `/api/v1/messages` | [docs/modules/messages.md](docs/modules/messages.md) |
 | Notifications | `/api/v1/notifications` | [docs/modules/notifications.md](docs/modules/notifications.md) |

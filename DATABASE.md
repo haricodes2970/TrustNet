@@ -121,11 +121,59 @@ Structural like Project — permissions are owner/admin only (no contributor wri
 
 **No `url` field** — delivery URLs are never persisted, generated on demand via `storageService.downloadUrl()` on every read. Permissions: `workspaceService.resolveWorkspaceAccess()` through the parent Project, composed with `canMutateDocument()` (`documentService.js` — a dedicated helper, deliberately **not** a reuse of `canMutateTask()`; contributor may only mutate a document they uploaded, no `assignedTo` concept exists for Documents). Upload guard checks `project.isArchived` (its immediate parent), same per-layer pattern Task/Project use. See [docs/modules/documents.md](docs/modules/documents.md).
 
+### InvestorProfile (`InvestorProfile.js`)
+
+`user` (ref User, required, **unique** — one profile per user), `organization`, `investmentThesis`, `preferredStages` (reuses `Startup.stage`'s enum, no parallel enum invented), `preferredIndustries[]`, `preferredRegions[]`, `createdBy`/`updatedBy` (audit only). No `verificationStatus` field — deliberately reuses `User.verificationStatus` (existing KYC) instead of a duplicated concept. Public directory: list/get unauthenticated, create/update owner-only. No Startup relationship at all. See [docs/modules/investors.md](docs/modules/investors.md).
+
+### InvestmentInterest (`InvestmentInterest.js`)
+
+`investor` (ref User, required, indexed), `startup` (ref Startup, required, indexed — only relationship), `message`, `status` enum (submitted/reviewing/contacted/accepted/declined/withdrawn, default submitted, indexed), `isArchived` (default false), `createdBy`/`updatedBy` (audit only).
+
+Partial unique index: `{ startup: 1, investor: 1 }`, `partialFilterExpression: { status: { $ne: "withdrawn" } }` — blocks a concurrent duplicate active interest, permits re-expression after withdrawal, same pattern as Application's `{job, applicant}` index. Permissions resolved via `investmentInterestService`'s own `resolveStartupAccess()` — a **third, deliberate duplication** of the role-computation logic already in `workspaceService.resolveWorkspaceAccess()` and `jobService.resolveStartupAccess()`, not shared with either by explicit instruction. Contributor gets read-only access here — unlike Application's contributor-zero-access, and unlike Task's conditional contributor read-write. See [docs/modules/investors.md](docs/modules/investors.md).
+
+### FundingRound (`FundingRound.js`)
+
+`startup` (ref Startup, required, indexed — only relationship), `title`, `roundType` enum (pre-seed/seed/series-a/series-b/series-c/bridge/other), `targetAmount` (required, min 0), `raisedAmount` (default 0, min 0 — denormalized sum of this round's own confirmed contributions, maintained exclusively via atomic `$inc`, never a direct write), `currency` enum (reuses the same list `Startup.currency` already uses), `minimumContribution` (optional, business-rule input only), `status` enum (draft/open/closed/cancelled, default draft, indexed), `openedAt`/`closedAt` (Date, set by the service on transition), `description`, `createdBy`/`updatedBy` (audit only), `isArchived` (default false).
+
+Permissions resolved via `fundingRoundService`'s own `resolveStartupAccess()` — a **fourth, deliberate duplication** of the role-computation logic already in `workspaceService.resolveWorkspaceAccess()`, `jobService.resolveStartupAccess()`, and `investmentInterestService.resolveStartupAccess()`. Non-open/archived rounds return 404 (not 403) to unauthorized viewers — same concealment convention `Job` established. See [docs/modules/funding.md](docs/modules/funding.md).
+
+### FundingContribution (`FundingContribution.js`)
+
+`fundingRound` (ref FundingRound, required, indexed), `investor` (ref User, required, indexed — not assumed to hold an `InvestorProfile`), `amount` (required, min 0.01), `currency` enum (validated against the parent round's currency at the service layer), `status` enum (pledged/confirmed/rejected/withdrawn, default pledged, indexed), `note`, `createdBy`/`updatedBy` (audit only).
+
+**No partial unique index** — unlike `InvestmentInterest`/`Application`, an investor may hold multiple concurrent pledges to the same round; a uniqueness constraint would be actively wrong here. On `pledged → confirmed`, `FundingRound.raisedAmount` and `Startup.fundingRaised` are both incremented atomically via `$inc` (never read-modify-write) — the first module in this codebase to write to a `Startup` field it doesn't otherwise own. See [docs/modules/funding.md](docs/modules/funding.md).
+
+### ProviderProfile (`ProviderProfile.js`)
+
+`user` (ref User, required, unique — one profile per user), `businessName` (required), `tagline`, `description`, `serviceCategories` (String[], freeform — same shape as `InvestorProfile.preferredIndustries`), `portfolioUrl` (URL-validated), `createdBy`/`updatedBy` (audit only). No `verificationStatus` field — reuses `User.verificationStatus`. Public directory: list/get unauthenticated, create/update owner-only. No Startup relationship at all. See [docs/modules/marketplace.md](docs/modules/marketplace.md).
+
+### ServiceListing (`ServiceListing.js`)
+
+`provider` (ref **ProviderProfile**, required, indexed — deliberately coupled, unlike `FundingContribution.investor`/`InvestmentInterest.investor` which ref `User` directly), `title`, `category` (freeform), `description` (not required at schema level — drafts may be incomplete), `pricingModel` enum, `priceMin`/`priceMax`, `currency` enum (reuses the existing list), `status` enum (draft/published/archived, default draft, indexed — three states, mirrors `Job.status`), `tags`, `createdBy`/`updatedBy` (audit only), `isArchived`. Permissions: flat ownership via the parent `ProviderProfile.user`, no `resolveStartupAccess()` involved. Non-published/archived listings return 404 (not 403) to unauthorized viewers — same concealment convention `Job`/`FundingRound` established. See [docs/modules/marketplace.md](docs/modules/marketplace.md).
+
+### EngagementRequest (`EngagementRequest.js`)
+
+`serviceListing` (ref ServiceListing, required, indexed), `startup` (ref Startup, required, indexed), `message`, `status` enum (requested/accepted/declined/in_progress/completed/cancelled, default requested, indexed), `createdBy`/`updatedBy` (audit only).
+
+Partial unique index: `{ serviceListing: 1, startup: 1 }`, excluding `declined`/`cancelled`/`completed` — permits re-engagement after any terminal outcome, including a prior successful completion (a three-way exclusion, wider than Application's/InvestmentInterest's single-status exclusion). Permissions resolved via **two independent mechanisms on the same document** — `engagementRequestService`'s own `resolveStartupAccess()` (a **fifth, deliberate duplication** of the role-computation logic already in `workspaceService`/`jobService`/`investmentInterestService`/`fundingRoundService`) for the requester side, and `serviceListingService.resolveProviderOwnership()` (reused, not duplicated) for the fulfiller side. See [docs/modules/marketplace.md](docs/modules/marketplace.md).
+
 ### Team (`Team.js`)
 
 `startup` (ref Startup, required, indexed), `name`, `description`, `slug`, `owner` (ref User, indexed), `members[]` (sub-doc: `user` ref User nullable, `email`, `name`, `role` enum admin/member, `status` enum pending/active, `invitedBy`, `invitedAt`, `joinedAt`), `memberCount`, `isArchived`.
 
 Indexes: `{ startup: 1 }`, `{ "members.email": 1 }`, `{ "members.user": 1 }`. See [docs/modules/teams.md](docs/modules/teams.md) for the feature this backs.
+
+### Analytics (no model)
+
+The Analytics module (`analyticsService.js`) has no collection of its own — every metric is computed on demand from the models above via `find()`/`countDocuments()`/`aggregate()`. Permissions resolved via its own `resolveStartupAccess()` — a **sixth, deliberate duplication** of the role-computation logic already in `workspaceService`/`jobService`/`investmentInterestService`/`fundingRoundService`/`engagementRequestService`. See [docs/modules/analytics.md](docs/modules/analytics.md).
+
+### Reports (no model)
+
+The Reports module (`reportService.js`) has no collection of its own — every report is generated on demand by dispatching to an existing `analyticsService` function and serializing its output (JSON or CSV). Authorization is reused directly from `analyticsService.resolveStartupAccess`/`assertAnyRole` — **no seventh Startup authorization helper** — narrowed to owner/admin only (contributor excluded, a deliberate divergence from Analytics' any-role gate). See [docs/modules/reports.md](docs/modules/reports.md).
+
+### AI (no model)
+
+The AI module (`aiService.js`, `aiProviderService.js`) has no collection of its own and **no persistence whatsoever** — no models, no conversation history, no embeddings, no vector store. Every capability's context is gathered by calling an existing `analyticsService`/`reportService`/`taskService`/`serviceListingService` function; authorization is entirely inherited from that call, with **no `resolveStartupAccess()` of its own**. The one exception noted for completeness: rate-limit counters are held in an in-memory `Map` (process memory, not a document, not persisted) — see [docs/modules/ai.md](docs/modules/ai.md).
 
 ## Relationships
 
@@ -139,6 +187,9 @@ Project 1---N Milestone         Milestone 1---N Task (via Task.milestone, nullab
 Project 1---N Document (Document.createdBy is audit-only; no url stored, generated on demand)
 Startup 1---N Job (independent of Workspace/Project — Job resolves permission via its own resolveStartupAccess(), a deliberate duplication of workspaceService's logic)
 Job 1---N Application (Application.applicant is the candidate, not a Team member; notes are staff-only, redacted for the candidate view)
+User 1---N InvestorProfile (unique per user)   User (investor) 1---N InvestmentInterest 1---1 Startup (independent of Workspace/Project/Job — its own resolveStartupAccess(), a third deliberate duplication)
+Startup 1---N FundingRound 1---N FundingContribution (User investor, not InvestorProfile — a fourth deliberate resolveStartupAccess() duplication; confirmed contributions $inc both FundingRound.raisedAmount and Startup.fundingRaised)
+User (provider) 1---1 ProviderProfile 1---N ServiceListing   Startup 1---N EngagementRequest N---1 ServiceListing (dual authority: fifth resolveStartupAccess() duplication for the requester side, flat ProviderProfile ownership for the fulfiller side)
 User N---N Community (members)   User 1---N Community (owner)
 User 1---N Post (author)         Community 1---N Post   Startup 1---N Post
 Post 1---N Comment
