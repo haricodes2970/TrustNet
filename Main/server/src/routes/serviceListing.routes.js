@@ -1,0 +1,113 @@
+const express = require("express");
+const serviceListingController = require("../controllers/serviceListingController");
+const { authenticate } = require("../middlewares/auth");
+const validate = require("../middlewares/validate");
+const { serviceListingCreate, serviceListingUpdate } = require("../validators/serviceListing.validators");
+
+const router = express.Router();
+
+// Like job.routes.js, this file does NOT apply `router.use(authenticate)`
+// globally — GET / and GET /:id are public (published listings are a
+// public marketplace), so authenticate is applied per-route on the
+// mutation endpoints only. Same known limitation as Job/FundingRound: with
+// no optional-auth middleware in this codebase, req.user is unset on these
+// two routes today (see BACKLOG.md).
+
+/**
+ * @openapi
+ * /service-listings:
+ *   post:
+ *     summary: Create a service listing (requires an existing provider profile, draft by default)
+ *     tags: [ServiceListings]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       201: { description: Service listing created }
+ *       409: { description: No provider profile exists, or priceMin > priceMax }
+ */
+router.post("/", authenticate, validate(serviceListingCreate), serviceListingController.createListing);
+
+/**
+ * @openapi
+ * /service-listings:
+ *   get:
+ *     summary: List service listings. Public visitors see only published, non-archived listings; the owning provider sees all statuses for their own profile.
+ *     tags: [ServiceListings]
+ *     parameters:
+ *       - { name: providerId, in: query, required: false, schema: { type: string } }
+ *     responses:
+ *       200: { description: List of service listings }
+ */
+router.get("/", serviceListingController.listListings);
+
+/**
+ * @openapi
+ * /service-listings/{id}:
+ *   get:
+ *     summary: Get a single service listing. Draft/archived listings return 404 to anyone but the owning provider — existence is concealed, not just content.
+ *     tags: [ServiceListings]
+ *     parameters:
+ *       - { name: id, in: path, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: Service listing details }
+ *       404: { description: Listing not found (also returned for non-published listings the caller does not own) }
+ */
+router.get("/:id", serviceListingController.getListing);
+
+/**
+ * @openapi
+ * /service-listings/{id}:
+ *   put:
+ *     summary: Update listing metadata (owning provider only; status is not changeable here)
+ *     tags: [ServiceListings]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { name: id, in: path, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: Updated service listing }
+ */
+router.put("/:id", authenticate, validate(serviceListingUpdate), serviceListingController.updateListing);
+
+/**
+ * @openapi
+ * /service-listings/{id}:
+ *   delete:
+ *     summary: Archive a service listing (owning provider only)
+ *     tags: [ServiceListings]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { name: id, in: path, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: Service listing archived }
+ */
+router.delete("/:id", authenticate, serviceListingController.archiveListing);
+
+/**
+ * @openapi
+ * /service-listings/{id}/publish:
+ *   put:
+ *     summary: Publish a listing (owning provider only; requires title/description/category/pricingModel and not archived)
+ *     tags: [ServiceListings]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { name: id, in: path, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: Service listing published }
+ *       409: { description: Archived, or missing required fields }
+ */
+router.put("/:id/publish", authenticate, serviceListingController.publishListing);
+
+/**
+ * @openapi
+ * /service-listings/{id}/unpublish:
+ *   put:
+ *     summary: Revert a published listing back to draft (owning provider only)
+ *     tags: [ServiceListings]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { name: id, in: path, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: Service listing unpublished }
+ */
+router.put("/:id/unpublish", authenticate, serviceListingController.unpublishListing);
+
+module.exports = router;
