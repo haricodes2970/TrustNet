@@ -26,7 +26,7 @@ Per the backend stabilization backlog ([.kilo/plans/1784096125148-backend-stabil
 
 - `helmet` middleware sets standard security headers.
 - CORS origin from `CLIENT_URL` or `*` — lock to explicit origin list before production ([docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)).
-- No rate limiting on `/auth/*` yet — brute-force risk on login/reset endpoints. Tracked in [ROADMAP.md](ROADMAP.md) Phase 1.
+- ~~No rate limiting on `/auth/*` yet~~ — resolved via a merge with an independently-developed backend (Developer 1, see `BACKLOG.md`): `signupLimiter`/`loginLimiter`/`forgotPasswordLimiter`/`resendVerificationLimiter` (`src/middlewares/rateLimiter.js`) now gate `/auth/register`, `/auth/login`, `/auth/forgot-password`, `/auth/resend-verification` specifically, plus a global `defaultLimiter` (100 req/15min per IP/user) wraps all of `/api/v1`.
 
 ## Role-based access
 
@@ -44,7 +44,7 @@ Per the backend stabilization backlog ([.kilo/plans/1784096125148-backend-stabil
 
 `GET /api/v1/jobs` and `GET /api/v1/jobs/:id` are the first genuinely unauthenticated read endpoints in this codebase beyond `Startup`'s own public listing (`GET /startups`, `GET /startups/:id`). Published, non-archived jobs are intentionally public (a job board); draft/closed/archived jobs return **404, not 403**, deliberately concealing existence, not just content, from anyone without a role on the job's Startup — see [docs/modules/hiring.md](docs/modules/hiring.md).
 
-This introduces a new attack-surface class not previously present: scraping and enumeration of a public job board. No rate limiting exists on these routes (same repo-wide gap as `/auth/*`, tracked in Phase 1) — worth a dedicated look before production given the endpoints are unauthenticated by design, not just under-protected.
+This introduces a new attack-surface class not previously present: scraping and enumeration of a public job board. The global `defaultLimiter` (100 req/15min per IP/user, see Auth model above) now applies to these routes like every other `/api/v1` route, but no *dedicated*, tighter limit exists for this specific surface the way `/auth/*` and `/search` now have — worth a dedicated look before production given the endpoints are unauthenticated by design, not just under-protected.
 
 `jobService.js` deliberately duplicates `workspaceService.resolveWorkspaceAccess()`'s role-computation logic rather than sharing it (explicit instruction, tracked in [BACKLOG.md](BACKLOG.md)) — two independent implementations of the same founder/admin/contributor rules now exist; a future fix to one must be checked against the other until they're unified.
 
@@ -56,7 +56,7 @@ Compliance considerations (retention limits, right-to-deletion, jurisdiction-spe
 
 ## Investor data
 
-`/api/v1/investors` (`InvestorProfile`) is a public directory by design (list/get unauthenticated, same class of surface as `Startup`'s and Job's public listings) — no new PII class beyond what's already public elsewhere (organization name, investment thesis, stated preferences), but same enumeration/scraping caveat as Job's public surface applies (no rate limiting, tracked in Phase 1). `/api/v1/investment-interests` has no public tier at all (every route authenticated).
+`/api/v1/investors` (`InvestorProfile`) is a public directory by design (list/get unauthenticated, same class of surface as `Startup`'s and Job's public listings) — no new PII class beyond what's already public elsewhere (organization name, investment thesis, stated preferences), but same enumeration/scraping caveat as Job's public surface applies (covered only by the global `defaultLimiter` baseline, no dedicated tighter limit). `/api/v1/investment-interests` has no public tier at all (every route authenticated).
 
 `investmentInterestService.js` deliberately duplicates `workspaceService.resolveWorkspaceAccess()`'s/`jobService.resolveStartupAccess()`'s role-computation logic rather than sharing either (explicit instruction, tracked in [BACKLOG.md](BACKLOG.md)) — a third independent implementation of the same founder/admin/contributor rules now exists; a future fix to any one must be checked against the other two until they're unified in a dedicated authorization cleanup phase.
 
@@ -70,7 +70,7 @@ Compliance considerations (retention limits, right-to-deletion, jurisdiction-spe
 
 ## Marketplace data
 
-`/api/v1/provider-profiles` and `/api/v1/service-listings` both have public tiers (provider directory; published, non-archived listings), same class of surface as `Startup`'s/Job's/Investor's/FundingRound's public listings — same standing enumeration/scraping caveat (no rate limiting, tracked in Phase 1) applies. `/api/v1/engagement-requests` has no public tier at all.
+`/api/v1/provider-profiles` and `/api/v1/service-listings` both have public tiers (provider directory; published, non-archived listings), same class of surface as `Startup`'s/Job's/Investor's/FundingRound's public listings — same standing enumeration/scraping caveat (global `defaultLimiter` baseline only, no dedicated tighter limit) applies. `/api/v1/engagement-requests` has no public tier at all.
 
 `engagementRequestService.js` deliberately duplicates `workspaceService.resolveWorkspaceAccess()`'s/`jobService.resolveStartupAccess()`'s/`investmentInterestService.resolveStartupAccess()`'s/`fundingRoundService.resolveStartupAccess()`'s role-computation logic rather than sharing any of them (explicit instruction, tracked in [BACKLOG.md](BACKLOG.md)) — a fifth independent implementation of the same founder/admin/contributor rules now exists; a future fix to any one must be checked against the other four until unified in a dedicated authorization cleanup phase.
 
@@ -100,7 +100,18 @@ CSV export is hand-rolled (no new dependency) with RFC 4180-style field escaping
 
 **No real LLM provider is integrated this phase** — no API key, no outbound network call, no new dependency. `aiProviderService.generateCompletion()` is the single seam where a real provider would be wired in; until then, no user data leaves this backend as part of an AI request.
 
-**Rate limiting** is a lightweight, in-memory, per-user sliding window (10 requests/minute) — the first rate limiting of any kind in this codebase (every other module's public surfaces still have none, per the standing Phase 1 backlog item). Not persisted, not shared across instances — acceptable for a single-instance MVP, flagged in `BACKLOG.md` as needing a shared store before scaling out or before a real (costed) provider is wired in.
+**Rate limiting** is a lightweight, in-memory, per-user sliding window (10 requests/minute) inside `aiService.js` itself — layered underneath `aiApiLimiter` (`express-rate-limit`, also 10 req/hour per user/IP, adopted from the Developer 1 merge) at the route level. Neither is persisted or shared across instances — acceptable for a single-instance MVP, flagged in `BACKLOG.md` as needing a shared store before scaling out or before a real (costed) provider is wired in.
+
+## Backend merge (Developer 1 + Developer 2)
+
+Two independently-developed TrustNet backends were compared and merged. Developer 1's codebase (`trustnet 2.zip`) had **zero automated tests** (`"test": "echo \"No tests configured yet\""`) and a structurally different domain model (`StartupMember`/`StartupInvitation` instead of `Team`/`Workspace`; its own social-graph, admin-audit, realtime, and AI-gateway subsystems never on this roadmap). Per explicit scope decision, none of that was absorbed — Developer 2's tested, documented architecture (this repo, pre-merge) was kept wholesale for every domain both sides shared.
+
+Two self-contained, non-duplicative pieces were adopted from Developer 1 as new security middleware, since both filled gaps this repo's own `BACKLOG.md` had flagged since Phase 1:
+
+- **`src/middlewares/sanitizer.js`** — strips NoSQL-operator-injection keys (leading `$`, dot-notation) and raw HTML tags from `req.body`/`req.query`/`req.params` at the API edge. Adapted for Express 5: Developer 1's version reassigned `req.query` directly, which is a silent no-op under Express 5 (`req.query` is a getter with no setter — `Object.getOwnPropertyDescriptor(express.request, 'query').set === undefined`); this version mutates `req.query`'s keys in place instead.
+- **`src/middlewares/rateLimiter.js`** + **`src/config/rateLimits.js`** — `express-rate-limit`-based limiters. Developer 1's version coupled the exceeded-limit handler to an `auditLogService`/`AuditLog` model that wasn't adopted (out of scope, see above); this version logs to `console.warn` only, consistent with `errorHandler.js`'s existing `console.error` usage. Also fixed Developer 1's custom `keyGenerator` to use `express-rate-limit`'s own `ipKeyGenerator` helper for the anonymous-caller fallback (raw `req.ip` fails IPv6 normalization and can be bypassed by rotating within a /56 subnet — `express-rate-limit` validates for this and threw `ERR_ERL_KEY_GEN_IPV6` until fixed).
+
+See `BACKLOG.md` for the full list of now-closed and still-open rate-limiting items.
 
 ## Reporting a vulnerability
 

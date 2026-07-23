@@ -3,11 +3,17 @@ const aiController = require("../controllers/aiController");
 const { authenticate } = require("../middlewares/auth");
 const validate = require("../middlewares/validate");
 const { insightRequest } = require("../validators/ai.validators");
+const { aiApiLimiter } = require("../middlewares/rateLimiter");
 
 const router = express.Router();
 
-// No public tier — every route requires auth.
-router.use(authenticate);
+// No public tier — every route requires auth. aiApiLimiter (per-user,
+// adapted from Developer 1's rate limiter during the backend merge) sits
+// in front of aiService's own in-memory per-user rate limiter — the two
+// are complementary, not redundant: this one is IP/user-keyed at the HTTP
+// layer via express-rate-limit (survives across capabilities), aiService's
+// is a second, independent cap already documented in docs/modules/ai.md.
+router.use(authenticate, aiApiLimiter);
 
 /**
  * @openapi

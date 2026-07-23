@@ -4,10 +4,21 @@ Unresolved / open items across the backend. Delivered work already merged is tra
 
 > Verify each item against current code before acting — this backlog is compiled from planning docs ([.kilo/plans/](/.kilo/plans/)) and may not reflect fixes already landed.
 
+## Backend merge (Developer 1 + Developer 2) — not pursued further this phase
+
+An independently-developed TrustNet backend (`trustnet 2.zip`, "Developer 1") was compared against this repo ("Developer 2") for a possible merge. Findings and explicit scope decision:
+
+- Developer 1 had **zero automated tests** (`package.json`: `"test": "echo \"No tests configured yet\""`) versus this repo's 452 passing (unit + integration). Every one of the 12 model names both sides share (`User`, `Job`, `Application`, `Startup`, `Post`, `Comment`, `Community`, `Conversation`, `Message`, `Notification`, `UserPreference`, `CollaborationRequest`) differs in schema between the two — none identical.
+- Developer 1 has 22 additional models representing a different product surface entirely: a social graph (`Block`/`Bookmark`/`Connection`/`Follower`/`Reaction`/`Reply`), admin/observability (`AuditLog`/`SystemConfig`/`AppMetric`/`AnalyticsMetric`/`Report`/`Announcement`), email-retry (`EmailToken`/`FailedEmail`), media (`Media`), and a different Startup-membership model (`StartupMember`/`StartupInvitation` instead of this repo's `Team`/`Workspace`). It also ships its own realtime layer (`src/socket/`, needs `socket.io`), background job runner (`src/jobs/`, needs `node-cron`), and its own AI gateway with real provider SDKs (`src/ai/`, needs `openai` + `@google/generative-ai`) — none of which this roadmap ever called for.
+- **Explicit decision: none of the above was adopted.** Developer 2's architecture, models, and services were kept wholesale for every domain both backends touch — adopting untested code over tested code, or a second parallel Startup-membership system alongside `Team`, would have regressed correctness and duplicated functionality, both directly prohibited for this merge.
+- **Adopted:** `src/middlewares/sanitizer.js` (NoSQL-injection/XSS-at-the-edge sanitization, fixed for Express 5's getter-only `req.query`) and `src/middlewares/rateLimiter.js` + `src/config/rateLimits.js` (`express-rate-limit`-based, `auditLogService` coupling dropped, IPv6 key-generation fixed) — both self-contained, non-duplicative, and each closed a gap this file had already flagged since Phase 1. New dependency: `express-rate-limit@^8.6.0`.
+- [ ] If a future phase wants any of Developer 1's social-graph/admin-audit/realtime/background-job/AI-gateway features, treat each as its own new module needing its own planning report — do not re-attempt a bulk absorption; the two codebases' domain models are too structurally divergent for that to be safe.
+- [ ] `defaultLimiter`'s 100/15min baseline (from the merge) is generic and repo-wide; several public listing endpoints (Job, Investor, Marketplace) and Reports generation still lack a *dedicated*, tighter, per-surface limit — see their respective sections below.
+
 ## Security & stability (Phase 1)
 
 - [ ] Confirm/fix JWT refresh verification secret bug in `src/middlewares/auth.js` (see [SECURITY.md](SECURITY.md))
-- [ ] Rate limiting on `/auth/*` routes
+- [x] ~~Rate limiting on `/auth/*` routes~~ — done via the Developer 1 backend merge: `signupLimiter`/`loginLimiter`/`forgotPasswordLimiter`/`resendVerificationLimiter` on the specific routes, plus a global `defaultLimiter` (100/15min) on all of `/api/v1`. See "Backend merge" section below.
 - [ ] Lock CORS to explicit origin allowlist (currently `CLIENT_URL` or `*`)
 - [ ] Enforce password policy on register/reset/change-password
 - [ ] Confirm `.env` gitignored + `.env.example` committed
@@ -61,7 +72,7 @@ Unresolved / open items across the backend. Delivered work already merged is tra
 ## Hiring (not fixed this phase — explicit, instructed tradeoffs)
 
 - [ ] **`jobService.resolveStartupAccess()`/`getAccessibleStartupIds()` deliberately duplicate `workspaceService.resolveWorkspaceAccess()`/`listWorkspacesForUser()`'s role-computation logic.** This was an explicit instruction for this phase, not an oversight — the collaboration permission layer is already integration-tested and was left untouched on purpose. A future dedicated refactoring phase should collapse this into one shared primitive both Workspace and Hiring call, the same way `resolveProjectAccess` was already recommended (Collaboration Architecture Audit §9) for Task/Milestone/Documents. This is now the clearest, most justified case for that refactor across the whole codebase.
-- [ ] `downloadUrl`-style public file-serving isn't relevant here, but the analogous gap: `Job`'s public read surface has no rate limiting beyond whatever exists repo-wide (see Security Phase 1 item above) — a public job board is a scraping/enumeration target, worth a dedicated look before production.
+- [ ] `downloadUrl`-style public file-serving isn't relevant here, but the analogous gap: `Job`'s public read surface has only the generic `defaultLimiter` baseline (100/15min, repo-wide via the Developer 1 merge), no dedicated tighter limit the way `/auth/*`/`/search` now have — a public job board is a scraping/enumeration target, worth a dedicated look before production.
 - [ ] Publish-time validation (`assertPublishReady`) and draft-time validation (Joi) intentionally differ in strictness — confirmed working as designed via tests, but no product spec defined the exact required-field list (`title`/`description`/`employmentType`/`remotePolicy`) beyond this implementation's own judgment call. Revisit if product has stricter requirements.
 
 ## Applications (not fixed this phase)
@@ -75,7 +86,7 @@ Unresolved / open items across the backend. Delivered work already merged is tra
 
 - [ ] **Startup authorization currently exists in three local helpers** (`workspaceService.resolveWorkspaceAccess`, `jobService.resolveStartupAccess`, `investmentInterestService.resolveStartupAccess`). Refactor into a shared authorization service only during a dedicated authorization cleanup phase, once additional Startup-domain modules exist — not now.
 - [ ] `InvestorProfile` and `InvestmentInterest` have no relationship to each other — an investor can express interest without ever creating a profile. Intentional this phase (interest is User-driven, not Profile-driven); confirm against product intent before a future phase changes it.
-- [ ] Public `GET /investors` directory has no rate limiting beyond whatever exists repo-wide — same enumeration/scraping concern already flagged for Job's public surface (see Hiring section above).
+- [ ] Public `GET /investors` directory has only the generic `defaultLimiter` baseline, no dedicated tighter limit — same enumeration/scraping concern already flagged for Job's public surface (see Hiring section above).
 - [ ] Contributor tier now has three different shapes across three modules (Task: conditional read-write; Application: zero access; Investment Interest: unconditional read-only) — each individually justified in its own module doc, nothing central compares them; worth a note if a fourth shape appears.
 
 ## Funding (not fixed this phase — explicit, instructed tradeoffs)
@@ -90,7 +101,7 @@ Unresolved / open items across the backend. Delivered work already merged is tra
 - [ ] **Startup authorization currently exists in five local helpers** (`workspaceService.resolveWorkspaceAccess`, `jobService.resolveStartupAccess`, `investmentInterestService.resolveStartupAccess`, `fundingRoundService.resolveStartupAccess`, `engagementRequestService.resolveStartupAccess`). Refactor into a shared authorization service only during a dedicated authorization cleanup phase, once additional Startup-domain modules exist — not now. This is now the strongest, most-repeated case for that refactor of any module completed so far.
 - [ ] **Providers are individual Users, not Startups** — a Startup cannot itself be a service provider in this design. A real capability limit, not just an implementation simplification; confirm against product intent before treating it as permanent.
 - [ ] **`ServiceListing.provider` refs `ProviderProfile`, deliberately coupled** — unlike `FundingContribution.investor`/`InvestmentInterest.investor`, which ref `User` directly. A considered inconsistency across modules, not an oversight; worth knowing if a future module needs the same shape.
-- [ ] Public `GET /service-listings` directory has no rate limiting beyond whatever exists repo-wide — same enumeration/scraping concern already flagged for Job's/Investor's/Funding's public surfaces.
+- [ ] Public `GET /service-listings` directory has only the generic `defaultLimiter` baseline, no dedicated tighter limit — same enumeration/scraping concern already flagged for Job's/Investor's/Funding's public surfaces.
 - [ ] Same optional-auth gap Job and FundingRound already have (`req.user` unpopulated on public GET routes without a token, so "authenticated caller sees more" is unreachable in production) now affects a third module (`service-listings`).
 
 ## Analytics (not fixed this phase — explicit, instructed tradeoffs)

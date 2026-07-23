@@ -12,6 +12,12 @@ const { sendPasswordResetEmail } = require('../services/email.service');
 const { authenticate } = require('../middlewares/auth');
 const cloudinary = require('../services/cloudinary.service');
 const { encryptTwoFactorSecret, decryptTwoFactorSecret } = require('../services/twoFactor.service');
+const {
+  signupLimiter,
+  loginLimiter,
+  forgotPasswordLimiter,
+  resendVerificationLimiter,
+} = require('../middlewares/rateLimiter');
 
 const router = express.Router();
 
@@ -132,7 +138,7 @@ async function generateUniqueUsername(email) {
   }
 }
 
-router.post('/register', async (req, res, next) => {
+router.post('/register', signupLimiter, async (req, res, next) => {
   try {
     const { email, password, fullName, username, designation } = req.body;
 
@@ -173,7 +179,7 @@ router.post('/register', async (req, res, next) => {
   }
 });
 
-router.post('/login', async (req, res, next) => {
+router.post('/login', loginLimiter, async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
@@ -575,11 +581,11 @@ router.get('/verify-email', (req, res) => {
   res.json({ success: true, message: 'Email verified successfully.' });
 });
 
-router.post('/resend-verification', (req, res) => {
+router.post('/resend-verification', resendVerificationLimiter, (req, res) => {
   res.json({ success: true, message: 'Verification email sent.' });
 });
 
-router.post('/forgot-password', async (req, res, next) => {
+router.post('/forgot-password', forgotPasswordLimiter, async (req, res, next) => {
   try {
     const email = String(req.body?.email || '').trim().toLowerCase();
     if (!/^\S+@\S+\.\S+$/.test(email)) {

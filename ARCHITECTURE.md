@@ -68,13 +68,15 @@ Middleware order in `app.js`:
 3. CORS preflight handler
 4. `compressionMiddleware` — gzip
 5. `express.json()` — body parsing
-6. `cookieParser()`
-7. `morgan('dev')` — request logging
-8. `healthRoutes` at `/health`
-9. Swagger UI at `/api/docs`
-10. `apiRoutes` at `/api/v1` (see [API_GUIDELINES.md](API_GUIDELINES.md))
-11. `notFound` — 404 fallback
-12. `errorHandler` — centralized error response
+6. `sanitizeRequest` — strips leading `$`/dot-notation from body/query/param keys (NoSQL operator injection) and raw HTML tags from string values, in place for `req.query` (a getter-only accessor under Express 5). Adopted from a merge with an independently-developed backend (Developer 1); see [BACKLOG.md](BACKLOG.md).
+7. `cookieParser()`
+8. `morgan('dev')` — request logging
+9. `healthRoutes` at `/health`
+10. Swagger UI at `/api/docs`
+11. `defaultLimiter` — global per-IP/user rate limit (100 req/15min), plus stricter per-route limiters on `/auth/register`, `/auth/login`, `/auth/forgot-password`, `/auth/resend-verification`, `/search`, `/ai/insights` (`src/middlewares/rateLimiter.js`, also adopted from the Developer 1 merge). Closes the "no rate limiting middleware yet" gap below.
+12. `apiRoutes` at `/api/v1` (see [API_GUIDELINES.md](API_GUIDELINES.md))
+13. `notFound` — 404 fallback
+14. `errorHandler` — centralized error response
 
 Per-route middleware: `authenticate` (JWT check), `authorize(...roles)` (RBAC), `validate(schema)` (Joi body validation), `requireApprovedVerification` (gates dashboard on KYC approval).
 
@@ -121,7 +123,7 @@ Tracked in [ROADMAP.md](ROADMAP.md) / [BACKLOG.md](BACKLOG.md):
 - No repository layer (services hit Mongoose models directly) despite README claim.
 - No automated test suite (`test/` is a placeholder, `npm test` echoes a message).
 - No CI/CD configuration found in repo.
-- No rate limiting middleware yet.
+- ~~No rate limiting middleware yet.~~ Resolved via the Developer 1 merge — see Request lifecycle above.
 - Auth middleware bug: refresh-token verification path reportedly uses the access secret instead of refresh secret (see [SECURITY.md](SECURITY.md)).
 
 TODO: add sequence diagrams for auth flow once flow is stabilized (see [docs/AUTH_FLOW.md](docs/AUTH_FLOW.md)).
