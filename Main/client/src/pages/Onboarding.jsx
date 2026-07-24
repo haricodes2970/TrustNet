@@ -19,7 +19,7 @@ export default function OnboardingPage() {
         setSaving(true);
         setSaveError("");
         try {
-            const res = await api.put("/v1/profile", { role });
+            const res = await api.put("/profile", { role });
             setUser((u) => (u ? { ...u, role: res.data?.data?.role ?? role } : u));
             setStep(3);
         } catch (err) {
@@ -33,7 +33,7 @@ export default function OnboardingPage() {
         setSaving(true);
         setSaveError("");
         try {
-            await api.put("/v1/profile", { onboardingCompleted: true });
+            await api.put("/profile", { onboardingCompleted: true });
             setUser((u) => (u ? { ...u, onboardingCompleted: true } : u));
         } catch (err) {
             // Even if this last save fails, don't trap the user on this screen —

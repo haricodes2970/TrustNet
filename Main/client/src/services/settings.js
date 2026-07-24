@@ -11,66 +11,66 @@ import api from "./api";
 //   DELETE /v1/settings/sessions/:id
 
 export async function getSettings() {
-  const { data } = await api.get("/v1/settings");
+  const { data } = await api.get("/settings");
   return data?.data ?? data;
 }
 
 export async function updateProfileSettings(payload) {
-  const { data } = await api.put("/v1/settings/profile", payload);
+  const { data } = await api.put("/settings/profile", payload);
   return data?.data ?? data;
 }
 
 export async function updatePreferences(payload) {
-  const { data } = await api.put("/v1/settings/preferences", payload);
+  const { data } = await api.put("/settings/preferences", payload);
   return data?.data ?? data;
 }
 
 export async function updatePrivacy(payload) {
-  const { data } = await api.put("/v1/settings/privacy", payload);
+  const { data } = await api.put("/settings/privacy", payload);
   return data?.data ?? data;
 }
 
 export async function updateAppearance(payload) {
-  const { data } = await api.put("/v1/settings/appearance", payload);
+  const { data } = await api.put("/settings/appearance", payload);
   return data?.data ?? data;
 }
 
 export async function getSessions() {
-  const { data } = await api.get("/v1/settings/sessions");
+  const { data } = await api.get("/settings/sessions");
   return data?.data ?? data;
 }
 
 export async function deleteSession(id) {
-  const { data } = await api.delete(`/v1/settings/sessions/${id}`);
+  const { data } = await api.delete(`/settings/sessions/${id}`);
   return data?.data ?? data;
 }
 
 export async function deleteAccount(currentPassword) {
-  const { data } = await api.delete("/v1/auth/account", { data: { currentPassword } });
+  const { data } = await api.delete("/auth/account", { data: { currentPassword } });
   return data?.data ?? data;
 }
 
 export async function changePassword(payload) {
-  const { data } = await api.put("/v1/auth/change-password", payload);
+  const { data } = await api.put("/auth/change-password", payload);
   return data?.data ?? data;
 }
 
 export async function getTwoFactorStatus() {
-  const { data } = await api.get("/v1/auth/2fa");
+  const { data } = await api.get("/auth/2fa");
   return data?.data ?? data;
 }
 
 export async function setupTwoFactor() {
-  const { data } = await api.post("/v1/auth/2fa/setup");
+  const { data } = await api.post("/auth/2fa/setup");
   return data?.data ?? data;
 }
 
 export async function enableTwoFactor(token) {
-  const { data } = await api.post("/v1/auth/2fa/enable", { token });
+  const { data } = await api.post("/auth/2fa/enable", { token });
   return data?.data ?? data;
 }
 
 export async function disableTwoFactor(currentPassword, token) {
-  const { data } = await api.post("/v1/auth/2fa/disable", { currentPassword, token });
+  const { data } = await api.post("/auth/2fa/disable", { currentPassword, token });
   return data?.data ?? data;
 }

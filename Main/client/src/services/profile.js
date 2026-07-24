@@ -8,25 +8,25 @@ import api from "./api";
 //   DELETE /v1/profile/avatar -> removeAvatar
 
 export async function getProfile() {
-  const { data } = await api.get("/v1/profile");
+  const { data } = await api.get("/profile");
   return data?.data ?? data;
 }
 
 export async function updateProfile(payload) {
-  const { data } = await api.put("/v1/profile", payload);
+  const { data } = await api.put("/profile", payload);
   return data?.data ?? data;
 }
 
 export async function uploadAvatar(file) {
   const form = new FormData();
   form.append("avatar", file);
-  const { data } = await api.post("/v1/profile/avatar", form, {
+  const { data } = await api.post("/profile/avatar", form, {
     headers: { "Content-Type": "multipart/form-data" },
   });
   return data?.data ?? data;
 }
 
 export async function removeAvatar() {
-  const { data } = await api.delete("/v1/profile/avatar");
+  const { data } = await api.delete("/profile/avatar");
   return data?.data ?? data;
 }

@@ -8,7 +8,7 @@ export default function VerifyEmailPage() {
   useEffect(() => {
     // Confirm the email with the backend; the page UI stays the same.
     api
-      .get("/v1/auth/verify-email")
+      .get("/auth/verify-email")
       .catch(() => {});
   }, []);
 

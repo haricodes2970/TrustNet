@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import api from "./api";
 
 export async function searchRequest(query) {
-  const { data } = await api.get("/v1/search", { params: { q: query } });
+  const { data } = await api.get("/search", { params: { q: query } });
   return data?.data ?? { users: [], startups: [], communities: [], posts: [] };
 }
 

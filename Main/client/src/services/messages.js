@@ -13,27 +13,27 @@ import api from "./api";
 //   GET    /v1/messages/unread-count
 
 export async function getConversations(params = {}) {
-  const { data } = await api.get("/v1/messages/conversations", { params });
+  const { data } = await api.get("/messages/conversations", { params });
   return data?.data ?? data;
 }
 
 export async function createConversation(payload) {
-  const { data } = await api.post("/v1/messages/conversations", payload);
+  const { data } = await api.post("/messages/conversations", payload);
   return data?.data ?? data;
 }
 
 export async function getConversation(id) {
-  const { data } = await api.get(`/v1/messages/conversations/${id}`);
+  const { data } = await api.get(`/messages/conversations/${id}`);
   return data?.data ?? data;
 }
 
 export async function deleteConversation(id) {
-  const { data } = await api.delete(`/v1/messages/conversations/${id}`);
+  const { data } = await api.delete(`/messages/conversations/${id}`);
   return data?.data ?? data;
 }
 
 export async function getMessages(conversationId, params = {}) {
-  const { data } = await api.get(`/v1/messages/conversations/${conversationId}/messages`, {
+  const { data } = await api.get(`/messages/conversations/${conversationId}/messages`, {
     params,
   });
   return data?.data ?? data;
@@ -41,7 +41,7 @@ export async function getMessages(conversationId, params = {}) {
 
 export async function sendMessage(conversationId, payload) {
   const { data } = await api.post(
-    `/v1/messages/conversations/${conversationId}/messages`,
+    `/messages/conversations/${conversationId}/messages`,
     payload
   );
   return data?.data ?? data;
@@ -49,19 +49,19 @@ export async function sendMessage(conversationId, payload) {
 
 export async function markMessageRead(conversationId, messageId) {
   const { data } = await api.put(
-    `/v1/messages/conversations/${conversationId}/messages/${messageId}/read`
+    `/messages/conversations/${conversationId}/messages/${messageId}/read`
   );
   return data?.data ?? data;
 }
 
 export async function deleteMessage(conversationId, messageId) {
   const { data } = await api.delete(
-    `/v1/messages/conversations/${conversationId}/messages/${messageId}`
+    `/messages/conversations/${conversationId}/messages/${messageId}`
   );
   return data?.data ?? data;
 }
 
 export async function getUnreadCount() {
-  const { data } = await api.get("/v1/messages/unread-count");
+  const { data } = await api.get("/messages/unread-count");
   return data?.data ?? data;
 }

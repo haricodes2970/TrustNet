@@ -24,7 +24,7 @@ export default function ResetPasswordPage() {
     setSubmitting(true);
     setMessage("");
     try {
-      await api.post("/v1/auth/reset-password", {
+      await api.post("/auth/reset-password", {
         password: String(fd.get("password")),
         confirmPassword: String(fd.get("confirm")),
         token: new URLSearchParams(window.location.search).get("token"),

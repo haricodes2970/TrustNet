@@ -1,12 +1,12 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
-import api from "../services/api";
+import api, { API_BASE_URL } from "../services/api";
 
 // Restore client: attaches the stored access token but has NO response
 // interceptor. A failed session-restore (stale/invalid token) must NOT trigger
 // the global hard-redirect to /login — it should just leave the user logged out.
 const restoreApi = axios.create({
-  baseURL: "/api",
+  baseURL: API_BASE_URL,
   withCredentials: true,
   headers: { "Content-Type": "application/json" },
 });
@@ -34,13 +34,13 @@ export function AuthProvider({ children }) {
   };
 
   const fetchMe = useCallback(async () => {
-    const { data } = await api.get("/v1/auth/me");
+    const { data } = await api.get("/auth/me");
     setUser(data.data);
     return data.data;
   }, []);
 
   const refresh = useCallback(async () => {
-    const { data } = await api.post("/v1/auth/refresh");
+    const { data } = await api.post("/auth/refresh");
     const token = data?.data?.accessToken;
     if (token) {
       applyToken(token);
@@ -62,14 +62,14 @@ export function AuthProvider({ children }) {
     }
     (async () => {
       try {
-        const { data } = await restoreApi.get("/v1/auth/me");
+        const { data } = await restoreApi.get("/auth/me");
         setUser(data.data);
       } catch (e) {
         try {
-          const { data } = await restoreApi.post("/v1/auth/refresh");
+          const { data } = await restoreApi.post("/auth/refresh");
           const newToken = data?.data?.accessToken;
           if (newToken) applyToken(newToken);
-          const { data: meData } = await restoreApi.get("/v1/auth/me");
+          const { data: meData } = await restoreApi.get("/auth/me");
           setUser(meData.data);
         } catch (e2) {
           if (!active || sessionRef.current !== mySession) return;
@@ -87,7 +87,7 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     sessionRef.current += 1;
-    const response = await api.post("/v1/auth/login", { email, password });
+    const response = await api.post("/auth/login", { email, password });
     if (response.data?.data?.requiresTwoFactor) {
       return response.data;
     }
@@ -97,7 +97,7 @@ export function AuthProvider({ children }) {
   };
 
   const completeTwoFactorLogin = async (twoFactorToken, token) => {
-    const response = await api.post("/v1/auth/login/2fa", { twoFactorToken, token });
+    const response = await api.post("/auth/login/2fa", { twoFactorToken, token });
     applyToken(response.data.data.accessToken);
     setUser(response.data.data.user);
     return response.data;
@@ -115,14 +115,14 @@ export function AuthProvider({ children }) {
   }, [fetchMe]);
 
   const register = async (payload) => {
-    const { data } = await api.post("/v1/auth/register", payload);
+    const { data } = await api.post("/auth/register", payload);
     return data;
   };
 
   const logout = async () => {
     sessionRef.current += 1;
     try {
-      await api.post("/v1/auth/logout");
+      await api.post("/auth/logout");
     } catch (e) {
       // ignore — clear local session regardless
     }

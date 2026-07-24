@@ -20,7 +20,7 @@ export default function ForgotPasswordPage() {
     setSubmitting(true);
     setError("");
     try {
-      await api.post("/v1/auth/forgot-password", { email });
+      await api.post("/auth/forgot-password", { email });
       setSent(true);
     } catch (err) {
       setError(err?.response?.data?.message || "Unable to send a reset link. Please try again.");
