@@ -4,7 +4,7 @@
     {
       "name": "trustnet-frontend",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "trustnet-frontend", "run", "dev", "--", "--host"],
+      "runtimeArgs": ["--prefix", "Main/client", "run", "dev", "--", "--host"],
       "port": 5173
     }
   ]

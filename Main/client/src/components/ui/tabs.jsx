@@ -1,11 +1,44 @@
-import * as React from "react";
-import * as TabsPrimitive from "@radix-ui/react-tabs";
-import { cn } from "../../lib/utils";
-const Tabs = TabsPrimitive.Root;
-const TabsList = React.forwardRef(({ className, ...props }, ref) => (<TabsPrimitive.List ref={ref} className={cn("inline-flex h-9 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground", className)} {...props}/>));
-TabsList.displayName = TabsPrimitive.List.displayName;
-const TabsTrigger = React.forwardRef(({ className, ...props }, ref) => (<TabsPrimitive.Trigger ref={ref} className={cn("inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium ring-offset-background cursor-pointer transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow", className)} {...props}/>));
-TabsTrigger.displayName = TabsPrimitive.Trigger.displayName;
-const TabsContent = React.forwardRef(({ className, ...props }, ref) => (<TabsPrimitive.Content ref={ref} className={cn("mt-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2", className)} {...props}/>));
-TabsContent.displayName = TabsPrimitive.Content.displayName;
-export { Tabs, TabsList, TabsTrigger, TabsContent };
+import React from 'react';
+import { motion } from 'framer-motion';
+
+export const Tabs = ({
+  tabs = [], // [{ id, label, icon: Icon, badge: count }]
+  activeTab,
+  onChange,
+  className = ''
+}) => {
+  return (
+    <div className={`flex items-center gap-1 border-b border-slate-200 overflow-x-auto no-scrollbar ${className}`}>
+      {tabs.map((tab) => {
+        const isActive = activeTab === tab.id;
+        const Icon = tab.icon;
+        return (
+          <button
+            key={tab.id}
+            onClick={() => onChange(tab.id)}
+            className={`relative flex items-center gap-2 px-4 py-3 text-sm font-semibold whitespace-nowrap transition-colors ${
+              isActive ? 'text-emerald-600' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            {Icon && <Icon className={`w-4 h-4 ${isActive ? 'text-emerald-600' : 'text-slate-400'}`} />}
+            <span>{tab.label}</span>
+            {tab.badge !== undefined && (
+              <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${
+                isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'
+              }`}>
+                {tab.badge}
+              </span>
+            )}
+            {isActive && (
+              <motion.div
+                layoutId="activeTabIndicator"
+                className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-500 rounded-t-full"
+                transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+              />
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+};

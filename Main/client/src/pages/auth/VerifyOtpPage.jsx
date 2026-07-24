@@ -1,14 +1,27 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams, Link } from 'react-router-dom';
 import { ShieldCheck, ArrowRight, ArrowLeft, RefreshCw } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
+import { useAuth } from '../../context/AuthContext';
 
 export const VerifyOtpPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const { completeTwoFactorLogin } = useAuth();
   const userEmail = location.state?.email || 'alex@nexusai.io';
 
-  const [otp, setOtp] = useState(['4', '8', '2', '9', '1', '6']);
+  // Real 2FA-login case: arrives here from LoginPage (state.twoFactorToken,
+  // after POST /auth/login returned requiresTwoFactor) or from an OAuth
+  // redirect (backend sends 2FA-enabled users to
+  // /login?twoFactorToken=... -- LoginPage forwards them here). Every
+  // other case (signup email verification, password-reset code) has no
+  // real backend equivalent -- this backend's register/forgot-password
+  // flows don't use a 6-digit code at all -- so those keep the original
+  // mock behavior below, unchanged.
+  const twoFactorToken = location.state?.twoFactorToken || searchParams.get('twoFactorToken');
+
+  const [otp, setOtp] = useState(twoFactorToken ? ['', '', '', '', '', ''] : ['4', '8', '2', '9', '1', '6']);
   const [resendTimer, setResendTimer] = useState(60);
   const [canResend, setCanResend] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -71,7 +84,7 @@ export const VerifyOtpPage = () => {
     // Mock resend code
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const code = otp.join('');
     if (code.length < 6) {
@@ -82,6 +95,20 @@ export const VerifyOtpPage = () => {
     setError('');
     setIsLoading(true);
 
+    if (twoFactorToken) {
+      try {
+        await completeTwoFactorLogin(twoFactorToken, code);
+        navigate('/app/dashboard', { replace: true });
+      } catch (err) {
+        setError(err.message || 'Invalid or expired authentication code.');
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
+
+    // Mock path (no real backend endpoint for this) -- signup email
+    // verification and password-reset code entry.
     setTimeout(() => {
       setIsLoading(false);
       if (location.state?.isSignup) {
@@ -107,9 +134,13 @@ export const VerifyOtpPage = () => {
           <ShieldCheck className="w-8 h-8" />
         </div>
 
-        <h1 className="text-xl font-black text-slate-900 dark:text-white">Enter Verification Code</h1>
+        <h1 className="text-xl font-black text-slate-900 dark:text-white">
+          {twoFactorToken ? 'Two-Factor Authentication' : 'Enter Verification Code'}
+        </h1>
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          We sent a 6-digit OTP code to <span className="font-semibold text-slate-700 dark:text-slate-300">{userEmail}</span>.
+          {twoFactorToken
+            ? 'Enter the 6-digit code from your authenticator app.'
+            : <>We sent a 6-digit OTP code to <span className="font-semibold text-slate-700 dark:text-slate-300">{userEmail}</span>.</>}
         </p>
       </div>
 
@@ -142,6 +173,7 @@ export const VerifyOtpPage = () => {
         </Button>
       </form>
 
+      {!twoFactorToken && (
       <div className="text-center text-xs text-slate-500 dark:text-slate-400">
         Didn't receive code?{' '}
         <button
@@ -156,6 +188,7 @@ export const VerifyOtpPage = () => {
           {canResend ? 'Resend Code' : `Resend in ${resendTimer}s`}
         </button>
       </div>
+      )}
     </div>
   );
 };

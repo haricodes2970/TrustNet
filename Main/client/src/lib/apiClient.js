@@ -4,7 +4,11 @@
 // only job is base-URL/token plumbing and turning the failure envelope
 // into a thrown Error the caller can catch.
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api/v1';
+// VITE_API_URL matches the env var name established for Main/client and
+// documented for Vercel (VITE_API_URL=https://trustnet-8lr8.onrender.com/api/v1)
+// -- kept identical across both frontends so one Vercel env var works
+// regardless of which one is deployed.
+export const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
 const TOKEN_KEY = 'trustnet_access_token';
 
 export function getToken() {

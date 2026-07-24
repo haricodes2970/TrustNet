@@ -50,6 +50,17 @@ export const AuthProvider = ({ children }) => {
     return result;
   };
 
+  // Used by the OAuth callback page: the backend redirects here with an
+  // access token already issued (Google/LinkedIn succeeded server-side) --
+  // store it, then ask who it belongs to via GET /auth/me.
+  const loginWithToken = async (token) => {
+    setToken(token);
+    const user = await authApi.fetchCurrentUser();
+    setCurrentUser(user);
+    setIsAuthenticated(true);
+    return user;
+  };
+
   const register = async (fields) => authApi.register(fields);
 
   const logout = async () => {
@@ -70,6 +81,7 @@ export const AuthProvider = ({ children }) => {
         isLoading,
         login,
         completeTwoFactorLogin,
+        loginWithToken,
         register,
         logout,
         updateUserProfile,

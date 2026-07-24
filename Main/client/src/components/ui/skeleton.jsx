@@ -1,5 +1,14 @@
-import { cn } from "../../lib/utils";
-function Skeleton({ className, ...props }) {
-    return <div className={cn("animate-pulse rounded-md bg-primary/10", className)} {...props}/>;
-}
-export { Skeleton };
+import React from 'react';
+
+export const Skeleton = ({ className = '', count = 1 }) => {
+  return (
+    <>
+      {Array.from({ length: count }).map((_, idx) => (
+        <div
+          key={idx}
+          className={`animate-shimmer bg-slate-200/80 rounded-xl ${className}`}
+        />
+      ))}
+    </>
+  );
+};

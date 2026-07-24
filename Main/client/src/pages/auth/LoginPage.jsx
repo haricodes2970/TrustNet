@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { 
   Mail, 
   Lock, 
@@ -17,9 +17,11 @@ import {
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { useAuth } from '../../context/AuthContext';
+import { BASE_URL } from '../../lib/apiClient';
 
 export const LoginPage = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { login } = useAuth();
 
   const [email, setEmail] = useState('');
@@ -37,6 +39,17 @@ export const LoginPage = () => {
       setSelectedRole(savedRole);
     }
   }, []);
+
+  // OAuth 2FA case: the backend redirects 2FA-enabled Google/LinkedIn
+  // logins here with ?twoFactorToken=... (never straight to
+  // /oauth/callback) -- forward to the same code-entry step a normal
+  // password login with 2FA would use.
+  useEffect(() => {
+    const twoFactorToken = searchParams.get('twoFactorToken');
+    if (twoFactorToken) {
+      navigate('/verify-otp', { replace: true, state: { twoFactorToken } });
+    }
+  }, [searchParams, navigate]);
 
   const handleRoleSelect = (roleId) => {
     if (isLoading) return;
@@ -219,6 +232,29 @@ export const LoginPage = () => {
           <ArrowRight className="w-4 h-4" strokeWidth={1.75} />
         </Button>
       </form>
+
+      <div className="flex items-center gap-3 text-[11px] font-semibold text-slate-400 uppercase">
+        <div className="h-px flex-1 bg-slate-200" />
+        <span>Or</span>
+        <div className="h-px flex-1 bg-slate-200" />
+      </div>
+
+      {/* Full-page redirects to the backend, not axios calls -- the backend
+          issues its own redirect to Google/LinkedIn and back. */}
+      <div className="space-y-2.5">
+        <a
+          href={`${BASE_URL}/auth/google`}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+        >
+          Continue with Google
+        </a>
+        <a
+          href={`${BASE_URL}/auth/linkedin`}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+        >
+          Continue with LinkedIn
+        </a>
+      </div>
 
       <div className="text-center text-xs text-slate-500 pt-4 border-t border-slate-100">
         Don't have an account?{' '}
