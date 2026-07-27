@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   ShieldAlert, 
   Users, 
@@ -34,6 +34,7 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Tabs } from '../../components/ui/Tabs';
 import { useApp } from '../../context/AppContext';
+import * as adminApi from '../../lib/adminApi';
 import { 
   ResponsiveContainer, 
   AreaChart, 
@@ -55,6 +56,18 @@ const analyticsData = [
   { month: 'Jun', users: 18420, revenue: 52100 }
 ];
 
+// Only Verification is wired to a real backend endpoint (see
+// docs/Technical_Documentation_v2.md §6/§9 -- the admin API surface is
+// verification-review only). Every other section below is a UI preview
+// with no corresponding backend model or route; this banner says so
+// instead of silently presenting fabricated numbers as live data.
+const DemoDataNotice = () => (
+  <div className="flex items-center gap-2 p-3 bg-amber-50 text-amber-700 rounded-xl border border-amber-200 text-[11px] font-semibold">
+    <ShieldAlert className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />
+    <span>Demo preview -- this section has no backend endpoint yet. Numbers and actions here are illustrative only.</span>
+  </div>
+);
+
 export const AdminDashboardPage = () => {
   const { showToast } = useApp();
 
@@ -75,10 +88,29 @@ export const AdminDashboardPage = () => {
     { id: 'usr_5', name: 'David Miller', email: 'david@paypulse.io', role: 'Entrepreneur', status: 'Suspended', verified: false }
   ]);
 
-  const [verificationsQueue, setVerificationsQueue] = useState([
-    { id: 'ver_1', name: 'David K. Miller', company: 'PayPulse AI', type: 'YC W24 Founder', proof: 'YC_W24_Acceptance_Letter.pdf', date: '2 hours ago' },
-    { id: 'ver_2', name: 'Victoria Thorne', company: 'Apex Capital', type: 'Accredited VC', proof: 'FINRA_Accreditation_Proof.pdf', date: '5 hours ago' }
-  ]);
+  // Live data -- GET /api/v1/admin/verifications (the only admin capability
+  // with real backend support; see docs/Technical_Documentation_v2.md).
+  const [verificationsQueue, setVerificationsQueue] = useState([]);
+  const [verificationsLoading, setVerificationsLoading] = useState(true);
+  const [verificationsError, setVerificationsError] = useState('');
+  const [actioningId, setActioningId] = useState(null);
+
+  const loadVerifications = useCallback(async () => {
+    setVerificationsLoading(true);
+    setVerificationsError('');
+    try {
+      const users = await adminApi.listVerifications();
+      setVerificationsQueue(Array.isArray(users) ? users : []);
+    } catch (err) {
+      setVerificationsError(err.message || 'Failed to load verification queue.');
+    } finally {
+      setVerificationsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadVerifications();
+  }, [loadVerifications]);
 
   const [reportsList, setReportsList] = useState([
     { id: 'rep_1', reporter: 'Alex Morgan', reported: 'Spam Pitch Bot', reason: 'Unsolicited mass DM pitches', date: 'Today' },
@@ -87,9 +119,31 @@ export const AdminDashboardPage = () => {
 
   const [broadcastMessage, setBroadcastMessage] = useState('');
 
-  const handleApproveVerification = (id, name) => {
-    setVerificationsQueue(prev => prev.filter(v => v.id !== id));
-    showToast('Identity Verified', `Approved badge for ${name}.`, 'success');
+  const handleApproveVerification = async (userId, name) => {
+    setActioningId(userId);
+    try {
+      await adminApi.approveVerification(userId);
+      setVerificationsQueue(prev => prev.filter(v => v._id !== userId));
+      showToast('Identity Verified', `Approved badge for ${name}.`, 'success');
+    } catch (err) {
+      showToast('Approval Failed', err.message || 'Could not approve this verification.', 'error');
+    } finally {
+      setActioningId(null);
+    }
+  };
+
+  const handleRejectVerification = async (userId, name) => {
+    const reason = window.prompt(`Reason for rejecting ${name}'s verification (optional):`) || undefined;
+    setActioningId(userId);
+    try {
+      await adminApi.rejectVerification(userId, reason);
+      setVerificationsQueue(prev => prev.filter(v => v._id !== userId));
+      showToast('Verification Rejected', `Rejected submission for ${name}.`, 'info');
+    } catch (err) {
+      showToast('Rejection Failed', err.message || 'Could not reject this verification.', 'error');
+    } finally {
+      setActioningId(null);
+    }
   };
 
   const handleToggleUserStatus = (userId) => {
@@ -151,6 +205,7 @@ export const AdminDashboardPage = () => {
       {/* 1. OVERVIEW SECTION */}
       {activeSection === 'overview' && (
         <div className="space-y-8">
+          <DemoDataNotice />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             <Card className="p-6 border-slate-200/80 hoverEffect">
               <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Total Ecosystem Users</span>
@@ -194,9 +249,12 @@ export const AdminDashboardPage = () => {
         </div>
       )}
 
-      {/* 2. MANAGEMENT SECTION */}
+      {/* 2. MANAGEMENT SECTION -- no GET /users list-all endpoint exists on
+          the backend (only GET /users/:id), so this whole section is a
+          UI preview, not real data. */}
       {activeSection === 'management' && (
         <div className="space-y-6">
+          <DemoDataNotice />
           {/* Sub-tabs bar */}
           <div className="flex items-center gap-2 border-b border-slate-200/80 pb-3 overflow-x-auto">
             {[
@@ -306,35 +364,83 @@ export const AdminDashboardPage = () => {
         </div>
       )}
 
-      {/* 3. VERIFICATION SECTION */}
+      {/* 3. VERIFICATION SECTION -- wired to the real backend
+          (GET/POST /api/v1/admin/verifications, see adminApi.js) */}
       {activeSection === 'verification' && (
         <Card className="p-6 border-slate-200/80 space-y-6">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-lg font-bold text-slate-900">Verification Center Queue</h3>
-              <p className="text-xs text-slate-500 mt-0.5">Review identity documents, YC acceptance letters, and VC accreditation proofs.</p>
+              <p className="text-xs text-slate-500 mt-0.5">Review identity documents and KYC submissions awaiting approval.</p>
             </div>
-            <Badge variant="emerald">{verificationsQueue.length} Pending</Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="emerald">{verificationsQueue.length} Pending</Badge>
+              <Button variant="outline" size="sm" onClick={loadVerifications} disabled={verificationsLoading}>
+                <RefreshCw className={`w-3.5 h-3.5 ${verificationsLoading ? 'animate-spin' : ''}`} strokeWidth={1.75} />
+              </Button>
+            </div>
           </div>
+
+          {verificationsLoading && (
+            <div className="p-6 text-center text-xs text-slate-500">Loading verification queue…</div>
+          )}
+
+          {!verificationsLoading && verificationsError && (
+            <div className="p-4 bg-rose-50 text-rose-600 rounded-xl border border-rose-200 text-xs font-medium">
+              {verificationsError}
+            </div>
+          )}
+
+          {!verificationsLoading && !verificationsError && verificationsQueue.length === 0 && (
+            <div className="p-6 text-center text-xs text-slate-500">No pending verifications. All caught up.</div>
+          )}
 
           <div className="space-y-3">
             {verificationsQueue.map((item) => (
-              <div key={item.id} className="p-4 bg-slate-50/80 rounded-xl border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div key={item._id} className="p-4 bg-slate-50/80 rounded-xl border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-2">
-                    <h4 className="text-xs font-bold text-slate-900">{item.name}</h4>
-                    <Badge variant="emerald">{item.type}</Badge>
+                    <h4 className="text-xs font-bold text-slate-900">{item.fullName}</h4>
+                    <Badge variant="emerald">{item.designation || item.role}</Badge>
                   </div>
-                  <p className="text-[11px] text-slate-500 mt-1">Company: {item.company} • Submitted: {item.date}</p>
-                  <span className="text-[10px] text-emerald-600 font-semibold mt-1 block">Proof File: {item.proof}</span>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    {item.email} • Submitted: {item.verificationSubmittedAt ? new Date(item.verificationSubmittedAt).toLocaleDateString() : 'Unknown'}
+                  </p>
+                  <span className="text-[10px] text-emerald-600 font-semibold mt-1 block">
+                    {(item.verificationDocuments || []).length} document(s) submitted
+                  </span>
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={() => showToast('Document View', `Opening ${item.proof}`, 'info')}>
-                    <Eye className="w-3.5 h-3.5" strokeWidth={1.75} />
-                    <span>View Proof</span>
+                  {(item.verificationDocuments || []).map((doc) => (
+                    <a
+                      key={doc._id || doc.type}
+                      href={doc.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex"
+                    >
+                      <Button variant="outline" size="sm">
+                        <Eye className="w-3.5 h-3.5" strokeWidth={1.75} />
+                        <span>{doc.type}</span>
+                      </Button>
+                    </a>
+                  ))}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    isLoading={actioningId === item._id}
+                    onClick={() => handleRejectVerification(item._id, item.fullName)}
+                  >
+                    <X className="w-3.5 h-3.5" strokeWidth={1.75} />
+                    <span>Reject</span>
                   </Button>
-                  <Button variant="primary" size="sm" onClick={() => handleApproveVerification(item.id, item.name)}>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    isLoading={actioningId === item._id}
+                    onClick={() => handleApproveVerification(item._id, item.fullName)}
+                  >
                     <Check className="w-3.5 h-3.5" strokeWidth={1.75} />
                     <span>Approve Badge</span>
                   </Button>
@@ -345,9 +451,10 @@ export const AdminDashboardPage = () => {
         </Card>
       )}
 
-      {/* 4. CONTENT SECTION */}
+      {/* 4. CONTENT SECTION -- no content-moderation model/route exists. */}
       {activeSection === 'content' && (
         <div className="space-y-6">
+          <DemoDataNotice />
           <div className="flex items-center gap-2 border-b border-slate-200/80 pb-3 overflow-x-auto">
             {[
               { id: 'posts', label: 'Posts & Feed' },
@@ -379,9 +486,10 @@ export const AdminDashboardPage = () => {
         </div>
       )}
 
-      {/* 5. MODERATION SECTION */}
+      {/* 5. MODERATION SECTION -- no report/dispute model exists. */}
       {activeSection === 'moderation' && (
         <div className="space-y-6">
+          <DemoDataNotice />
           <div className="flex items-center gap-2 border-b border-slate-200/80 pb-3">
             <button
               onClick={() => setModerationSubTab('reports')}
@@ -422,9 +530,13 @@ export const AdminDashboardPage = () => {
         </div>
       )}
 
-      {/* 6. ANALYTICS SECTION */}
+      {/* 6. ANALYTICS SECTION -- this is platform-wide admin analytics,
+          distinct from the real per-startup Analytics module (see
+          AnalyticsPage.jsx / GET /api/v1/analytics); no admin-wide
+          analytics endpoint exists. */}
       {activeSection === 'analytics' && (
         <Card className="p-6 border-slate-200/80 space-y-4">
+          <DemoDataNotice />
           <h3 className="text-lg font-bold text-slate-900">Ecosystem Platform Analytics</h3>
           <div className="h-80 w-full pt-4">
             <ResponsiveContainer width="100%" height="100%">
@@ -440,9 +552,12 @@ export const AdminDashboardPage = () => {
         </Card>
       )}
 
-      {/* 7. NOTIFICATIONS BROADCAST SECTION */}
+      {/* 7. NOTIFICATIONS BROADCAST SECTION -- no broadcast/system-wide
+          notification endpoint exists (Notification model is per-user,
+          created by specific actions, not admin-broadcast). */}
       {activeSection === 'notifications' && (
         <Card className="p-6 border-slate-200/80 space-y-4">
+          <DemoDataNotice />
           <h3 className="text-lg font-bold text-slate-900">System Announcement Broadcast</h3>
           <p className="text-xs text-slate-500">Broadcast notification message to all 18,420 registered users.</p>
 
@@ -462,9 +577,11 @@ export const AdminDashboardPage = () => {
         </Card>
       )}
 
-      {/* 8. SETTINGS SECTION */}
+      {/* 8. SETTINGS SECTION -- no roles/permissions-editor, audit-log, or
+          system-health endpoint exists on the backend. */}
       {activeSection === 'settings' && (
         <div className="space-y-6">
+          <DemoDataNotice />
           <div className="flex items-center gap-2 border-b border-slate-200/80 pb-3 overflow-x-auto">
             {[
               { id: 'roles-permissions', label: 'Roles & Permissions' },

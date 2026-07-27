@@ -6,13 +6,12 @@ import {
   ArrowRight, 
   Eye, 
   EyeOff, 
-  Building, 
-  DollarSign, 
-  Users, 
-  GraduationCap, 
-  ShieldAlert, 
-  CheckCircle2, 
-  Check 
+  Building,
+  DollarSign,
+  Users,
+  GraduationCap,
+  CheckCircle2,
+  Check
 } from 'lucide-react';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
@@ -83,11 +82,12 @@ export const LoginPage = () => {
         navigate('/verify-otp', { state: { twoFactorToken: result.twoFactorToken } });
         return;
       }
-      if (selectedRole === 'Administrator' || selectedRole === 'admin') {
-        navigate('/app/admin');
-      } else {
-        navigate('/app/dashboard');
-      }
+      // Everyone lands on the normal dashboard regardless of the workspace
+      // tile chosen above -- it's a display preference, not a role grant.
+      // Real administrators reach the Admin Console via the sidebar link,
+      // which only renders for accounts whose backend-verified role is
+      // 'admin' (see components/common/Sidebar.jsx).
+      navigate('/app/dashboard');
     } catch (err) {
       setError(err.message || 'Invalid email or password.');
     } finally {
@@ -96,11 +96,14 @@ export const LoginPage = () => {
     }
   };
 
+  // Administrator is intentionally not a selectable workspace here -- admin
+  // access is granted solely by the backend-verified account role, never by
+  // a login-time choice. Real admins sign in normally and reach the Admin
+  // Console through the sidebar link.
   const roleOptions = [
     { id: 'Entrepreneur', title: 'Entrepreneur', icon: Building, desc: 'Build and manage startups', footer: 'Startup Dashboard' },
     { id: 'Investor', title: 'Investor', icon: DollarSign, desc: 'Discover investment opportunities', footer: 'Investment Workspace' },
-    { id: 'Mentor', title: 'Mentor', icon: Users, desc: 'Guide founders', footer: 'Mentor Workspace' },
-    { id: 'Administrator', title: 'Administrator', icon: ShieldAlert, desc: 'Manage the platform', footer: 'Admin Console' }
+    { id: 'Mentor', title: 'Mentor', icon: Users, desc: 'Guide founders', footer: 'Mentor Workspace' }
   ];
 
   return (
@@ -128,8 +131,6 @@ export const LoginPage = () => {
                 key={role.id}
                 onClick={() => handleRoleSelect(role.id)}
                 className={`p-3 rounded-2xl border transition-all duration-200 cursor-pointer select-none relative ${
-                  role.id === 'Administrator' ? 'sm:col-span-2' : ''
-                } ${
                   isSelected
                     ? 'bg-white border-emerald-500 shadow-soft-sm ring-2 ring-emerald-500/20'
                     : 'bg-slate-50/60 border-slate-200/80 hover:bg-white hover:border-slate-300 hover:scale-[1.01]'

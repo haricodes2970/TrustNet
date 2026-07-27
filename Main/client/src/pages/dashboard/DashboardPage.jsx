@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
-  Building, 
-  DollarSign, 
-  Users, 
-  GraduationCap, 
-  ShieldAlert, 
-  Sparkles, 
+  Building,
+  DollarSign,
+  Users,
+  GraduationCap,
+  Sparkles,
   Plus
 } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
@@ -25,14 +24,15 @@ export const DashboardPage = () => {
   const [activeRole, setActiveRole] = useState('Entrepreneur');
 
   // Sync role from URL query param e.g. /app/dashboard?role=investor
+  // Admin is intentionally excluded: this is a display-only workspace
+  // switcher, not a real permission grant, and the real Admin Console
+  // lives at /app/admin behind ProtectedRoute's role check.
   useEffect(() => {
     const roleParam = searchParams.get('role');
     if (roleParam) {
       const formatted = roleParam.charAt(0).toUpperCase() + roleParam.slice(1);
-      const validRoles = ['Entrepreneur', 'Investor', 'Mentor', 'Admin', 'Administrator'];
-      if (formatted === 'Administrator') {
-        setActiveRole('Admin');
-      } else if (validRoles.includes(formatted)) {
+      const validRoles = ['Entrepreneur', 'Investor', 'Mentor'];
+      if (validRoles.includes(formatted)) {
         setActiveRole(formatted);
       }
     }
@@ -41,8 +41,7 @@ export const DashboardPage = () => {
   const roles = [
     { id: 'Entrepreneur', label: 'Entrepreneur', icon: Building },
     { id: 'Investor', label: 'Investor', icon: DollarSign },
-    { id: 'Mentor', label: 'Mentor', icon: Users },
-    { id: 'Admin', label: 'Admin Console', icon: ShieldAlert }
+    { id: 'Mentor', label: 'Mentor', icon: Users }
   ];
 
   return (
@@ -213,28 +212,6 @@ export const DashboardPage = () => {
       )}
 
       {/* 5. ADMIN DASHBOARD */}
-      {activeRole === 'Admin' && (
-        <div className="space-y-8">
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-6">
-            <Card className="p-6 border-slate-200/80 hoverEffect">
-              <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Total Users</span>
-              <h3 className="text-3xl font-black text-slate-900 mt-2">18,420</h3>
-            </Card>
-            <Card className="p-6 border-slate-200/80 hoverEffect">
-              <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Verified Startups</span>
-              <h3 className="text-3xl font-black text-emerald-600 mt-2">1,240</h3>
-            </Card>
-            <Card className="p-6 border-slate-200/80 hoverEffect">
-              <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Pending Verification</span>
-              <h3 className="text-3xl font-black text-amber-600 mt-2">14</h3>
-            </Card>
-            <Card className="p-6 border-slate-200/80 hoverEffect">
-              <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Platform Revenue</span>
-              <h3 className="text-3xl font-black text-emerald-600 mt-2">$48,200</h3>
-            </Card>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
