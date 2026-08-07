@@ -4,22 +4,28 @@ const Team = require("../models/Team");
 const ApiError = require("../utils/ApiError");
 const { applyQueryOptions, handleServiceError, normalizeFilter, assertOwner } = require("./serviceUtils");
 
-async function assertStartupFounder(startupId, userId) {
+async function assertStartupFounder(startupId, userId, { isAdmin = false } = {}) {
   const startup = await Startup.findById(startupId).lean();
   if (!startup) {
-    throw new Error("Startup not found.");
+    throw new ApiError(404, "Startup not found.");
   }
-  assertOwner(startup.founder, userId, "You are not authorized to manage a workspace for this startup.");
+  if (isAdmin) {
+    return startup;
+  }
+  assertOwner(startup.founder, userId, "You are not authorized to manage a workspace for this startup.", 403);
   return startup;
 }
 
-async function createWorkspace({ startupId, name, description, settings }, userId) {
+async function createWorkspace({ startupId, name, description, settings }, userId, { isAdmin = false } = {}) {
   try {
-    await assertStartupFounder(startupId, userId);
+    const startup = await assertStartupFounder(startupId, userId, { isAdmin });
+    if (startup.deletedAt) {
+      throw new ApiError(409, "This startup has been deleted. Restore it before creating a workspace.");
+    }
 
     const existing = await Workspace.findOne({ startup: startupId }).lean();
     if (existing) {
-      throw new Error("A workspace already exists for this startup.");
+      throw new ApiError(409, "A workspace already exists for this startup.");
     }
 
     const workspace = await Workspace.create({
@@ -32,6 +38,9 @@ async function createWorkspace({ startupId, name, description, settings }, userI
 
     return workspace.toObject();
   } catch (error) {
+    if (error.code === 11000 && error.keyPattern && error.keyPattern.startup) {
+      throw new ApiError(409, "A workspace already exists for this startup.");
+    }
     throw handleServiceError(error, "Failed to create workspace.");
   }
 }
@@ -65,12 +74,17 @@ async function listWorkspacesForUser(userId, filter = {}, options = {}) {
   }
 }
 
-async function updateWorkspace(id, userId, updateData) {
+async function updateWorkspace(id, userId, updateData, { isAdmin = false } = {}) {
   try {
     const existing = await getWorkspaceById(id);
-    const access = await resolveWorkspaceAccess(id, userId);
-    if (access.role !== "owner" && access.role !== "admin") {
-      throw new Error("You are not authorized to update this workspace.");
+    if (!isAdmin) {
+      const access = await resolveWorkspaceAccess(id, userId);
+      if (access.role !== "owner" && access.role !== "admin") {
+        throw new ApiError(403, "You are not authorized to update this workspace.");
+      }
+    }
+    if (existing.isArchived) {
+      throw new ApiError(409, "This workspace is archived. Restore it before making changes.");
     }
 
     const safeUpdate = { ...updateData };
@@ -84,7 +98,7 @@ async function updateWorkspace(id, userId, updateData) {
     }).lean();
 
     if (!workspace) {
-      throw new Error("Workspace not found.");
+      throw new ApiError(404, "Workspace not found.");
     }
 
     return workspace;
@@ -93,10 +107,12 @@ async function updateWorkspace(id, userId, updateData) {
   }
 }
 
-async function archiveWorkspace(id, userId) {
+async function archiveWorkspace(id, userId, { isAdmin = false } = {}) {
   try {
     const existing = await getWorkspaceById(id);
-    assertOwner(existing.owner, userId, "You are not authorized to archive this workspace.");
+    if (!isAdmin) {
+      assertOwner(existing.owner, userId, "You are not authorized to archive this workspace.", 403);
+    }
 
     const workspace = await Workspace.findByIdAndUpdate(
       id,
@@ -105,12 +121,40 @@ async function archiveWorkspace(id, userId) {
     ).lean();
 
     if (!workspace) {
-      throw new Error("Workspace not found.");
+      throw new ApiError(404, "Workspace not found.");
     }
 
     return workspace;
   } catch (error) {
     throw handleServiceError(error, "Failed to archive workspace.");
+  }
+}
+
+async function restoreWorkspace(id, userId, { isAdmin = false } = {}) {
+  try {
+    const existing = await getWorkspaceById(id);
+    if (!isAdmin) {
+      assertOwner(existing.owner, userId, "You are not authorized to restore this workspace.", 403);
+    }
+
+    const startup = await Startup.findById(existing.startup).lean();
+    if (!startup || startup.deletedAt) {
+      throw new ApiError(409, "Restore the startup before restoring its workspace.");
+    }
+
+    const workspace = await Workspace.findByIdAndUpdate(
+      id,
+      { isArchived: false },
+      { new: true }
+    ).lean();
+
+    if (!workspace) {
+      throw new ApiError(404, "Workspace not found.");
+    }
+
+    return workspace;
+  } catch (error) {
+    throw handleServiceError(error, "Failed to restore workspace.");
   }
 }
 
@@ -140,12 +184,14 @@ async function resolveHighestTeamRole(startupId, userId) {
   return best;
 }
 
-async function listWorkspaceMembers(id, userId) {
+async function listWorkspaceMembers(id, userId, { isAdmin = false } = {}) {
   try {
     const workspace = await getWorkspaceById(id);
-    const access = await resolveWorkspaceAccess(id, userId);
-    if (!access.role) {
-      throw new ApiError(403, "You are not authorized to view this workspace.");
+    if (!isAdmin) {
+      const access = await resolveWorkspaceAccess(id, userId);
+      if (!access.role) {
+        throw new ApiError(403, "You are not authorized to view this workspace.");
+      }
     }
 
     const teams = await Team.find({ startup: workspace.startup, isArchived: false }).lean();
@@ -203,6 +249,8 @@ module.exports = {
   listWorkspacesForUser,
   updateWorkspace,
   archiveWorkspace,
+  restoreWorkspace,
   listWorkspaceMembers,
   resolveWorkspaceAccess,
+  resolveHighestTeamRole,
 };
