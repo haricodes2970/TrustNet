@@ -65,7 +65,10 @@ async function markRead(req, res) {
 async function markAllRead(req, res) {
   try {
     const result = await notificationService.markAllRead(req.user.id);
-    logAction(req, "notification.readAll", null, result);
+    // Bulk action has no single target document - AuditLog.targetId is
+    // required, so the actor's own id stands in for "their notification
+    // set" (same shape as any self-scoped bulk action would need).
+    logAction(req, "notification.readAll", req.user.id, result);
     return res.status(200).json({ success: true, data: result });
   } catch (error) {
     const status = error instanceof ApiError ? error.statusCode : 500;
