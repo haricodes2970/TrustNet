@@ -57,6 +57,12 @@ On-demand, computed fresh per request — no persistence, no new model, per cons
 
 **Business rules (service layer):** `reportType` must be one of the six known values; `format` must be `json` or `csv`; `startupId` required/must exist/caller must be owner or admin (via `assertOwnerOrAdmin`, itself built on `assertAnyRole`'s existing 400/404/403 handling).
 
+## Fixed in the Analytics + Reports + AI hardening phase
+
+**No audit logging existed at all**, despite being an explicit requirement for this module specifically (not Analytics or AI — reports are exportable/downloadable, a materially higher exfiltration risk than an in-app read, the same reasoning that already justifies this module's stricter owner/admin-only gate). `reportController.js` now logs a `report.generate` entry (`{reportType, format}`) via `auditLogService` on every successful generation. Logged only on success — a failed/unauthorized attempt is already visible via the 403/404 response itself, and logging it too would let an unrelated caller probe for a startup's existence via the audit trail. `startupId` stands in as the audit entry's target (Reports has no single persisted document to key one on — it's a computed export, not a resource), the same "closest equivalent" reasoning used for Notification's `markAllRead` bulk action in an earlier phase.
+
+**Inherited the Analytics aggregate `$match` fix transitively** — every `reportType` dispatches straight to an `analyticsService` function, so `hiring`/`marketplace` reports (and the `startup` overview report's hiring/marketplace/investor sections) were affected by the same silent-zero bug and are now fixed with zero changes to `reportService.js` itself. See [analytics.md](analytics.md) for the root cause.
+
 ## Error handling
 
 Same convention as every prior module: `reportService` throws typed `ApiError`; `reportController` is pure pass-through except for the CSV response-shape branch described above. No 409 — same as Analytics, nothing here is ever mutated.
@@ -77,7 +83,9 @@ Same convention as every prior module: `reportService` throws typed `ApiError`; 
 - CSV: end-to-end `format=csv` output contains the expected flattened fields (`data.totalTasks,2`, `data.tasksByStatus.done,1`); a startup name containing a comma is correctly quoted in the CSV output (`data.startup.name,"Acme, Inc."`).
 - Validation: invalid `reportType` → 400 (checked *before* any DB/authorization work, directly tested); invalid `format` → 400; missing `startupId` → 400; non-existent `startupId` → 404.
 
-Combined suite: **409/409 passing** (`npm run test:all`), **145/145 unit-only** (`npm test`), no regressions in any prior module (Analytics' 386 carried forward unchanged).
+**New this phase** (`test/integration/analyticsReportsAiLifecycle.test.js`, shared with Analytics/AI): JSON/CSV export shape and headers over real HTTP, owner/admin-vs-contributor gate, audit log integration, empty-dataset zero-valued correctness, invalid report type.
+
+Combined suite: **746/746 passing** (`npm run test:all`), **172/172 unit-only** (`npm test`), no regressions in any prior module.
 
 ## Architectural concerns discovered
 

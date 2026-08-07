@@ -77,6 +77,10 @@ Deterministic, three-part assembly, entirely inside `aiService.buildPrompt()` (p
 
 Lightweight, per-user, in-memory sliding window — `RATE_LIMIT_MAX_REQUESTS = 10` per `RATE_LIMIT_WINDOW_MS = 60_000`ms, tracked in a `Map<userId, timestamp[]>` inside `aiService.js`. **Not a persisted model** (would conflict with the "no persistence" instruction) — process-memory only, resets on restart, not shared across instances. Acceptable for a single-instance MVP; flagged in `BACKLOG.md` as needing a real (persisted or shared-cache) implementation before a multi-instance deployment, since each instance would otherwise enforce its own independent 10-per-minute limit rather than one shared limit.
 
+## Fixed in the Analytics + Reports + AI hardening phase
+
+**No changes needed in this module's own files** — `hiring-insights`, `marketplace-recommendations`, and `analytics-interpretation` (for the `hiring`/`marketplace` sections) all dispatch straight to `analyticsService` functions that had a critical bug (`Model.aggregate()`'s `$match` silently matching zero documents against a route-param string instead of an ObjectId - see [analytics.md](analytics.md)), so those three capabilities were silently returning empty/zero context to the AI provider for every real request. Fixed entirely inside `analyticsService.js`; verified fixed through this module's own orchestration layer too (`test/integration/analyticsReportsAiLifecycle.test.js` asserts `hiring-insights`' `contextSummary.totalJobs` reflects the true seeded count over real HTTP, not the silent zero the bug produced) - direct evidence that AI's "never re-derive authorization or data, only call the reused service" design paid off: one fix in one file corrected every dependent surface automatically.
+
 ## Error handling
 
 Same convention as every prior module: `aiService` throws typed `ApiError`; `aiController` is pure pass-through.
@@ -100,7 +104,9 @@ Same convention as every prior module: `aiService` throws typed `ApiError`; `aiC
 - **Rate limiting** — a 10th request succeeds, an 11th within the window throws 429; a second user's requests are unaffected by the first user's exhausted limit (proves the `Map` keys correctly per-user, not globally).
 - **Validation** — invalid `capability` rejected before any authorization/DB work (no fixture needed for this test); missing `projectId`/`section`/`reportType` for their respective capabilities all reject with 400.
 
-Combined suite: **439/439 passing** (`npm run test:all`), **159/159 unit-only** (`npm test`), no regressions in any prior module (Reports' 409 carried forward unchanged).
+**New this phase** (`test/integration/analyticsReportsAiLifecycle.test.js`, shared with Analytics/Reports): capability dispatch success embedding the safety preamble and real (bug-fixed) context over real HTTP, `report-explanation` inheriting Reports' stricter gate, unrelated-user rejection, invalid capability / missing capability-specific field, and the 10-request rate-limit burst.
+
+Combined suite: **746/746 passing** (`npm run test:all`), **172/172 unit-only** (`npm test`), no regressions in any prior module.
 
 ## Architectural concerns discovered
 
