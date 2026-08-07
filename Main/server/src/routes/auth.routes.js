@@ -548,28 +548,8 @@ router.post('/2fa/disable', authenticate, async (req, res, next) => {
   }
 });
 
-router.get('/me', async (req, res) => {
-  const header = req.headers.authorization || '';
-  const token = header.startsWith('Bearer ')
-    ? header.slice('Bearer '.length)
-    : req.cookies?.trustnet_refresh;
-
-  if (!token) {
-    return res.status(401).json({ success: false, message: 'No active user.' });
-  }
-
-  let payload;
-  try {
-    payload = jwt.verify(token, jwtConfig.accessSecret);
-  } catch (err) {
-    return res.status(401).json({ success: false, message: 'No active user.' });
-  }
-
-  if (!payload || !payload.sub) {
-    return res.status(401).json({ success: false, message: 'No active user.' });
-  }
-
-  const user = await User.findById(payload.sub);
+router.get('/me', authenticate, async (req, res) => {
+  const user = await User.findById(req.user.id);
   if (!user) {
     return res.status(401).json({ success: false, message: 'No active user.' });
   }

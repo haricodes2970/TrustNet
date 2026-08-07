@@ -5,8 +5,7 @@ const jwtConfig = require("../config/jwt");
 function authenticate(req, res, next) {
   try {
     const header = req.headers.authorization || "";
-    const token =
-      header.startsWith("Bearer ") ? header.slice("Bearer ".length) : req.cookies?.trustnet_refresh;
+    const token = header.startsWith("Bearer ") ? header.slice("Bearer ".length) : null;
 
     if (!token) {
       throw new ApiError(401, "Authentication token is missing.");
