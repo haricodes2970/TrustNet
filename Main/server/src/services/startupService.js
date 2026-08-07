@@ -1,6 +1,7 @@
 ﻿const Startup = require("../models/Startup");
 const Workspace = require("../models/Workspace");
 const Team = require("../models/Team");
+const Job = require("../models/Job");
 const ApiError = require("../utils/ApiError");
 const { applyQueryOptions, handleServiceError, normalizeFilter } = require("./serviceUtils");
 
@@ -87,6 +88,17 @@ async function updateStartup(id, updateData) {
 // restoreStartup does NOT auto-restore them; the owner restores each
 // deliberately via workspaceService.restoreWorkspace/teamService.restoreTeam,
 // which already refuse to run while the startup is still deleted.
+//
+// Cascades to Job too (Hiring & Applications phase): found the same gap -
+// a deleted startup's published jobs stayed fully live on the public job
+// board and kept accepting applications. Uses Job.isArchived, NOT Job.
+// deletedAt (a separate, admin-moderation-only field from the Admin
+// Dashboard phase, cleared only via the admin content-moderation "restore"
+// action) - isArchived is Job's owner-restorable field, symmetric with
+// jobService.restoreJob, which already refuses to run while the startup is
+// still deleted. Using deletedAt here instead would have cascaded the
+// startup-delete correctly but left the founder with no self-service way
+// to undo it after restoring their startup.
 async function deleteStartup(id) {
   try {
     const startup = await Startup.findByIdAndUpdate(id, { deletedAt: new Date() }, { new: true });
@@ -97,6 +109,7 @@ async function deleteStartup(id) {
     await Promise.all([
       Workspace.updateMany({ startup: id, isArchived: false }, { isArchived: true }),
       Team.updateMany({ startup: id, isArchived: false }, { isArchived: true }),
+      Job.updateMany({ startup: id, isArchived: false }, { isArchived: true }),
     ]);
 
     return startup;
