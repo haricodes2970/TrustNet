@@ -16,5 +16,6 @@ router.get("/me", authenticate, startupController.getMyStartups);
 router.post("/", authenticate, validate(startupCreate), startupController.createStartup);
 router.put("/:id", authenticate, validate(startupUpdate), startupController.updateStartup);
 router.delete("/:id", authenticate, startupController.deleteStartup);
+router.post("/:id/restore", authenticate, startupController.restoreStartup);
 
 module.exports = router;

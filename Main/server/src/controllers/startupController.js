@@ -44,6 +44,9 @@ async function updateStartup(req, res) {
   try {
     const existing = await startupService.getStartupById(req.params.id);
     assertOwner(existing.founder, req.user.id, "You are not authorized to update this startup.", 403);
+    if (existing.deletedAt) {
+      throw new ApiError(409, "This startup has been deleted. Restore it before making changes.");
+    }
     const startup = await startupService.updateStartup(req.params.id, req.body);
     return res.status(200).json({ success: true, data: startup });
   } catch (error) {
@@ -57,6 +60,18 @@ async function deleteStartup(req, res) {
     const existing = await startupService.getStartupById(req.params.id);
     assertOwner(existing.founder, req.user.id, "You are not authorized to delete this startup.", 403);
     const startup = await startupService.deleteStartup(req.params.id);
+    return res.status(200).json({ success: true, data: startup });
+  } catch (error) {
+    const status = error instanceof ApiError ? error.statusCode : 404;
+    return res.status(status).json({ success: false, message: error.message });
+  }
+}
+
+async function restoreStartup(req, res) {
+  try {
+    const existing = await startupService.getStartupById(req.params.id);
+    assertOwner(existing.founder, req.user.id, "You are not authorized to restore this startup.", 403);
+    const startup = await startupService.restoreStartup(req.params.id);
     return res.status(200).json({ success: true, data: startup });
   } catch (error) {
     const status = error instanceof ApiError ? error.statusCode : 404;
@@ -80,5 +95,6 @@ module.exports = {
   getMyStartups,
   updateStartup,
   deleteStartup,
+  restoreStartup,
   listStartups,
 };

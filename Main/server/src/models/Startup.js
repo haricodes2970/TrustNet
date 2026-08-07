@@ -139,6 +139,16 @@ const startupSchema = new mongoose.Schema(
       maxlength: 500,
       default: null,
     },
+    deletedAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
+    updatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
   },
   {
     timestamps: true,

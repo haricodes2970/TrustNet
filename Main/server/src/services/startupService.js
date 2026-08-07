@@ -50,9 +50,14 @@ async function updateStartup(id, updateData) {
   }
 }
 
+// Soft delete: Team, Workspace, Job and FundingRound all reference a
+// startup by id (Team.startup, Workspace.startup, Job.startup,
+// FundingRound.startup) - a hard delete orphaned every one of those on
+// the next lookup. Flagging deletedAt keeps the row (and every reference
+// to it) intact and reversible via restoreStartup.
 async function deleteStartup(id) {
   try {
-    const startup = await Startup.findByIdAndDelete(id);
+    const startup = await Startup.findByIdAndUpdate(id, { deletedAt: new Date() }, { new: true });
     if (!startup) {
       throw new Error("Startup not found.");
     }
@@ -62,12 +67,24 @@ async function deleteStartup(id) {
   }
 }
 
-// isSuspended defaults to excluded, same pattern as Post/Community's
-// listing defaults - an explicit filter value (admin's suspended-startups
-// view) overrides it.
+async function restoreStartup(id) {
+  try {
+    const startup = await Startup.findByIdAndUpdate(id, { deletedAt: null }, { new: true });
+    if (!startup) {
+      throw new Error("Startup not found.");
+    }
+    return startup;
+  } catch (error) {
+    throw handleServiceError(error, "Failed to restore startup.");
+  }
+}
+
+// isSuspended/deletedAt default to excluded, same pattern as Post/
+// Community's listing defaults - an explicit filter value (e.g. admin's
+// suspended/deleted view) overrides it.
 async function listStartups(filter = {}, options = {}) {
   try {
-    const withDefaults = { isSuspended: false, ...normalizeFilter(filter) };
+    const withDefaults = { isSuspended: false, deletedAt: null, ...normalizeFilter(filter) };
     const query = Startup.find(withDefaults);
     return applyQueryOptions(query, options).lean();
   } catch (error) {
@@ -77,7 +94,7 @@ async function listStartups(filter = {}, options = {}) {
 
 async function listMyStartups(founderId, options = {}) {
   try {
-    const query = Startup.find({ founder: founderId });
+    const query = Startup.find({ founder: founderId, deletedAt: null });
     return applyQueryOptions(query, options).lean();
   } catch (error) {
     throw handleServiceError(error, "Failed to list your startups.");
@@ -90,6 +107,7 @@ module.exports = {
   getStartupBySlug,
   updateStartup,
   deleteStartup,
+  restoreStartup,
   listStartups,
   listMyStartups,
 };
