@@ -156,7 +156,7 @@ router.post('/register', signupLimiter, async (req, res, next) => {
       return res.status(409).json({ success: false, message: 'An account with this email already exists.' });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, 12);
     const finalUsername = username
       ? String(username).toLowerCase().replace(/[^a-z0-9_]/g, '_')
       : await generateUniqueUsername(normalizedEmail);
@@ -637,7 +637,7 @@ router.post('/reset-password', async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'This password reset link is invalid or has expired.' });
     }
 
-    user.password = await bcrypt.hash(password, 10);
+    user.password = await bcrypt.hash(password, 12);
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
     user.refreshTokenVersion = (user.refreshTokenVersion || 0) + 1;
@@ -674,7 +674,7 @@ router.put('/change-password', authenticate, sensitiveAccountActionLimiter, asyn
       return res.status(400).json({ success: false, message: 'New password must be different from your current password.' });
     }
 
-    user.password = await bcrypt.hash(newPassword, 10);
+    user.password = await bcrypt.hash(newPassword, 12);
     user.refreshTokenVersion = (user.refreshTokenVersion || 0) + 1;
     await user.save();
     return res.json({ success: true, message: 'Password changed successfully.' });
