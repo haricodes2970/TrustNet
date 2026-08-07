@@ -50,7 +50,7 @@ An independently-developed TrustNet backend (`trustnet 2.zip`, "Developer 1") wa
 
 - [x] ~~Fix N+1 in `getUnreadCount` and per-request user lookups~~ — `getUnreadCount` (Messages) reviewed in the Messaging + Notifications hardening phase: it's already a 2-query shape (`Conversation.find` then `Message.countDocuments` with `$in`), not a real N+1 - no change needed there. The per-request user lookups (`resolveCurrentUserId()` → `userService.getUserByEmail(req.user.email)` on every request) *were* real and fixed in `messageController.js`/`notificationController.js` this same phase (`req.user.id` used directly, like every other controller). `profileController.js`/`settingsController.js` still have their own copies of the same pattern - out of scope for Messaging/Notifications, revisit in a dedicated Profile/Settings pass.
 - [ ] Standardize list-endpoint pagination shape (`{ data, total, page, pageSize }`)
-- [ ] Confirm text indexes are used by `searchService.js`
+- [x] ~~Confirm text indexes are used by `searchService.js`~~ — reviewed in the Search + Recommendations hardening phase: they are **not** used, deliberately. `searchService.js` does regex-based substring matching (`escapeRegex` + case-insensitive `RegExp`), not `$text` queries - a `$text` query would only match tokenized/stemmed terms, breaking the partial/prefix matching ("eag" matching "eagle") this approach supports. `Startup`'s and `Post`'s text indexes go unused by search as a result; changing that would be a search-UX redesign (worse partial-match behavior), not a bug fix, so left as-is. See `docs/modules/search.md`.
 - [ ] Make email/Cloudinary transports singletons instead of per-call
 
 ## Messaging + Notifications (hardening phase) — explicit, instructed tradeoffs
@@ -58,6 +58,12 @@ An independently-developed TrustNet backend (`trustnet 2.zip`, "Developer 1") wa
 - [ ] **No dedicated file-upload pipeline for message attachments** - `Message.attachments` stays plain validated URL strings; the client is expected to upload via the Documents module's existing storage path and pass the resulting URL. Building a dedicated messaging-attachment upload flow would be a new feature, not a bug fix - out of scope for an MVP hardening phase (see `docs/modules/messages.md`).
 - [ ] **Conversation/Message soft-delete is shared-state, not per-participant.** Any participant deleting a conversation or their own message hides/marks it for everyone (reversible via restore), not just for themselves - matches this codebase's uniform soft-delete convention (every other soft-deletable resource works the same way), deliberately not a new per-user "hide from my inbox only" mechanism, which would be a larger, more speculative feature.
 - [ ] `profileController.js`/`settingsController.js` still resolve the acting user via `userService.getUserByEmail(req.user.email)` per request - the same pattern fixed in `messageController.js`/`notificationController.js` (and `interactionService.js`, Communities/Posts phase) this session, but those two files are outside Messaging/Notifications' scope.
+
+## Search + Recommendations (hardening phase) — explicit, instructed tradeoffs
+
+- [ ] **No dedicated rate limiter for `/recommendations`** - authenticated-only (higher abuse barrier than public `/search`, which already has `searchLimiter`), covered by the repo-wide `defaultLimiter` baseline only. Same standing gap class as every other module's public/authenticated listing surface this session (Job, Investor, Funding, Marketplace, Provider directories) - not fixed here either, for consistency.
+- [ ] **No user-blocking / "blocked content" feature exists** in this codebase at all (Developer 1's `Block` model was explicitly not adopted during the backend merge - see "Backend merge" section above). Recommendations' "blocked content" checklist item is consequently N/A, not unimplemented.
+- [ ] `profileController.js`/`settingsController.js` still resolve the acting user via `userService.getUserByEmail(req.user.email)` per request - same pattern now fixed in five other call sites across three phases (`interactionService.js`, `messageController.js`, `notificationController.js`, `recommendationController.js`); still out of scope (Profile/Settings, not Search/Recommendations).
 
 ## Features & DX (Phase 6)
 
