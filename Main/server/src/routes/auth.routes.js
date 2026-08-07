@@ -176,7 +176,11 @@ router.post('/register', signupLimiter, async (req, res, next) => {
     });
   } catch (err) {
     if (err && err.code === 11000) {
-      return res.status(409).json({ success: false, message: 'An account with this email already exists.' });
+      const duplicateField = err.keyPattern ? Object.keys(err.keyPattern)[0] : null;
+      const message = duplicateField === 'username'
+        ? 'This username is already taken.'
+        : 'An account with this email already exists.';
+      return res.status(409).json({ success: false, message });
     }
     return next(err);
   }
