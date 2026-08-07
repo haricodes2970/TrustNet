@@ -1,8 +1,11 @@
 const express = require("express");
 const { authenticate } = require("../middlewares/auth");
 const { authorize } = require("../middlewares/authorize");
+const validate = require("../middlewares/validate");
+const adminValidators = require("../validators/admin.validators");
 const adminVerificationController = require("../controllers/adminVerificationController");
 const adminDashboardController = require("../controllers/adminDashboardController");
+const adminUserController = require("../controllers/adminUserController");
 
 const router = express.Router();
 
@@ -16,5 +19,12 @@ router.get("/verifications/:userId", adminVerificationController.getVerification
 router.post("/verifications/:userId/approve", adminVerificationController.approveVerification);
 router.post("/verifications/:userId/reject", adminVerificationController.rejectVerification);
 router.post("/verifications/:userId/request-resubmission", adminVerificationController.requestResubmission);
+
+router.get("/users", adminUserController.listUsers);
+router.get("/users/:id", adminUserController.getUser);
+router.post("/users/:id/suspend", validate(adminValidators.moderationReason), adminUserController.suspendUser);
+router.post("/users/:id/reactivate", adminUserController.reactivateUser);
+router.patch("/users/:id/role", validate(adminValidators.changeRole), adminUserController.changeRole);
+router.delete("/users/:id", adminUserController.deleteUser);
 
 module.exports = router;

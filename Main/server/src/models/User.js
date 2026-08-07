@@ -175,6 +175,12 @@ const userSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    suspensionReason: {
+      type: String,
+      trim: true,
+      maxlength: 500,
+      default: null,
+    },
     profileVisibility: {
       type: String,
       enum: ["public", "private", "connections"],

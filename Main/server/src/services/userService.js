@@ -96,6 +96,14 @@ async function listUsers(filter = {}, options = {}) {
   }
 }
 
+async function countUsers(filter = {}) {
+  try {
+    return await User.countDocuments(filter);
+  } catch (error) {
+    throw new Error(error.message || "Failed to count users.");
+  }
+}
+
 module.exports = {
   createUser,
   getUserById,
@@ -104,4 +112,5 @@ module.exports = {
   updateUser,
   deleteUser,
   listUsers,
+  countUsers,
 };
