@@ -2,6 +2,7 @@ const express = require("express");
 const multer = require("multer");
 const applicationController = require("../controllers/applicationController");
 const { authenticate } = require("../middlewares/auth");
+const { authorize } = require("../middlewares/authorize");
 const validate = require("../middlewares/validate");
 const {
   applicationCreate,
@@ -33,6 +34,8 @@ const upload = multer({
 
 // No public tier at all (unlike job.routes.js) — every route requires auth.
 router.use(authenticate);
+// No role list - just populates req.user.role for the platform-admin override.
+router.use(authorize());
 
 /**
  * @openapi

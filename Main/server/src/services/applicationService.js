@@ -1,6 +1,7 @@
 const Application = require("../models/Application");
 const jobService = require("../services/jobService");
 const storageService = require("./storageService");
+const ApiError = require("../utils/ApiError");
 const { handleServiceError, normalizeFilter, applyQueryOptions, assertOwner } = require("./serviceUtils");
 
 // Applications belong only to Jobs (Startup -> Job -> Application). Reuses
@@ -15,6 +16,8 @@ const { handleServiceError, normalizeFilter, applyQueryOptions, assertOwner } = 
 //     application — Contributor's "no access" is enforced explicitly here,
 //     not inherited by accident from resolveStartupAccess (which would
 //     otherwise report "contributor" for an active Team member).
+// A platform admin bypasses all three, same override every other module
+// in this codebase already has.
 
 const TERMINAL_STATUSES = ["hired", "rejected", "withdrawn"];
 const FORWARD_PATH = ["submitted", "under_review", "interview", "offer", "hired"];
@@ -22,7 +25,7 @@ const FORWARD_PATH = ["submitted", "under_review", "interview", "offer", "hired"
 // Pure, database-independent.
 function assertValidStatusTransition(currentStatus, nextStatus) {
   if (TERMINAL_STATUSES.includes(currentStatus)) {
-    throw new Error(`Application is in a terminal state ("${currentStatus}") and cannot transition.`);
+    throw new ApiError(409, `Application is in a terminal state ("${currentStatus}") and cannot transition.`);
   }
   if (nextStatus === "rejected") {
     return; // staff may reject from any non-terminal state
@@ -30,7 +33,7 @@ function assertValidStatusTransition(currentStatus, nextStatus) {
   const currentIndex = FORWARD_PATH.indexOf(currentStatus);
   const nextIndex = FORWARD_PATH.indexOf(nextStatus);
   if (currentIndex === -1 || nextIndex !== currentIndex + 1) {
-    throw new Error(`Invalid status transition from "${currentStatus}" to "${nextStatus}".`);
+    throw new ApiError(400, `Invalid status transition from "${currentStatus}" to "${nextStatus}".`);
   }
 }
 
@@ -41,7 +44,10 @@ function redactForCandidate(application) {
   return rest;
 }
 
-async function resolveApplicationRole(application, userId) {
+async function resolveApplicationRole(application, userId, { isAdmin = false } = {}) {
+  if (isAdmin) {
+    return "admin";
+  }
   if (String(application.applicant) === String(userId)) {
     return "candidate";
   }
@@ -55,12 +61,21 @@ async function resolveApplicationRole(application, userId) {
   return null;
 }
 
+// job.status/isArchived/isHidden/deletedAt are all checked — an admin-
+// hidden or admin-soft-deleted job (Admin Dashboard phase's content
+// moderation) previously slipped past this, since only status/isArchived
+// were checked here; a candidate could still apply to a job platform
+// moderation had already taken down.
+function assertJobAcceptingApplications(job) {
+  if (job.status !== "published" || job.isArchived || job.isHidden || job.deletedAt) {
+    throw new ApiError(409, "This job is not accepting applications.");
+  }
+}
+
 async function createApplication({ jobId, coverLetter, buffer, mimeType, originalFileName }, userId) {
   try {
     const job = await jobService.getJobById(jobId);
-    if (job.status !== "published" || job.isArchived) {
-      throw new Error("This job is not accepting applications.");
-    }
+    assertJobAcceptingApplications(job);
 
     const existing = await Application.findOne({
       job: jobId,
@@ -68,7 +83,7 @@ async function createApplication({ jobId, coverLetter, buffer, mimeType, origina
       status: { $ne: "withdrawn" },
     }).lean();
     if (existing) {
-      throw new Error("You have already applied to this job.");
+      throw new ApiError(409, "You have already applied to this job.");
     }
 
     const stored = await storageService.upload({ buffer, mimeType, originalFileName });
@@ -87,7 +102,7 @@ async function createApplication({ jobId, coverLetter, buffer, mimeType, origina
     return application.toObject();
   } catch (error) {
     if (error.code === 11000) {
-      throw new Error("You have already applied to this job.");
+      throw new ApiError(409, "You have already applied to this job.");
     }
     throw handleServiceError(error, "Failed to submit application.");
   }
@@ -97,7 +112,7 @@ async function getApplicationById(id) {
   try {
     const application = await Application.findById(id).lean();
     if (!application) {
-      throw new Error("Application not found.");
+      throw new ApiError(404, "Application not found.");
     }
     return application;
   } catch (error) {
@@ -108,14 +123,14 @@ async function getApplicationById(id) {
 // Returns the application shaped for the requesting viewer (notes redacted
 // for the candidate), after verifying access. Throws if the viewer has no
 // role on this application at all (candidate ownership, or Startup
-// owner/admin on the parent job) — contributor and any unrelated user
-// included.
-async function getApplicationForViewer(id, userId) {
+// owner/admin on the parent job, or platform admin) — contributor and any
+// unrelated user included.
+async function getApplicationForViewer(id, userId, { isAdmin = false } = {}) {
   try {
     const application = await getApplicationById(id);
-    const role = await resolveApplicationRole(application, userId);
+    const role = await resolveApplicationRole(application, userId, { isAdmin });
     if (!role) {
-      throw new Error("You are not authorized to view this application.");
+      throw new ApiError(403, "You are not authorized to view this application.");
     }
     return role === "candidate" ? redactForCandidate(application) : application;
   } catch (error) {
@@ -125,21 +140,25 @@ async function getApplicationForViewer(id, userId) {
 
 // No public tier, no contributor tier — every result is scoped so the
 // caller can never see anything beyond what's rightfully theirs. Staff
-// (owner/admin) only see the full roster for a job when they explicitly
-// filter by that job AND hold a role on it; every other case (including a
-// candidate, a contributor, or staff without a `job` filter) is scoped to
-// "my own applications only" by construction, not by a rejected/allowed
-// branch — there is no case here where an unauthorized viewer sees someone
-// else's data, because the query itself never asks for it.
-async function listApplicationsForUser(userId, filter = {}, options = {}) {
+// (owner/admin, or a platform admin only when an explicit `job` filter is
+// given — same "targeted override, not a global bypass" shape Job's own
+// admin override has) only see the full roster for a job when they
+// explicitly filter by that job; every other case (including a candidate,
+// a contributor, or staff without a `job` filter) is scoped to "my own
+// applications only" by construction, not by a rejected/allowed branch —
+// there is no case here where an unauthorized viewer sees someone else's
+// data, because the query itself never asks for it.
+async function listApplicationsForUser(userId, filter = {}, options = {}, { isAdmin = false } = {}) {
   try {
     const base = normalizeFilter(filter);
 
     if (base.job) {
-      const job = await jobService.getJobById(base.job);
-      const access = await jobService.resolveStartupAccess(job.startup, userId);
-      if (access.role !== "owner" && access.role !== "admin") {
-        base.applicant = userId;
+      if (!isAdmin) {
+        const job = await jobService.getJobById(base.job);
+        const access = await jobService.resolveStartupAccess(job.startup, userId);
+        if (access.role !== "owner" && access.role !== "admin") {
+          base.applicant = userId;
+        }
       }
     } else {
       base.applicant = userId;
@@ -160,9 +179,9 @@ async function listApplicationsForUser(userId, filter = {}, options = {}) {
 }
 
 async function assertEditableByCandidate(application, userId) {
-  assertOwner(application.applicant, userId, "You are not authorized to update this application.");
+  assertOwner(application.applicant, userId, "You are not authorized to update this application.", 403);
   if (application.status !== "submitted") {
-    throw new Error("This application can no longer be edited — it is already under review.");
+    throw new ApiError(409, "This application can no longer be edited — it is already under review.");
   }
 }
 
@@ -186,7 +205,7 @@ async function updateResume(id, userId, { buffer, mimeType, originalFileName }) 
     ).lean();
 
     if (!application) {
-      throw new Error("Application not found.");
+      throw new ApiError(404, "Application not found.");
     }
     return application;
   } catch (error) {
@@ -206,7 +225,7 @@ async function updateCoverLetter(id, userId, coverLetter) {
     ).lean();
 
     if (!application) {
-      throw new Error("Application not found.");
+      throw new ApiError(404, "Application not found.");
     }
     return application;
   } catch (error) {
@@ -214,13 +233,15 @@ async function updateCoverLetter(id, userId, coverLetter) {
   }
 }
 
-async function updateStatus(id, userId, { status, notes }) {
+async function updateStatus(id, userId, { status, notes }, { isAdmin = false } = {}) {
   try {
     const existing = await getApplicationById(id);
-    const job = await jobService.getJobById(existing.job);
-    const access = await jobService.resolveStartupAccess(job.startup, userId);
-    if (access.role !== "owner" && access.role !== "admin") {
-      throw new Error("You are not authorized to update this application's status.");
+    if (!isAdmin) {
+      const job = await jobService.getJobById(existing.job);
+      const access = await jobService.resolveStartupAccess(job.startup, userId);
+      if (access.role !== "owner" && access.role !== "admin") {
+        throw new ApiError(403, "You are not authorized to update this application's status.");
+      }
     }
 
     const safeUpdate = { updatedBy: userId };
@@ -238,7 +259,7 @@ async function updateStatus(id, userId, { status, notes }) {
     }).lean();
 
     if (!application) {
-      throw new Error("Application not found.");
+      throw new ApiError(404, "Application not found.");
     }
     return application;
   } catch (error) {
@@ -246,13 +267,15 @@ async function updateStatus(id, userId, { status, notes }) {
   }
 }
 
-async function withdraw(id, userId) {
+async function withdraw(id, userId, { isAdmin = false } = {}) {
   try {
     const existing = await getApplicationById(id);
-    assertOwner(existing.applicant, userId, "You are not authorized to withdraw this application.");
+    if (!isAdmin) {
+      assertOwner(existing.applicant, userId, "You are not authorized to withdraw this application.", 403);
+    }
 
     if (TERMINAL_STATUSES.includes(existing.status)) {
-      throw new Error(`Application is in a terminal state ("${existing.status}") and cannot be withdrawn.`);
+      throw new ApiError(409, `Application is in a terminal state ("${existing.status}") and cannot be withdrawn.`);
     }
 
     const application = await Application.findByIdAndUpdate(
@@ -262,7 +285,7 @@ async function withdraw(id, userId) {
     ).lean();
 
     if (!application) {
-      throw new Error("Application not found.");
+      throw new ApiError(404, "Application not found.");
     }
     return application;
   } catch (error) {
@@ -274,6 +297,7 @@ module.exports = {
   assertValidStatusTransition,
   redactForCandidate,
   resolveApplicationRole,
+  assertJobAcceptingApplications,
   createApplication,
   getApplicationById,
   getApplicationForViewer,
