@@ -1,5 +1,6 @@
 const Project = require("../models/Project");
 const Workspace = require("../models/Workspace");
+const ApiError = require("../utils/ApiError");
 const workspaceService = require("./workspaceService");
 const { applyQueryOptions, handleServiceError, normalizeFilter } = require("./serviceUtils");
 
@@ -7,26 +8,49 @@ const { applyQueryOptions, handleServiceError, normalizeFilter } = require("./se
 // consulted for authorization. All permission decisions come exclusively
 // from workspaceService.resolveWorkspaceAccess() against the parent Workspace.
 
-async function assertWorkspaceWriteAccess(workspaceId, userId) {
+async function assertWorkspaceWriteAccess(workspaceId, userId, { isAdmin = false } = {}) {
   const workspace = await Workspace.findById(workspaceId).lean();
   if (!workspace) {
-    throw new Error("Workspace not found.");
+    throw new ApiError(404, "Workspace not found.");
   }
   if (workspace.isArchived) {
-    throw new Error("This workspace is archived and cannot accept new or updated projects.");
+    throw new ApiError(409, "This workspace is archived and cannot accept new or updated projects.");
   }
 
-  const access = await workspaceService.resolveWorkspaceAccess(workspaceId, userId);
-  if (access.role !== "owner" && access.role !== "admin") {
-    throw new Error("You are not authorized to manage projects in this workspace.");
+  if (!isAdmin) {
+    const access = await workspaceService.resolveWorkspaceAccess(workspaceId, userId);
+    if (access.role !== "owner" && access.role !== "admin") {
+      throw new ApiError(403, "You are not authorized to manage projects in this workspace.");
+    }
   }
 
   return workspace;
 }
 
-async function createProject({ workspaceId, name, description, status }, userId) {
+// Case-insensitive, per-workspace, active-projects-only - an archived
+// project's name is free to reuse (matches Startup's per-founder guard
+// from the Startup phase: this prevents accidental duplicate/spam
+// submissions, not legitimate reuse of a retired name).
+async function assertNoDuplicateName(workspaceId, name, excludeProjectId) {
+  const escaped = name.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const query = {
+    workspace: workspaceId,
+    isArchived: false,
+    name: new RegExp(`^${escaped}$`, "i"),
+  };
+  if (excludeProjectId) {
+    query._id = { $ne: excludeProjectId };
+  }
+  const existing = await Project.findOne(query).lean();
+  if (existing) {
+    throw new ApiError(409, "A project with this name already exists in this workspace.");
+  }
+}
+
+async function createProject({ workspaceId, name, description, status }, userId, { isAdmin = false } = {}) {
   try {
-    await assertWorkspaceWriteAccess(workspaceId, userId);
+    await assertWorkspaceWriteAccess(workspaceId, userId, { isAdmin });
+    await assertNoDuplicateName(workspaceId, name);
 
     const project = await Project.create({
       workspace: workspaceId,
@@ -46,7 +70,7 @@ async function getProjectById(id) {
   try {
     const project = await Project.findById(id).lean();
     if (!project) {
-      throw new Error("Project not found.");
+      throw new ApiError(404, "Project not found.");
     }
     return project;
   } catch (error) {
@@ -54,23 +78,37 @@ async function getProjectById(id) {
   }
 }
 
-async function assertProjectViewAccess(project, userId) {
+async function assertProjectViewAccess(project, userId, { isAdmin = false } = {}) {
+  if (isAdmin) {
+    return { role: "admin" };
+  }
   const access = await workspaceService.resolveWorkspaceAccess(project.workspace, userId);
   if (!access.role) {
-    throw new Error("You are not authorized to view this project.");
+    throw new ApiError(403, "You are not authorized to view this project.");
   }
   return access;
 }
 
+// isArchived defaults to excluded (override-friendly, same pattern as
+// Post/Community/Job/Startup's listing defaults) so an archived project
+// stops showing up in the default view. `search` does a case-insensitive
+// name/description match, same shape as adminUserService's search.
 async function listProjectsForUser(userId, filter = {}, options = {}) {
   try {
-    const base = normalizeFilter(filter);
+    const { search, ...rest } = normalizeFilter(filter);
+    const base = { isArchived: false, ...rest };
+
+    if (search) {
+      const escaped = String(search).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const regex = new RegExp(escaped, "i");
+      base.$or = [{ name: regex }, { description: regex }];
+    }
 
     if (base.workspace) {
       // A specific workspace was requested — verify access rather than trusting the caller's filter.
       const access = await workspaceService.resolveWorkspaceAccess(base.workspace, userId);
       if (!access.role) {
-        throw new Error("You are not authorized to view projects in this workspace.");
+        throw new ApiError(403, "You are not authorized to view projects in this workspace.");
       }
     } else {
       const workspaces = await workspaceService.listWorkspacesForUser(userId, {}, {});
@@ -84,10 +122,16 @@ async function listProjectsForUser(userId, filter = {}, options = {}) {
   }
 }
 
-async function updateProject(id, userId, updateData) {
+async function updateProject(id, userId, updateData, { isAdmin = false } = {}) {
   try {
     const existing = await getProjectById(id);
-    await assertWorkspaceWriteAccess(existing.workspace, userId);
+    await assertWorkspaceWriteAccess(existing.workspace, userId, { isAdmin });
+    if (existing.isArchived) {
+      throw new ApiError(409, "This project is archived. Restore it before making changes.");
+    }
+    if (updateData.name && updateData.name.trim().toLowerCase() !== existing.name.toLowerCase()) {
+      await assertNoDuplicateName(existing.workspace, updateData.name, id);
+    }
 
     const safeUpdate = { ...updateData };
     delete safeUpdate.workspace;
@@ -101,7 +145,7 @@ async function updateProject(id, userId, updateData) {
     }).lean();
 
     if (!project) {
-      throw new Error("Project not found.");
+      throw new ApiError(404, "Project not found.");
     }
 
     return project;
@@ -110,10 +154,10 @@ async function updateProject(id, userId, updateData) {
   }
 }
 
-async function archiveProject(id, userId) {
+async function archiveProject(id, userId, { isAdmin = false } = {}) {
   try {
     const existing = await getProjectById(id);
-    await assertWorkspaceWriteAccess(existing.workspace, userId);
+    await assertWorkspaceWriteAccess(existing.workspace, userId, { isAdmin });
 
     const project = await Project.findByIdAndUpdate(
       id,
@@ -122,12 +166,33 @@ async function archiveProject(id, userId) {
     ).lean();
 
     if (!project) {
-      throw new Error("Project not found.");
+      throw new ApiError(404, "Project not found.");
     }
 
     return project;
   } catch (error) {
     throw handleServiceError(error, "Failed to archive project.");
+  }
+}
+
+async function restoreProject(id, userId, { isAdmin = false } = {}) {
+  try {
+    const existing = await getProjectById(id);
+    await assertWorkspaceWriteAccess(existing.workspace, userId, { isAdmin });
+
+    const project = await Project.findByIdAndUpdate(
+      id,
+      { isArchived: false, updatedBy: userId },
+      { new: true }
+    ).lean();
+
+    if (!project) {
+      throw new ApiError(404, "Project not found.");
+    }
+
+    return project;
+  } catch (error) {
+    throw handleServiceError(error, "Failed to restore project.");
   }
 }
 
@@ -138,4 +203,5 @@ module.exports = {
   listProjectsForUser,
   updateProject,
   archiveProject,
+  restoreProject,
 };

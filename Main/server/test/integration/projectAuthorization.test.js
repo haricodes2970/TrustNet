@@ -85,27 +85,39 @@ test("updating a project fails when the parent workspace is archived", async () 
   );
 });
 
-// Current-behavior finding, not an assertion of desired behavior: archiving
-// a Project does not hide it from get/list, and does not itself block
-// further updates to that same project (only the parent Workspace's
-// isArchived flag is checked in updateProject/createProject — the project's
-// own isArchived flag is not consulted). Documented here so this is a known,
-// tested fact rather than an assumption. See Phase 2 report for discussion.
-test("CURRENT BEHAVIOR: an archived project is still returned by listProjectsForUser (no hide-on-archive filtering exists)", async () => {
+// Fixed in the Projects phase (was previously documented here as "CURRENT
+// BEHAVIOR", a known gap, not desired behavior): archiving a project now
+// hides it from the default listProjectsForUser view, and further updates
+// to an archived project are rejected until it's restored. See
+// restoreProject and the duplicate-name/status-code fixes in the same pass.
+test("archiving a project hides it from the default listProjectsForUser view", async () => {
   const fx = await createCollaborationFixture();
   await projectService.archiveProject(fx.project._id, fx.founder.user._id);
 
   const projects = await projectService.listProjectsForUser(fx.founder.user._id, {}, {});
   const ids = projects.map((p) => String(p._id));
-  assert.ok(ids.includes(String(fx.project._id)));
+  assert.ok(!ids.includes(String(fx.project._id)));
+
+  // Still reachable via an explicit filter, same override-friendly pattern
+  // used by every other module's default-excluded listing filter.
+  const withArchived = await projectService.listProjectsForUser(fx.founder.user._id, { isArchived: true }, {});
+  assert.ok(withArchived.map((p) => String(p._id)).includes(String(fx.project._id)));
 });
 
-test("CURRENT BEHAVIOR: an already-archived project can still be updated (its own isArchived flag is not checked in updateProject)", async () => {
+test("an archived project rejects further updates until restored", async () => {
   const fx = await createCollaborationFixture();
   await projectService.archiveProject(fx.project._id, fx.founder.user._id);
 
+  await assert.rejects(
+    () => projectService.updateProject(fx.project._id, fx.founder.user._id, { name: "Edited After Archive" }),
+    /archived/
+  );
+
+  const restored = await projectService.restoreProject(fx.project._id, fx.founder.user._id);
+  assert.equal(restored.isArchived, false);
+
   const updated = await projectService.updateProject(fx.project._id, fx.founder.user._id, {
-    name: "Edited After Archive",
+    name: "Edited After Restore",
   });
-  assert.equal(updated.name, "Edited After Archive");
+  assert.equal(updated.name, "Edited After Restore");
 });
