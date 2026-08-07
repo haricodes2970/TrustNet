@@ -1,4 +1,6 @@
 ﻿const Startup = require("../models/Startup");
+const Workspace = require("../models/Workspace");
+const Team = require("../models/Team");
 const ApiError = require("../utils/ApiError");
 const { applyQueryOptions, handleServiceError, normalizeFilter } = require("./serviceUtils");
 
@@ -77,12 +79,26 @@ async function updateStartup(id, updateData) {
 // FundingRound.startup) - a hard delete orphaned every one of those on
 // the next lookup. Flagging deletedAt keeps the row (and every reference
 // to it) intact and reversible via restoreStartup.
+//
+// Cascades to Workspace/Team: without this, a deleted startup's workspace
+// and teams stayed fully live - members could still invite/update/archive
+// as if nothing happened. Archiving both (not soft-deleting them - they
+// have their own, separate isArchived flag and restore path) means
+// restoreStartup does NOT auto-restore them; the owner restores each
+// deliberately via workspaceService.restoreWorkspace/teamService.restoreTeam,
+// which already refuse to run while the startup is still deleted.
 async function deleteStartup(id) {
   try {
     const startup = await Startup.findByIdAndUpdate(id, { deletedAt: new Date() }, { new: true });
     if (!startup) {
       throw new Error("Startup not found.");
     }
+
+    await Promise.all([
+      Workspace.updateMany({ startup: id, isArchived: false }, { isArchived: true }),
+      Team.updateMany({ startup: id, isArchived: false }, { isArchived: true }),
+    ]);
+
     return startup;
   } catch (error) {
     throw handleServiceError(error, "Failed to delete startup.");
