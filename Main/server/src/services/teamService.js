@@ -1,22 +1,38 @@
 const Team = require("../models/Team");
 const Startup = require("../models/Startup");
+const ApiError = require("../utils/ApiError");
 const userService = require("./userService");
 const { applyQueryOptions, handleServiceError, normalizeFilter, assertOwner } = require("./serviceUtils");
 const { createNotification } = require("./notificationService");
 const { sendEmail } = require("./email.service");
 
-async function assertStartupOwner(startupId, userId) {
+async function assertStartupOwner(startupId, userId, { isAdmin = false } = {}) {
   const startup = await Startup.findById(startupId).lean();
   if (!startup) {
-    throw new Error("Startup not found.");
+    throw new ApiError(404, "Startup not found.");
   }
-  assertOwner(startup.founder, userId, "You are not authorized to manage teams for this startup.");
+  if (isAdmin) {
+    return startup;
+  }
+  assertOwner(startup.founder, userId, "You are not authorized to manage teams for this startup.", 403);
   return startup;
 }
 
-async function createTeam({ startupId, name, description, slug }, userId) {
+// True for the owner too (createTeam always seeds the owner as an active
+// admin-role member) - callers that need an owner-only check use assertOwner
+// separately, this is purely "does this active membership carry admin tier."
+function isActiveTeamAdmin(team, userId) {
+  return team.members.some(
+    (member) => member.user && String(member.user) === String(userId) && member.status === "active" && member.role === "admin"
+  );
+}
+
+async function createTeam({ startupId, name, description, slug }, userId, { isAdmin = false } = {}) {
   try {
-    await assertStartupOwner(startupId, userId);
+    const startup = await assertStartupOwner(startupId, userId, { isAdmin });
+    if (startup.deletedAt) {
+      throw new ApiError(409, "This startup has been deleted. Restore it before creating a team.");
+    }
 
     const ownerAsMember = {
       user: userId,
@@ -47,7 +63,7 @@ async function getTeamById(id) {
   try {
     const team = await Team.findById(id).lean();
     if (!team) {
-      throw new Error("Team not found.");
+      throw new ApiError(404, "Team not found.");
     }
     return team;
   } catch (error) {
@@ -70,10 +86,15 @@ async function listTeams(filter = {}, options = {}, userId) {
   }
 }
 
-async function updateTeam(id, userId, updateData) {
+async function updateTeam(id, userId, updateData, { isAdmin = false } = {}) {
   try {
     const existing = await getTeamById(id);
-    assertOwner(existing.owner, userId, "You are not authorized to update this team.");
+    if (!isAdmin) {
+      assertOwner(existing.owner, userId, "You are not authorized to update this team.", 403);
+    }
+    if (existing.isArchived) {
+      throw new ApiError(409, "This team is archived. Restore it before making changes.");
+    }
 
     const safeUpdate = { ...updateData };
     delete safeUpdate.startup;
@@ -88,7 +109,7 @@ async function updateTeam(id, userId, updateData) {
     }).lean();
 
     if (!team) {
-      throw new Error("Team not found.");
+      throw new ApiError(404, "Team not found.");
     }
 
     return team;
@@ -97,10 +118,12 @@ async function updateTeam(id, userId, updateData) {
   }
 }
 
-async function archiveTeam(id, userId) {
+async function archiveTeam(id, userId, { isAdmin = false } = {}) {
   try {
     const existing = await getTeamById(id);
-    assertOwner(existing.owner, userId, "You are not authorized to archive this team.");
+    if (!isAdmin) {
+      assertOwner(existing.owner, userId, "You are not authorized to archive this team.", 403);
+    }
 
     const team = await Team.findByIdAndUpdate(
       id,
@@ -109,7 +132,7 @@ async function archiveTeam(id, userId) {
     ).lean();
 
     if (!team) {
-      throw new Error("Team not found.");
+      throw new ApiError(404, "Team not found.");
     }
 
     return team;
@@ -118,20 +141,50 @@ async function archiveTeam(id, userId) {
   }
 }
 
-async function inviteMember(id, userId, { email, name, role }) {
+async function restoreTeam(id, userId, { isAdmin = false } = {}) {
+  try {
+    const existing = await getTeamById(id);
+    if (!isAdmin) {
+      assertOwner(existing.owner, userId, "You are not authorized to restore this team.", 403);
+    }
+
+    const startup = await Startup.findById(existing.startup).lean();
+    if (!startup || startup.deletedAt) {
+      throw new ApiError(409, "Restore the startup before restoring its team.");
+    }
+
+    const team = await Team.findByIdAndUpdate(id, { isArchived: false }, { new: true }).lean();
+    if (!team) {
+      throw new ApiError(404, "Team not found.");
+    }
+
+    return team;
+  } catch (error) {
+    throw handleServiceError(error, "Failed to restore team.");
+  }
+}
+
+// Owner OR an active admin-tier member may invite - the admin member role
+// was previously decorative (every mutation gated on the literal owner).
+// Role changes stay owner/platform-admin-only (see changeMemberRole) so an
+// admin-tier member can't escalate a peer to admin themselves.
+async function inviteMember(id, userId, { email, name, role }, { isAdmin = false } = {}) {
   try {
     const team = await Team.findById(id);
     if (!team) {
-      throw new Error("Team not found.");
+      throw new ApiError(404, "Team not found.");
     }
-    assertOwner(team.owner, userId, "You are not authorized to invite members to this team.");
+    const isOwner = String(team.owner) === String(userId);
+    if (!isOwner && !isAdmin && !isActiveTeamAdmin(team, userId)) {
+      throw new ApiError(403, "You are not authorized to invite members to this team.");
+    }
 
     const normalizedEmail = String(email).toLowerCase();
     const alreadyMember = team.members.find(
       (member) => member.email === normalizedEmail
     );
     if (alreadyMember) {
-      throw new Error("This email has already been invited to the team.");
+      throw new ApiError(409, "This email has already been invited to the team.");
     }
 
     let existingUser = null;
@@ -141,7 +194,7 @@ async function inviteMember(id, userId, { email, name, role }) {
       existingUser = null;
     }
     if (existingUser && existingUser._id.toString() === userId) {
-      throw new Error("You are already a member of this team.");
+      throw new ApiError(409, "You are already a member of this team.");
     }
 
     const member = {
@@ -193,12 +246,12 @@ async function acceptInvite(id, memberId, userId, userEmail) {
   try {
     const team = await Team.findById(id);
     if (!team) {
-      throw new Error("Team not found.");
+      throw new ApiError(404, "Team not found.");
     }
 
     const member = team.members.id(memberId);
     if (!member) {
-      throw new Error("Invitation not found.");
+      throw new ApiError(404, "Invitation not found.");
     }
 
     const normalizedEmail = String(userEmail || "").toLowerCase();
@@ -206,11 +259,11 @@ async function acceptInvite(id, memberId, userId, userEmail) {
       (member.user && member.user.toString() === String(userId)) ||
       (normalizedEmail && member.email === normalizedEmail);
     if (!matches) {
-      throw new Error("You are not authorized to accept this invitation.");
+      throw new ApiError(403, "You are not authorized to accept this invitation.");
     }
 
     if (member.status === "active") {
-      throw new Error("This invitation has already been accepted.");
+      throw new ApiError(409, "This invitation has already been accepted.");
     }
 
     member.status = "active";
@@ -241,30 +294,38 @@ async function acceptInvite(id, memberId, userId, userEmail) {
   }
 }
 
-async function removeMember(id, memberId, userId) {
+// Owner, an active admin-tier member, platform admin, or the member
+// themselves (leave) may remove. The team owner's own member record can
+// never be removed through this path - the owner has no "leave" flow
+// (ownership transfer isn't implemented); this is deliberate founder
+// protection, not an oversight.
+async function removeMember(id, memberId, userId, { isAdmin = false } = {}) {
   try {
     const team = await Team.findById(id);
     if (!team) {
-      throw new Error("Team not found.");
+      throw new ApiError(404, "Team not found.");
     }
 
     const member = team.members.id(memberId);
     if (!member) {
-      throw new Error("Member not found.");
+      throw new ApiError(404, "Member not found.");
     }
 
     const isOwner = String(team.owner) === String(userId);
+    const isSelf = member.user && member.user.toString() === String(userId);
+    const isTeamAdmin = isActiveTeamAdmin(team, userId);
 
-    if (!isOwner && member.user && member.user.toString() !== String(userId)) {
-      throw new Error("You are not authorized to remove this member.");
+    if (!isOwner && !isAdmin && !isTeamAdmin && !isSelf) {
+      throw new ApiError(403, "You are not authorized to remove this member.");
     }
 
     if (member.user && member.user.toString() === String(team.owner)) {
-      throw new Error("The team owner cannot be removed.");
+      throw new ApiError(403, "The team owner cannot be removed.");
     }
 
     const removedUserId = member.user ? member.user.toString() : null;
     const removedLabel = member.name || member.email;
+    const removedBySomeoneElse = removedUserId !== String(userId);
 
     team.members.pull(memberId);
     team.memberCount = Math.max(0, team.members.length);
@@ -273,7 +334,7 @@ async function removeMember(id, memberId, userId) {
     const savedTeam = team.toObject();
 
     try {
-      if (isOwner && removedUserId && removedUserId !== String(userId)) {
+      if (removedBySomeoneElse && removedUserId) {
         await createNotification({
           recipient: removedUserId,
           type: "team_member_removed",
@@ -281,7 +342,7 @@ async function removeMember(id, memberId, userId) {
           message: `You have been removed from the team "${team.name}".`,
           data: { teamId: String(team._id), teamName: team.name },
         });
-      } else if (!isOwner && removedUserId === String(userId)) {
+      } else if (!removedBySomeoneElse) {
         await createNotification({
           recipient: team.owner,
           type: "team_member_left",
@@ -301,17 +362,22 @@ async function removeMember(id, memberId, userId) {
   }
 }
 
-async function changeMemberRole(id, memberId, userId, role) {
+// Deliberately owner/platform-admin only, unlike invite/remove above - an
+// admin-tier member granting the admin role to a peer (or themselves) would
+// be a role-escalation path with no further gate above it.
+async function changeMemberRole(id, memberId, userId, role, { isAdmin = false } = {}) {
   try {
     const team = await Team.findById(id);
     if (!team) {
-      throw new Error("Team not found.");
+      throw new ApiError(404, "Team not found.");
     }
-    assertOwner(team.owner, userId, "You are not authorized to change member roles.");
+    if (!isAdmin) {
+      assertOwner(team.owner, userId, "You are not authorized to change member roles.", 403);
+    }
 
     const member = team.members.id(memberId);
     if (!member) {
-      throw new Error("Member not found.");
+      throw new ApiError(404, "Member not found.");
     }
 
     member.role = role;
@@ -346,8 +412,10 @@ module.exports = {
   listTeams,
   updateTeam,
   archiveTeam,
+  restoreTeam,
   inviteMember,
   acceptInvite,
   removeMember,
   changeMemberRole,
+  isActiveTeamAdmin,
 };

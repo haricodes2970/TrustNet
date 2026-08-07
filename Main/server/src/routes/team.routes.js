@@ -1,12 +1,16 @@
 const express = require("express");
 const teamController = require("../controllers/teamController");
 const { authenticate } = require("../middlewares/auth");
+const { authorize } = require("../middlewares/authorize");
 const validate = require("../middlewares/validate");
 const { teamCreate, teamUpdate, memberInvite, memberRole } = require("../validators/team.validators");
 
 const router = express.Router();
 
 router.use(authenticate);
+// No role list - just populates req.user.role so controllers can grant a
+// platform admin override alongside the existing owner/team-admin checks.
+router.use(authorize());
 
 /**
  * @openapi
@@ -73,6 +77,21 @@ router.put("/:id", validate(teamUpdate), teamController.updateTeam);
  *       200: { description: Team archived }
  */
 router.delete("/:id", teamController.archiveTeam);
+
+/**
+ * @openapi
+ * /teams/{id}/restore:
+ *   post:
+ *     summary: Restore an archived team (owner or platform admin)
+ *     tags: [Teams]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { name: id, in: path, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: Team restored }
+ *       409: { description: The underlying startup is still deleted }
+ */
+router.post("/:id/restore", teamController.restoreTeam);
 
 /**
  * @openapi
