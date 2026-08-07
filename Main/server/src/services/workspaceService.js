@@ -1,6 +1,7 @@
 const Workspace = require("../models/Workspace");
 const Startup = require("../models/Startup");
 const Team = require("../models/Team");
+const ApiError = require("../utils/ApiError");
 const { applyQueryOptions, handleServiceError, normalizeFilter, assertOwner } = require("./serviceUtils");
 
 async function assertStartupFounder(startupId, userId) {
@@ -113,39 +114,66 @@ async function archiveWorkspace(id, userId) {
   }
 }
 
+// A startup has MANY teams (1 startup : N teams — see docs/modules/
+// startups.md), so a single Team.findOne() here silently ignored
+// membership in every team but whichever one Mongo happened to return
+// first: an admin/contributor of a startup's second or third team was
+// getting denied all workspace access. Checks every non-archived team for
+// the startup and returns the highest privilege found (admin beats
+// contributor; ownership is resolved separately by the caller since it
+// isn't a Team-membership concept).
+async function resolveHighestTeamRole(startupId, userId) {
+  const teams = await Team.find({ startup: startupId, isArchived: false }).lean();
+
+  let best = null;
+  for (const team of teams) {
+    const member = team.members.find(
+      (m) => m.user && String(m.user) === String(userId) && m.status === "active"
+    );
+    if (!member) continue;
+    const role = member.role === "admin" ? "admin" : "contributor";
+    if (role === "admin") {
+      return "admin";
+    }
+    best = best || role;
+  }
+  return best;
+}
+
 async function listWorkspaceMembers(id, userId) {
   try {
     const workspace = await getWorkspaceById(id);
     const access = await resolveWorkspaceAccess(id, userId);
     if (!access.role) {
-      throw new Error("You are not authorized to view this workspace.");
+      throw new ApiError(403, "You are not authorized to view this workspace.");
     }
 
-    const team = await Team.findOne({ startup: workspace.startup }).lean();
+    const teams = await Team.find({ startup: workspace.startup, isArchived: false }).lean();
 
-    const members = [
-      {
-        user: workspace.owner,
-        role: "owner",
-        status: "active",
-      },
-    ];
-
-    if (team) {
+    // A user can be an active member of more than one team for the same
+    // startup - dedupe by user id, keeping the highest role found, so the
+    // effective roster doesn't list the same person twice.
+    const byUserId = new Map();
+    teams.forEach((team) => {
       team.members
         .filter((member) => member.status === "active" && String(member.user) !== String(workspace.owner))
         .forEach((member) => {
-          members.push({
-            user: member.user,
-            email: member.email,
-            name: member.name,
-            role: member.role === "admin" ? "admin" : "contributor",
-            status: "active",
-          });
+          const key = String(member.user);
+          const role = member.role === "admin" ? "admin" : "contributor";
+          const existing = byUserId.get(key);
+          if (!existing || (existing.role !== "admin" && role === "admin")) {
+            byUserId.set(key, {
+              user: member.user,
+              email: member.email,
+              name: member.name,
+              role,
+              status: "active",
+            });
+          }
         });
-    }
+    });
 
-    return members;
+    return [{ user: workspace.owner, role: "owner", status: "active" }, ...byUserId.values()];
   } catch (error) {
     throw handleServiceError(error, "Failed to list workspace members.");
   }
@@ -162,20 +190,8 @@ async function resolveWorkspaceAccess(workspaceId, userId) {
       return { role: "owner" };
     }
 
-    const team = await Team.findOne({ startup: workspace.startup }).lean();
-    if (!team) {
-      return { role: null };
-    }
-
-    const member = team.members.find(
-      (m) => m.user && String(m.user) === String(userId) && m.status === "active"
-    );
-
-    if (!member) {
-      return { role: null };
-    }
-
-    return { role: member.role === "admin" ? "admin" : "contributor" };
+    const role = await resolveHighestTeamRole(workspace.startup, userId);
+    return { role };
   } catch (error) {
     throw handleServiceError(error, "Failed to resolve workspace access.");
   }
