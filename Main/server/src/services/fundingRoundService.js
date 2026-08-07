@@ -12,7 +12,9 @@ const { applyQueryOptions, handleServiceError, normalizeFilter } = require("./se
 // workspaceService.resolveWorkspaceAccess(), jobService.resolveStartupAccess(),
 // and investmentInterestService.resolveStartupAccess(). Not shared with any
 // of them by explicit instruction — none of those three files are touched
-// here. See docs/modules/funding.md and BACKLOG.md.
+// here. See docs/modules/funding.md and BACKLOG.md. Re-verified during the
+// Investors & Funding phase audit — still intentional, still documented,
+// left unchanged.
 //
 // Error typing: 404 not found, 403 authorization failure (role/ownership),
 // 409 state conflict (invalid transition, terminal-state block, startup not
@@ -56,6 +58,34 @@ async function getAccessibleStartupIds(userId) {
   return Array.from(unique.values());
 }
 
+function assertStartupWriteRole(access, isAdmin, message) {
+  if (isAdmin) {
+    return;
+  }
+  if (access.role !== "owner" && access.role !== "admin") {
+    throw new ApiError(403, message);
+  }
+}
+
+// Startup must exist, not be soft-deleted or admin-suspended, and be
+// "active" — previously openRound only checked the last of these three,
+// so a suspended (or already-deleted) startup with status still "active"
+// could still open a new round.
+function assertStartupActiveForFunding(startup) {
+  if (!startup) {
+    throw new ApiError(404, "Startup not found.");
+  }
+  if (startup.deletedAt) {
+    throw new ApiError(409, "This startup has been deleted.");
+  }
+  if (startup.isSuspended) {
+    throw new ApiError(409, "This startup is suspended.");
+  }
+  if (startup.status !== "active") {
+    throw new ApiError(409, "This startup is not currently active.");
+  }
+}
+
 const TERMINAL_ROUND_STATUSES = ["closed", "cancelled"];
 const ALLOWED_ROUND_TRANSITIONS = {
   draft: ["open", "cancelled"],
@@ -77,18 +107,20 @@ function assertValidRoundTransition(currentStatus, nextStatus) {
 
 async function createRound(
   { startupId, title, roundType, targetAmount, currency, minimumContribution, description },
-  userId
+  userId,
+  { isAdmin = false } = {}
 ) {
   try {
     const startup = await Startup.findById(startupId).lean();
     if (!startup) {
       throw new ApiError(404, "Startup not found.");
     }
+    if (startup.deletedAt) {
+      throw new ApiError(409, "This startup has been deleted and cannot accept new funding rounds.");
+    }
 
     const access = await resolveStartupAccess(startupId, userId);
-    if (access.role !== "owner" && access.role !== "admin") {
-      throw new ApiError(403, "You are not authorized to create funding rounds for this startup.");
-    }
+    assertStartupWriteRole(access, isAdmin, "You are not authorized to create funding rounds for this startup.");
 
     const round = await FundingRound.create({
       startup: startupId,
@@ -125,10 +157,15 @@ async function getRoundById(id) {
 // itself is concealed, not just content. Deliberate reuse of Job's
 // precedent since FundingRound has the same "public when open" shape Job's
 // "public when published" shape has; every other Funding/Investor endpoint
-// keeps this repo's usual 403-on-no-access convention.
-async function getRoundForViewer(id, userId) {
+// keeps this repo's usual 403-on-no-access convention. A platform admin
+// always passes.
+async function getRoundForViewer(id, userId, { isAdmin = false } = {}) {
   try {
     const round = await getRoundById(id);
+    if (isAdmin) {
+      return round;
+    }
+
     const isPubliclyVisible = round.status === "open" && !round.isArchived;
     if (isPubliclyVisible) {
       return round;
@@ -179,15 +216,16 @@ async function listRoundsForUser(userId, filter = {}, options = {}) {
   }
 }
 
-async function updateRound(id, userId, updateData) {
+async function updateRound(id, userId, updateData, { isAdmin = false } = {}) {
   try {
     const existing = await getRoundById(id);
     const access = await resolveStartupAccess(existing.startup, userId);
-    if (access.role !== "owner" && access.role !== "admin") {
-      throw new ApiError(403, "You are not authorized to update this funding round.");
-    }
+    assertStartupWriteRole(access, isAdmin, "You are not authorized to update this funding round.");
     if (existing.status !== "draft") {
       throw new ApiError(409, "Only draft funding rounds can be edited.");
+    }
+    if (existing.isArchived) {
+      throw new ApiError(409, "This funding round is archived. Restore it before making changes.");
     }
 
     const safeUpdate = { ...updateData };
@@ -214,19 +252,15 @@ async function updateRound(id, userId, updateData) {
   }
 }
 
-async function openRound(id, userId) {
+async function openRound(id, userId, { isAdmin = false } = {}) {
   try {
     const existing = await getRoundById(id);
     const access = await resolveStartupAccess(existing.startup, userId);
-    if (access.role !== "owner" && access.role !== "admin") {
-      throw new ApiError(403, "You are not authorized to open this funding round.");
-    }
+    assertStartupWriteRole(access, isAdmin, "You are not authorized to open this funding round.");
     assertValidRoundTransition(existing.status, "open");
 
     const startup = await Startup.findById(existing.startup).lean();
-    if (!startup || startup.status !== "active") {
-      throw new ApiError(409, "This startup is not currently active.");
-    }
+    assertStartupActiveForFunding(startup);
 
     const round = await FundingRound.findByIdAndUpdate(
       id,
@@ -243,13 +277,11 @@ async function openRound(id, userId) {
   }
 }
 
-async function closeRound(id, userId) {
+async function closeRound(id, userId, { isAdmin = false } = {}) {
   try {
     const existing = await getRoundById(id);
     const access = await resolveStartupAccess(existing.startup, userId);
-    if (access.role !== "owner" && access.role !== "admin") {
-      throw new ApiError(403, "You are not authorized to close this funding round.");
-    }
+    assertStartupWriteRole(access, isAdmin, "You are not authorized to close this funding round.");
     assertValidRoundTransition(existing.status, "closed");
 
     const round = await FundingRound.findByIdAndUpdate(
@@ -267,13 +299,11 @@ async function closeRound(id, userId) {
   }
 }
 
-async function cancelRound(id, userId) {
+async function cancelRound(id, userId, { isAdmin = false } = {}) {
   try {
     const existing = await getRoundById(id);
     const access = await resolveStartupAccess(existing.startup, userId);
-    if (access.role !== "owner" && access.role !== "admin") {
-      throw new ApiError(403, "You are not authorized to cancel this funding round.");
-    }
+    assertStartupWriteRole(access, isAdmin, "You are not authorized to cancel this funding round.");
     assertValidRoundTransition(existing.status, "cancelled");
 
     const round = await FundingRound.findByIdAndUpdate(
@@ -291,10 +321,64 @@ async function cancelRound(id, userId) {
   }
 }
 
+// FundingRound.isArchived has been in the schema from the start and is
+// already consulted everywhere reads happen (getRoundForViewer,
+// listRoundsForUser, fundingContributionService.createContribution's
+// accept-contribution check) - but nothing ever WROTE it. archiveRound/
+// restoreRound were simply missing; this is new functionality, not a
+// behavior change to anything that already worked.
+async function archiveRound(id, userId, { isAdmin = false } = {}) {
+  try {
+    const existing = await getRoundById(id);
+    const access = await resolveStartupAccess(existing.startup, userId);
+    assertStartupWriteRole(access, isAdmin, "You are not authorized to archive this funding round.");
+
+    const round = await FundingRound.findByIdAndUpdate(
+      id,
+      { isArchived: true, updatedBy: userId },
+      { new: true }
+    ).lean();
+
+    if (!round) {
+      throw new ApiError(404, "Funding round not found.");
+    }
+    return round;
+  } catch (error) {
+    throw handleServiceError(error, "Failed to archive funding round.");
+  }
+}
+
+async function restoreRound(id, userId, { isAdmin = false } = {}) {
+  try {
+    const existing = await getRoundById(id);
+    const access = await resolveStartupAccess(existing.startup, userId);
+    assertStartupWriteRole(access, isAdmin, "You are not authorized to restore this funding round.");
+
+    const startup = await Startup.findById(existing.startup).lean();
+    if (!startup || startup.deletedAt) {
+      throw new ApiError(409, "Restore the startup before restoring its funding rounds.");
+    }
+
+    const round = await FundingRound.findByIdAndUpdate(
+      id,
+      { isArchived: false, updatedBy: userId },
+      { new: true }
+    ).lean();
+
+    if (!round) {
+      throw new ApiError(404, "Funding round not found.");
+    }
+    return round;
+  } catch (error) {
+    throw handleServiceError(error, "Failed to restore funding round.");
+  }
+}
+
 module.exports = {
   resolveStartupAccess,
   getAccessibleStartupIds,
   assertValidRoundTransition,
+  assertStartupActiveForFunding,
   createRound,
   getRoundById,
   getRoundForViewer,
@@ -303,4 +387,6 @@ module.exports = {
   openRound,
   closeRound,
   cancelRound,
+  archiveRound,
+  restoreRound,
 };

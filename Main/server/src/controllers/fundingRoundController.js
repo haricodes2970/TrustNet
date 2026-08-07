@@ -1,9 +1,22 @@
 const fundingRoundService = require("../services/fundingRoundService");
+const auditLogService = require("../services/auditLogService");
 const ApiError = require("../utils/ApiError");
 
 // Controllers stay thin: parse req, call service, shape response. Services
 // own error typing (ApiError with a statusCode) — the fallback below only
 // fires for a genuinely unexpected (non-ApiError) failure.
+
+function isPlatformAdmin(req) {
+  return req.user && req.user.role === "admin";
+}
+
+function logAction(req, action, targetId, details) {
+  auditLogService
+    .createLog({ actor: req.user.id, action, targetType: "FundingRound", targetId, details, ip: req.ip })
+    .catch((error) => {
+      console.error(`[audit] Failed to log "${action}" by ${req.user.id}: ${error.message}`);
+    });
+}
 
 async function createRound(req, res) {
   try {
@@ -17,8 +30,10 @@ async function createRound(req, res) {
         minimumContribution: req.body.minimumContribution,
         description: req.body.description,
       },
-      req.user.id
+      req.user.id,
+      { isAdmin: isPlatformAdmin(req) }
     );
+    logAction(req, "fundingRound.create", round._id, { startupId: req.body.startupId, title: round.title });
     return res.status(201).json({ success: true, data: round });
   } catch (error) {
     const status = error instanceof ApiError ? error.statusCode : 500;
@@ -28,7 +43,9 @@ async function createRound(req, res) {
 
 async function getRound(req, res) {
   try {
-    const round = await fundingRoundService.getRoundForViewer(req.params.id, req.user ? req.user.id : null);
+    const round = await fundingRoundService.getRoundForViewer(req.params.id, req.user ? req.user.id : null, {
+      isAdmin: isPlatformAdmin(req),
+    });
     return res.status(200).json({ success: true, data: round });
   } catch (error) {
     const status = error instanceof ApiError ? error.statusCode : 500;
@@ -42,11 +59,15 @@ async function listRounds(req, res) {
     if (req.query.startupId) {
       filter.startup = req.query.startupId;
     }
-    const rounds = await fundingRoundService.listRoundsForUser(
-      req.user ? req.user.id : null,
-      filter,
-      req.query.options || {}
-    );
+    if (req.query.status) {
+      filter.status = req.query.status;
+    }
+    const options = { ...(req.query.options || {}) };
+    if (req.query.limit !== undefined) options.limit = req.query.limit;
+    if (req.query.skip !== undefined) options.skip = req.query.skip;
+    if (req.query.sort !== undefined) options.sort = req.query.sort;
+
+    const rounds = await fundingRoundService.listRoundsForUser(req.user ? req.user.id : null, filter, options);
     return res.status(200).json({ success: true, data: rounds });
   } catch (error) {
     const status = error instanceof ApiError ? error.statusCode : 500;
@@ -56,7 +77,10 @@ async function listRounds(req, res) {
 
 async function updateRound(req, res) {
   try {
-    const round = await fundingRoundService.updateRound(req.params.id, req.user.id, req.body);
+    const round = await fundingRoundService.updateRound(req.params.id, req.user.id, req.body, {
+      isAdmin: isPlatformAdmin(req),
+    });
+    logAction(req, "fundingRound.update", round._id, { fields: Object.keys(req.body) });
     return res.status(200).json({ success: true, data: round });
   } catch (error) {
     const status = error instanceof ApiError ? error.statusCode : 500;
@@ -66,7 +90,8 @@ async function updateRound(req, res) {
 
 async function openRound(req, res) {
   try {
-    const round = await fundingRoundService.openRound(req.params.id, req.user.id);
+    const round = await fundingRoundService.openRound(req.params.id, req.user.id, { isAdmin: isPlatformAdmin(req) });
+    logAction(req, "fundingRound.open", round._id, {});
     return res.status(200).json({ success: true, data: round });
   } catch (error) {
     const status = error instanceof ApiError ? error.statusCode : 500;
@@ -76,7 +101,8 @@ async function openRound(req, res) {
 
 async function closeRound(req, res) {
   try {
-    const round = await fundingRoundService.closeRound(req.params.id, req.user.id);
+    const round = await fundingRoundService.closeRound(req.params.id, req.user.id, { isAdmin: isPlatformAdmin(req) });
+    logAction(req, "fundingRound.close", round._id, {});
     return res.status(200).json({ success: true, data: round });
   } catch (error) {
     const status = error instanceof ApiError ? error.statusCode : 500;
@@ -86,7 +112,30 @@ async function closeRound(req, res) {
 
 async function cancelRound(req, res) {
   try {
-    const round = await fundingRoundService.cancelRound(req.params.id, req.user.id);
+    const round = await fundingRoundService.cancelRound(req.params.id, req.user.id, { isAdmin: isPlatformAdmin(req) });
+    logAction(req, "fundingRound.cancel", round._id, {});
+    return res.status(200).json({ success: true, data: round });
+  } catch (error) {
+    const status = error instanceof ApiError ? error.statusCode : 500;
+    return res.status(status).json({ success: false, message: error.message });
+  }
+}
+
+async function archiveRound(req, res) {
+  try {
+    const round = await fundingRoundService.archiveRound(req.params.id, req.user.id, { isAdmin: isPlatformAdmin(req) });
+    logAction(req, "fundingRound.archive", round._id, {});
+    return res.status(200).json({ success: true, data: round });
+  } catch (error) {
+    const status = error instanceof ApiError ? error.statusCode : 500;
+    return res.status(status).json({ success: false, message: error.message });
+  }
+}
+
+async function restoreRound(req, res) {
+  try {
+    const round = await fundingRoundService.restoreRound(req.params.id, req.user.id, { isAdmin: isPlatformAdmin(req) });
+    logAction(req, "fundingRound.restore", round._id, {});
     return res.status(200).json({ success: true, data: round });
   } catch (error) {
     const status = error instanceof ApiError ? error.statusCode : 500;
@@ -102,4 +151,6 @@ module.exports = {
   openRound,
   closeRound,
   cancelRound,
+  archiveRound,
+  restoreRound,
 };
