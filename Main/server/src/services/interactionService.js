@@ -49,7 +49,7 @@ async function likePost(postId, userId, { isAdmin = false } = {}) {
         { $set: { likes: { $setUnion: ["$likes", [userObjectId]] } } },
         { $set: { likeCount: { $size: "$likes" } } },
       ],
-      { new: true }
+      { new: true, updatePipeline: true }
     ).lean();
 
     return { liked: true, likeCount: updated.likeCount };
@@ -77,7 +77,7 @@ async function unlikePost(postId, userId) {
         },
         { $set: { likeCount: { $size: "$likes" } } },
       ],
-      { new: true }
+      { new: true, updatePipeline: true }
     ).lean();
 
     return { liked: false, likeCount: updated.likeCount };

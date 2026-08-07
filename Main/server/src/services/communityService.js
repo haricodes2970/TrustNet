@@ -223,7 +223,7 @@ async function joinCommunity(id, userId) {
         { $set: { members: { $setUnion: ["$members", [userObjectId]] } } },
         { $set: { memberCount: { $size: "$members" } } },
       ],
-      { new: true }
+      { new: true, updatePipeline: true }
     ).lean();
     return updated;
   } catch (error) {
@@ -253,7 +253,7 @@ async function leaveCommunity(id, userId) {
         },
         { $set: { memberCount: { $size: "$members" } } },
       ],
-      { new: true }
+      { new: true, updatePipeline: true }
     ).lean();
     return updated;
   } catch (error) {
