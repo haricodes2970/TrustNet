@@ -62,6 +62,9 @@ async function listRounds(req, res) {
     if (req.query.status) {
       filter.status = req.query.status;
     }
+    if (req.query.search) {
+      filter.search = req.query.search;
+    }
     const options = { ...(req.query.options || {}) };
     if (req.query.limit !== undefined) options.limit = req.query.limit;
     if (req.query.skip !== undefined) options.skip = req.query.skip;

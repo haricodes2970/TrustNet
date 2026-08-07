@@ -188,9 +188,19 @@ async function getRoundForViewer(id, userId, { isAdmin = false } = {}) {
 
 // "Downgrade to public subset" on an unauthorized/absent filter, same
 // pattern jobService.listJobsForUser uses — never an outright rejection.
+// `search` does a case-insensitive title/description match, same shape as
+// every other collaboration-chain module's listing search.
 async function listRoundsForUser(userId, filter = {}, options = {}) {
   try {
-    const base = normalizeFilter(filter);
+    const { search, ...rest } = normalizeFilter(filter);
+    const base = { ...rest };
+
+    if (search) {
+      const escaped = String(search).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const regex = new RegExp(escaped, "i");
+      base.$and = [...(base.$and || []), { $or: [{ title: regex }, { description: regex }] }];
+    }
+
     const accessibleStartupIds = userId ? await getAccessibleStartupIds(userId) : [];
 
     if (base.startup) {
