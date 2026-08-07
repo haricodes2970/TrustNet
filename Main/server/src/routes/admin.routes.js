@@ -7,6 +7,7 @@ const adminVerificationController = require("../controllers/adminVerificationCon
 const adminDashboardController = require("../controllers/adminDashboardController");
 const adminUserController = require("../controllers/adminUserController");
 const adminModerationController = require("../controllers/adminModerationController");
+const adminStartupController = require("../controllers/adminStartupController");
 
 const router = express.Router();
 
@@ -33,5 +34,9 @@ router.post(
   validate(adminValidators.moderateContent),
   adminModerationController.moderate
 );
+
+router.get("/startups", adminStartupController.listStartups);
+router.post("/startups/:id/suspend", validate(adminValidators.moderationReason), adminStartupController.suspendStartup);
+router.post("/startups/:id/restore", adminStartupController.restoreStartup);
 
 module.exports = router;

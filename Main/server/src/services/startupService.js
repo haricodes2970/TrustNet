@@ -62,9 +62,13 @@ async function deleteStartup(id) {
   }
 }
 
+// isSuspended defaults to excluded, same pattern as Post/Community's
+// listing defaults - an explicit filter value (admin's suspended-startups
+// view) overrides it.
 async function listStartups(filter = {}, options = {}) {
   try {
-    const query = Startup.find(normalizeFilter(filter));
+    const withDefaults = { isSuspended: false, ...normalizeFilter(filter) };
+    const query = Startup.find(withDefaults);
     return applyQueryOptions(query, options).lean();
   } catch (error) {
     throw handleServiceError(error, "Failed to list startups.");
