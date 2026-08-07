@@ -6,6 +6,7 @@ const adminValidators = require("../validators/admin.validators");
 const adminVerificationController = require("../controllers/adminVerificationController");
 const adminDashboardController = require("../controllers/adminDashboardController");
 const adminUserController = require("../controllers/adminUserController");
+const adminModerationController = require("../controllers/adminModerationController");
 
 const router = express.Router();
 
@@ -26,5 +27,11 @@ router.post("/users/:id/suspend", validate(adminValidators.moderationReason), ad
 router.post("/users/:id/reactivate", adminUserController.reactivateUser);
 router.patch("/users/:id/role", validate(adminValidators.changeRole), adminUserController.changeRole);
 router.delete("/users/:id", adminUserController.deleteUser);
+
+router.post(
+  "/content/:type/:id/moderate",
+  validate(adminValidators.moderateContent),
+  adminModerationController.moderate
+);
 
 module.exports = router;

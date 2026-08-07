@@ -10,4 +10,9 @@ const moderationReason = Joi.object({
   reason: Joi.string().trim().max(500).allow("", null),
 });
 
-module.exports = { changeRole, moderationReason };
+const moderateContent = Joi.object({
+  action: Joi.string().valid("hide", "restore", "delete").required(),
+  reason: Joi.string().trim().max(500).allow("", null),
+});
+
+module.exports = { changeRole, moderationReason, moderateContent };
