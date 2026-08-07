@@ -48,10 +48,16 @@ An independently-developed TrustNet backend (`trustnet 2.zip`, "Developer 1") wa
 
 ## Scalability (Phase 5)
 
-- [ ] Fix N+1 in `getUnreadCount` and per-request user lookups
+- [x] ~~Fix N+1 in `getUnreadCount` and per-request user lookups~~ — `getUnreadCount` (Messages) reviewed in the Messaging + Notifications hardening phase: it's already a 2-query shape (`Conversation.find` then `Message.countDocuments` with `$in`), not a real N+1 - no change needed there. The per-request user lookups (`resolveCurrentUserId()` → `userService.getUserByEmail(req.user.email)` on every request) *were* real and fixed in `messageController.js`/`notificationController.js` this same phase (`req.user.id` used directly, like every other controller). `profileController.js`/`settingsController.js` still have their own copies of the same pattern - out of scope for Messaging/Notifications, revisit in a dedicated Profile/Settings pass.
 - [ ] Standardize list-endpoint pagination shape (`{ data, total, page, pageSize }`)
 - [ ] Confirm text indexes are used by `searchService.js`
 - [ ] Make email/Cloudinary transports singletons instead of per-call
+
+## Messaging + Notifications (hardening phase) — explicit, instructed tradeoffs
+
+- [ ] **No dedicated file-upload pipeline for message attachments** - `Message.attachments` stays plain validated URL strings; the client is expected to upload via the Documents module's existing storage path and pass the resulting URL. Building a dedicated messaging-attachment upload flow would be a new feature, not a bug fix - out of scope for an MVP hardening phase (see `docs/modules/messages.md`).
+- [ ] **Conversation/Message soft-delete is shared-state, not per-participant.** Any participant deleting a conversation or their own message hides/marks it for everyone (reversible via restore), not just for themselves - matches this codebase's uniform soft-delete convention (every other soft-deletable resource works the same way), deliberately not a new per-user "hide from my inbox only" mechanism, which would be a larger, more speculative feature.
+- [ ] `profileController.js`/`settingsController.js` still resolve the acting user via `userService.getUserByEmail(req.user.email)` per request - the same pattern fixed in `messageController.js`/`notificationController.js` (and `interactionService.js`, Communities/Posts phase) this session, but those two files are outside Messaging/Notifications' scope.
 
 ## Features & DX (Phase 6)
 
