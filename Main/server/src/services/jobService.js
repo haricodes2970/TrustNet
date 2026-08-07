@@ -1,6 +1,7 @@
 const Job = require("../models/Job");
 const Startup = require("../models/Startup");
 const Team = require("../models/Team");
+const ApiError = require("../utils/ApiError");
 const { applyQueryOptions, handleServiceError, normalizeFilter } = require("./serviceUtils");
 
 // Hiring is a Startup-domain module: Startup -> Job, with NO Workspace and
@@ -17,7 +18,9 @@ const { applyQueryOptions, handleServiceError, normalizeFilter } = require("./se
 // lives in workspaceService.resolveWorkspaceAccess()/listWorkspacesForUser().
 // This is not an oversight — it's the explicitly chosen tradeoff for this
 // phase. See docs/modules/hiring.md and BACKLOG.md for the standing note to
-// collapse this duplication in a future refactor.
+// collapse this duplication in a future refactor. Re-verified during the
+// Hiring & Applications phase audit — still intentional, still documented,
+// left unchanged.
 
 async function resolveStartupAccess(startupId, userId) {
   const startup = await Startup.findById(startupId).lean();
@@ -59,7 +62,7 @@ async function getAccessibleStartupIds(userId) {
 // Pure, database-independent.
 function validateSalaryRange(salaryMin, salaryMax) {
   if (salaryMin != null && salaryMax != null && Number(salaryMin) > Number(salaryMax)) {
-    throw new Error("salaryMin must be less than or equal to salaryMax.");
+    throw new ApiError(400, "salaryMin must be less than or equal to salaryMax.");
   }
 }
 
@@ -67,26 +70,42 @@ function validateSalaryRange(salaryMin, salaryMax) {
 // draft is allowed to skip, and the job must not be archived.
 function assertPublishReady(job) {
   if (job.isArchived) {
-    throw new Error("Archived jobs cannot be published.");
+    throw new ApiError(409, "Archived jobs cannot be published.");
   }
 
   const missing = ["title", "description", "employmentType", "remotePolicy"].filter(
     (field) => !job[field]
   );
   if (missing.length > 0) {
-    throw new Error(`Cannot publish: missing required field(s): ${missing.join(", ")}.`);
+    throw new ApiError(400, `Cannot publish: missing required field(s): ${missing.join(", ")}.`);
+  }
+}
+
+function assertStartupWriteRole(access, isAdmin, message) {
+  if (isAdmin) {
+    return;
+  }
+  if (access.role !== "owner" && access.role !== "admin") {
+    throw new ApiError(403, message);
   }
 }
 
 async function createJob(
   { startupId, title, department, employmentType, location, remotePolicy, salaryMin, salaryMax, currency, description, requirements },
-  userId
+  userId,
+  { isAdmin = false } = {}
 ) {
   try {
-    const access = await resolveStartupAccess(startupId, userId);
-    if (access.role !== "owner" && access.role !== "admin") {
-      throw new Error("You are not authorized to create jobs for this startup.");
+    const startup = await Startup.findById(startupId).lean();
+    if (!startup) {
+      throw new ApiError(404, "Startup not found.");
     }
+    if (startup.deletedAt) {
+      throw new ApiError(409, "This startup has been deleted and cannot accept new jobs.");
+    }
+
+    const access = await resolveStartupAccess(startupId, userId);
+    assertStartupWriteRole(access, isAdmin, "You are not authorized to create jobs for this startup.");
 
     validateSalaryRange(salaryMin, salaryMax);
 
@@ -115,7 +134,7 @@ async function getJobById(id) {
   try {
     const job = await Job.findById(id).lean();
     if (!job) {
-      throw new Error("Job not found.");
+      throw new ApiError(404, "Job not found.");
     }
     return job;
   } catch (error) {
@@ -130,20 +149,24 @@ async function getJobById(id) {
 // which case applies. The controller maps every rejection from this
 // function to 404, never 403 (see documentController-style split used by
 // every other module — Job's read path deliberately does NOT follow that
-// convention; see docs/modules/hiring.md).
-async function assertJobViewAccess(job, userId) {
+// convention; see docs/modules/hiring.md). A platform admin always passes.
+async function assertJobViewAccess(job, userId, { isAdmin = false } = {}) {
+  if (isAdmin) {
+    return { role: "admin" };
+  }
+
   const isPubliclyVisible = job.status === "published" && !job.isArchived && !job.isHidden && !job.deletedAt;
   if (isPubliclyVisible) {
     return { role: userId ? (await resolveStartupAccess(job.startup, userId)).role : null };
   }
 
   if (!userId) {
-    throw new Error("Job not found.");
+    throw new ApiError(404, "Job not found.");
   }
 
   const access = await resolveStartupAccess(job.startup, userId);
   if (!access.role) {
-    throw new Error("Job not found.");
+    throw new ApiError(404, "Job not found.");
   }
   return access;
 }
@@ -185,19 +208,20 @@ async function listJobsForUser(userId, filter = {}, options = {}) {
   }
 }
 
-async function updateJob(id, userId, updateData) {
+async function updateJob(id, userId, updateData, { isAdmin = false } = {}) {
   try {
     const existing = await getJobById(id);
     const access = await resolveStartupAccess(existing.startup, userId);
-    if (access.role !== "owner" && access.role !== "admin") {
-      throw new Error("You are not authorized to update this job.");
+    assertStartupWriteRole(access, isAdmin, "You are not authorized to update this job.");
+    if (existing.isArchived) {
+      throw new ApiError(409, "This job is archived. Restore it before making changes.");
     }
 
     const safeUpdate = { ...updateData };
     delete safeUpdate.startup;
     delete safeUpdate.createdBy;
     delete safeUpdate.isArchived;
-    delete safeUpdate.status; // status changes only via publish/unpublish
+    delete safeUpdate.status; // status changes only via publish/unpublish/close
 
     const mergedMin = Object.prototype.hasOwnProperty.call(safeUpdate, "salaryMin")
       ? safeUpdate.salaryMin
@@ -215,7 +239,7 @@ async function updateJob(id, userId, updateData) {
     }).lean();
 
     if (!job) {
-      throw new Error("Job not found.");
+      throw new ApiError(404, "Job not found.");
     }
 
     return job;
@@ -224,13 +248,11 @@ async function updateJob(id, userId, updateData) {
   }
 }
 
-async function archiveJob(id, userId) {
+async function archiveJob(id, userId, { isAdmin = false } = {}) {
   try {
     const existing = await getJobById(id);
     const access = await resolveStartupAccess(existing.startup, userId);
-    if (access.role !== "owner" && access.role !== "admin") {
-      throw new Error("You are not authorized to archive this job.");
-    }
+    assertStartupWriteRole(access, isAdmin, "You are not authorized to archive this job.");
 
     const job = await Job.findByIdAndUpdate(
       id,
@@ -239,7 +261,7 @@ async function archiveJob(id, userId) {
     ).lean();
 
     if (!job) {
-      throw new Error("Job not found.");
+      throw new ApiError(404, "Job not found.");
     }
 
     return job;
@@ -248,13 +270,38 @@ async function archiveJob(id, userId) {
   }
 }
 
-async function publishJob(id, userId) {
+async function restoreJob(id, userId, { isAdmin = false } = {}) {
   try {
     const existing = await getJobById(id);
     const access = await resolveStartupAccess(existing.startup, userId);
-    if (access.role !== "owner" && access.role !== "admin") {
-      throw new Error("You are not authorized to publish this job.");
+    assertStartupWriteRole(access, isAdmin, "You are not authorized to restore this job.");
+
+    const startup = await Startup.findById(existing.startup).lean();
+    if (!startup || startup.deletedAt) {
+      throw new ApiError(409, "Restore the startup before restoring its jobs.");
     }
+
+    const job = await Job.findByIdAndUpdate(
+      id,
+      { isArchived: false, updatedBy: userId },
+      { new: true }
+    ).lean();
+
+    if (!job) {
+      throw new ApiError(404, "Job not found.");
+    }
+
+    return job;
+  } catch (error) {
+    throw handleServiceError(error, "Failed to restore job.");
+  }
+}
+
+async function publishJob(id, userId, { isAdmin = false } = {}) {
+  try {
+    const existing = await getJobById(id);
+    const access = await resolveStartupAccess(existing.startup, userId);
+    assertStartupWriteRole(access, isAdmin, "You are not authorized to publish this job.");
 
     assertPublishReady(existing);
 
@@ -265,7 +312,7 @@ async function publishJob(id, userId) {
     ).lean();
 
     if (!job) {
-      throw new Error("Job not found.");
+      throw new ApiError(404, "Job not found.");
     }
 
     return job;
@@ -274,13 +321,11 @@ async function publishJob(id, userId) {
   }
 }
 
-async function unpublishJob(id, userId) {
+async function unpublishJob(id, userId, { isAdmin = false } = {}) {
   try {
     const existing = await getJobById(id);
     const access = await resolveStartupAccess(existing.startup, userId);
-    if (access.role !== "owner" && access.role !== "admin") {
-      throw new Error("You are not authorized to unpublish this job.");
-    }
+    assertStartupWriteRole(access, isAdmin, "You are not authorized to unpublish this job.");
 
     const job = await Job.findByIdAndUpdate(
       id,
@@ -289,12 +334,40 @@ async function unpublishJob(id, userId) {
     ).lean();
 
     if (!job) {
-      throw new Error("Job not found.");
+      throw new ApiError(404, "Job not found.");
     }
 
     return job;
   } catch (error) {
     throw handleServiceError(error, "Failed to unpublish job.");
+  }
+}
+
+// "closed" is a long-declared Job.status enum value with nothing setting
+// it — hiring closed (position filled/cancelled) is distinct from
+// unpublish (back to draft for further editing): closing signals the role
+// is done, not "not ready yet." Applications are already rejected for any
+// non-"published" status (applicationService.createApplication), so this
+// needs no separate application-blocking logic.
+async function closeJob(id, userId, { isAdmin = false } = {}) {
+  try {
+    const existing = await getJobById(id);
+    const access = await resolveStartupAccess(existing.startup, userId);
+    assertStartupWriteRole(access, isAdmin, "You are not authorized to close this job.");
+
+    const job = await Job.findByIdAndUpdate(
+      id,
+      { status: "closed", updatedBy: userId },
+      { new: true }
+    ).lean();
+
+    if (!job) {
+      throw new ApiError(404, "Job not found.");
+    }
+
+    return job;
+  } catch (error) {
+    throw handleServiceError(error, "Failed to close job.");
   }
 }
 
@@ -309,6 +382,8 @@ module.exports = {
   listJobsForUser,
   updateJob,
   archiveJob,
+  restoreJob,
   publishJob,
   unpublishJob,
+  closeJob,
 };
