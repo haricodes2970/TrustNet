@@ -20,9 +20,10 @@ async function getDashboard(email) {
     startupService.listStartups({}, {}),
     communityService.listCommunities({}, {}),
     collaborationService.listCollaborationRequests({}, {}),
-    postService.listPosts({}, { limit: 5, sort: "-createdAt" }),
+    postService.listPostsForUser({}, {}, { limit: 5, sort: "-createdAt" }),
     startupService.listStartups({}, { sort: "-createdAt", limit: 5 }),
-    postService.listPosts(
+    postService.listPostsForUser(
+      {},
       {},
       {
         sort: "-likeCount",
