@@ -13,5 +13,6 @@ router.get("/verifications", adminVerificationController.listVerifications);
 router.get("/verifications/:userId", adminVerificationController.getVerification);
 router.post("/verifications/:userId/approve", adminVerificationController.approveVerification);
 router.post("/verifications/:userId/reject", adminVerificationController.rejectVerification);
+router.post("/verifications/:userId/request-resubmission", adminVerificationController.requestResubmission);
 
 module.exports = router;
