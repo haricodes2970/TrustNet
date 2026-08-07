@@ -2,6 +2,8 @@
 const Workspace = require("../models/Workspace");
 const Team = require("../models/Team");
 const Job = require("../models/Job");
+const FundingRound = require("../models/FundingRound");
+const InvestmentInterest = require("../models/InvestmentInterest");
 const ApiError = require("../utils/ApiError");
 const { applyQueryOptions, handleServiceError, normalizeFilter } = require("./serviceUtils");
 
@@ -99,6 +101,13 @@ async function updateStartup(id, updateData) {
 // still deleted. Using deletedAt here instead would have cascaded the
 // startup-delete correctly but left the founder with no self-service way
 // to undo it after restoring their startup.
+//
+// Cascades to FundingRound and InvestmentInterest too (Investors & Funding
+// phase): same gap, same fix - both use their own isArchived flag,
+// symmetric with fundingRoundService.restoreRound/investmentInterestService.
+// restoreInterest, which already refuse to run while the startup is still
+// deleted. This also transitively blocks new FundingContributions (its own
+// createContribution already rejects a round with isArchived:true).
 async function deleteStartup(id) {
   try {
     const startup = await Startup.findByIdAndUpdate(id, { deletedAt: new Date() }, { new: true });
@@ -110,6 +119,8 @@ async function deleteStartup(id) {
       Workspace.updateMany({ startup: id, isArchived: false }, { isArchived: true }),
       Team.updateMany({ startup: id, isArchived: false }, { isArchived: true }),
       Job.updateMany({ startup: id, isArchived: false }, { isArchived: true }),
+      FundingRound.updateMany({ startup: id, isArchived: false }, { isArchived: true }),
+      InvestmentInterest.updateMany({ startup: id, isArchived: false }, { isArchived: true }),
     ]);
 
     return startup;
