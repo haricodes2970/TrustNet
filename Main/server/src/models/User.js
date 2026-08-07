@@ -31,6 +31,10 @@ const userSchema = new mongoose.Schema(
       type: Date,
       select: false,
     },
+    refreshTokenVersion: {
+      type: Number,
+      default: 0,
+    },
     twoFactorEnabled: {
       type: Boolean,
       default: false,

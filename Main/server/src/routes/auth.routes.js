@@ -62,7 +62,7 @@ function signAccessToken(user) {
 
 function signRefreshToken(user) {
   return jwt.sign(
-    { sub: user._id.toString(), email: user.email, type: 'refresh' },
+    { sub: user._id.toString(), email: user.email, type: 'refresh', v: user.refreshTokenVersion || 0 },
     jwtConfig.refreshSecret,
     { expiresIn: jwtConfig.refreshExpiresIn }
   );
@@ -436,10 +436,25 @@ router.post('/refresh', refreshLimiter, async (req, res) => {
     return res.status(401).json({ success: false, message: 'No active session.' });
   }
 
+  if ((payload.v || 0) !== (user.refreshTokenVersion || 0)) {
+    return res.status(401).json({ success: false, message: 'No active session.' });
+  }
+
   return sendAuthResponse(res, user);
 });
 
-router.post('/logout', (req, res) => {
+router.post('/logout', async (req, res) => {
+  const token = req.cookies?.trustnet_refresh;
+  if (token) {
+    try {
+      const payload = jwt.verify(token, jwtConfig.refreshSecret);
+      if (payload?.type === 'refresh' && payload.sub) {
+        await User.findByIdAndUpdate(payload.sub, { $inc: { refreshTokenVersion: 1 } });
+      }
+    } catch (err) {
+      // Token already invalid/expired — nothing to revoke.
+    }
+  }
   clearRefreshCookie(res);
   return res.json({ success: true, message: 'Logged out successfully.' });
 });
@@ -621,6 +636,7 @@ router.post('/reset-password', async (req, res, next) => {
     user.password = await bcrypt.hash(password, 10);
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
+    user.refreshTokenVersion = (user.refreshTokenVersion || 0) + 1;
     await user.save();
     return res.json({ success: true, message: 'Your password has been reset. You can now sign in.' });
   } catch (err) {
@@ -655,6 +671,7 @@ router.put('/change-password', authenticate, sensitiveAccountActionLimiter, asyn
     }
 
     user.password = await bcrypt.hash(newPassword, 10);
+    user.refreshTokenVersion = (user.refreshTokenVersion || 0) + 1;
     await user.save();
     return res.json({ success: true, message: 'Password changed successfully.' });
   } catch (err) {
