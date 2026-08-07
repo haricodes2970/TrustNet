@@ -1,8 +1,8 @@
 const Comment = require("../models/Comment");
+const Post = require("../models/Post");
+const Community = require("../models/Community");
 const Job = require("../models/Job");
 const ServiceListing = require("../models/ServiceListing");
-const postService = require("./postService");
-const communityService = require("./communityService");
 const ApiError = require("../utils/ApiError");
 const { handleServiceError } = require("./serviceUtils");
 
@@ -20,22 +20,45 @@ function fieldsFor(action) {
   return { deletedAt: new Date() }; // delete
 }
 
-// postService.updatePost / communityService.updateCommunity are raw
-// findByIdAndUpdate with no ownership check baked in (ownership is
-// enforced in their own controllers, not the service) - safe to reuse
-// directly. jobService.updateJob / serviceListingService.updateListing
-// DO enforce startup/provider ownership inside the service itself, which
-// would incorrectly reject a platform admin who isn't a team member -
-// those two go straight to the model instead of through the guarded
-// service function.
+// postService.updatePost / communityService.updateCommunity now enforce
+// ownership (added in the Communities/Posts hardening phase, matching
+// jobService.updateJob / serviceListingService.updateListing's existing
+// shape) - a platform admin isn't the post's author or the community's
+// owner, so going through the guarded service function would incorrectly
+// reject them. All five content types go straight to the model here.
 const HANDLERS = {
-  posts: (id, fields) => postService.updatePost(id, fields),
+  posts: async (id, fields) => {
+    const post = await Post.findByIdAndUpdate(id, fields, { new: true, runValidators: true });
+    if (!post) throw new Error("Post not found.");
+    return post;
+  },
+  // Keeping Post.commentCount accurate across moderation: hiding/deleting a
+  // comment removes it from listComments' view exactly like a user's own
+  // soft-delete does, but unlike the user-facing path this one bypassed
+  // Post.commentCount entirely - the count drifted upward forever after
+  // any moderation action. Only adjusts on an actual visibility transition
+  // (idempotent re-hide/re-delete no longer double-decrements).
   comments: async (id, fields) => {
+    const before = await Comment.findById(id).select("isHidden deletedAt post");
+    if (!before) throw new Error("Comment not found.");
+    const wasVisible = !before.isHidden && !before.deletedAt;
+
     const comment = await Comment.findByIdAndUpdate(id, fields, { new: true, runValidators: true });
-    if (!comment) throw new Error("Comment not found.");
+    const isVisibleNow = !comment.isHidden && !comment.deletedAt;
+
+    if (wasVisible && !isVisibleNow) {
+      await Post.findByIdAndUpdate(comment.post, { $inc: { commentCount: -1 } });
+    } else if (!wasVisible && isVisibleNow) {
+      await Post.findByIdAndUpdate(comment.post, { $inc: { commentCount: 1 } });
+    }
+
     return comment;
   },
-  communities: (id, fields) => communityService.updateCommunity(id, fields),
+  communities: async (id, fields) => {
+    const community = await Community.findByIdAndUpdate(id, fields, { new: true, runValidators: true });
+    if (!community) throw new Error("Community not found.");
+    return community;
+  },
   listings: async (id, fields) => {
     const listing = await ServiceListing.findByIdAndUpdate(id, fields, { new: true, runValidators: true });
     if (!listing) throw new Error("Service listing not found.");
