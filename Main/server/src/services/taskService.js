@@ -152,6 +152,9 @@ async function updateTask(id, userId, updateData, { isAdmin = false } = {}) {
     if (existing.isArchived) {
       throw new ApiError(409, "This task is archived. Restore it before making changes.");
     }
+    if (project.isArchived) {
+      throw new ApiError(409, "This project is archived. Restore it before updating its tasks.");
+    }
 
     const safeUpdate = { ...updateData };
     delete safeUpdate.project;
