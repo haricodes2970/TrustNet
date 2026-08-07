@@ -2,6 +2,7 @@ const express = require("express");
 const multer = require("multer");
 const documentController = require("../controllers/documentController");
 const { authenticate } = require("../middlewares/auth");
+const { authorize } = require("../middlewares/authorize");
 const validate = require("../middlewares/validate");
 const { documentCreate, documentUpdate } = require("../validators/document.validators");
 const ApiError = require("../utils/ApiError");
@@ -36,6 +37,9 @@ const upload = multer({
 });
 
 router.use(authenticate);
+// No role list - just populates req.user.role so controllers can grant a
+// platform admin override alongside the existing Workspace-role checks.
+router.use(authorize());
 
 /**
  * @openapi
@@ -117,5 +121,20 @@ router.put("/:id", validate(documentUpdate), documentController.updateDocument);
  *       200: { description: Document archived }
  */
 router.delete("/:id", documentController.archiveDocument);
+
+/**
+ * @openapi
+ * /documents/{id}/restore:
+ *   post:
+ *     summary: Restore an archived document (workspace owner/admin, the uploader, or platform admin)
+ *     tags: [Documents]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { name: id, in: path, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: Document restored }
+ *       409: { description: The parent project is still archived }
+ */
+router.post("/:id/restore", documentController.restoreDocument);
 
 module.exports = router;
