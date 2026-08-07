@@ -101,16 +101,44 @@ async function restoreStartup(id) {
   }
 }
 
-// isSuspended/deletedAt default to excluded, same pattern as Post/
-// Community's listing defaults - an explicit filter value (e.g. admin's
-// suspended/deleted view) overrides it.
+// isPublic/status/isSuspended/deletedAt default to the public-directory
+// subset, same override-friendly pattern as Post/Community/Job's listing
+// defaults - an explicit filter value overrides a default (admin's own
+// GET /admin/startups, from the Admin Dashboard phase, already relies on
+// this to see suspended startups by passing an explicit filter).
 async function listStartups(filter = {}, options = {}) {
   try {
-    const withDefaults = { isSuspended: false, deletedAt: null, ...normalizeFilter(filter) };
+    const withDefaults = {
+      isPublic: true,
+      status: "active",
+      isSuspended: false,
+      deletedAt: null,
+      ...normalizeFilter(filter),
+    };
     const query = Startup.find(withDefaults);
     return applyQueryOptions(query, options).lean();
   } catch (error) {
     throw handleServiceError(error, "Failed to list startups.");
+  }
+}
+
+// Same 404-concealment convention as jobService.assertJobViewAccess /
+// serviceListingService.getListingForViewer: a non-public startup returns
+// "not found" to anyone who isn't its founder or a platform admin, rather
+// than a 403 that would confirm the id/slug exists.
+function isPubliclyVisible(startup) {
+  return startup.isPublic === true && startup.status === "active" && !startup.isSuspended && !startup.deletedAt;
+}
+
+function assertStartupViewAccess(startup, viewer) {
+  if (isPubliclyVisible(startup)) {
+    return;
+  }
+
+  const isOwner = viewer && viewer.id && String(startup.founder) === String(viewer.id);
+  const isAdmin = viewer && viewer.role === "admin";
+  if (!isOwner && !isAdmin) {
+    throw new Error("Startup not found.");
   }
 }
 
@@ -127,6 +155,7 @@ module.exports = {
   createStartup,
   getStartupById,
   getStartupBySlug,
+  assertStartupViewAccess,
   updateStartup,
   deleteStartup,
   restoreStartup,

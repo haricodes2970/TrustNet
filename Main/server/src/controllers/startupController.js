@@ -1,7 +1,17 @@
 const startupService = require("../services/startupService");
 const ApiError = require("../utils/ApiError");
-const { assertOwner } = require("../services/serviceUtils");
 const auditLogService = require("../services/auditLogService");
+
+// Owner OR platform admin. Mirrors assertOwner's ApiError(403) shape, but
+// admin's role (populated by `authorize()` on these routes purely to read
+// req.user.role, same trick as the Admin Dashboard phase) always passes.
+function assertOwnerOrAdmin(founderId, req, message) {
+  const isOwner = String(founderId) === String(req.user.id);
+  const isAdmin = req.user.role === "admin";
+  if (!isOwner && !isAdmin) {
+    throw new ApiError(403, message);
+  }
+}
 
 // Startup mutations are logged the same way admin actions are (see
 // adminUserController.js etc. from the Admin Dashboard phase) - reusing
@@ -31,18 +41,20 @@ async function createStartup(req, res) {
 async function getStartup(req, res) {
   try {
     const startup = await startupService.getStartupById(req.params.id);
+    startupService.assertStartupViewAccess(startup, req.user);
     return res.status(200).json({ success: true, data: startup });
   } catch (error) {
-    return res.status(404).json({ success: false, message: error.message });
+    return res.status(404).json({ success: false, message: "Startup not found." });
   }
 }
 
 async function getStartupBySlug(req, res) {
   try {
     const startup = await startupService.getStartupBySlug(req.params.slug);
+    startupService.assertStartupViewAccess(startup, req.user);
     return res.status(200).json({ success: true, data: startup });
   } catch (error) {
-    return res.status(404).json({ success: false, message: error.message });
+    return res.status(404).json({ success: false, message: "Startup not found." });
   }
 }
 
@@ -58,7 +70,7 @@ async function getMyStartups(req, res) {
 async function updateStartup(req, res) {
   try {
     const existing = await startupService.getStartupById(req.params.id);
-    assertOwner(existing.founder, req.user.id, "You are not authorized to update this startup.", 403);
+    assertOwnerOrAdmin(existing.founder, req, "You are not authorized to update this startup.");
     if (existing.deletedAt) {
       throw new ApiError(409, "This startup has been deleted. Restore it before making changes.");
     }
@@ -74,7 +86,7 @@ async function updateStartup(req, res) {
 async function deleteStartup(req, res) {
   try {
     const existing = await startupService.getStartupById(req.params.id);
-    assertOwner(existing.founder, req.user.id, "You are not authorized to delete this startup.", 403);
+    assertOwnerOrAdmin(existing.founder, req, "You are not authorized to delete this startup.");
     const startup = await startupService.deleteStartup(req.params.id);
     logAction(req, "startup.delete", startup._id, {});
     return res.status(200).json({ success: true, data: startup });
@@ -87,7 +99,7 @@ async function deleteStartup(req, res) {
 async function restoreStartup(req, res) {
   try {
     const existing = await startupService.getStartupById(req.params.id);
-    assertOwner(existing.founder, req.user.id, "You are not authorized to restore this startup.", 403);
+    assertOwnerOrAdmin(existing.founder, req, "You are not authorized to restore this startup.");
     const startup = await startupService.restoreStartup(req.params.id);
     logAction(req, "startup.restore", startup._id, {});
     return res.status(200).json({ success: true, data: startup });
