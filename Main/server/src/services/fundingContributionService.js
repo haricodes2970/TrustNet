@@ -33,7 +33,10 @@ function assertValidContributionTransition(currentStatus, nextStatus) {
   }
 }
 
-async function resolveContributionRole(contribution, userId) {
+async function resolveContributionRole(contribution, userId, { isAdmin = false } = {}) {
+  if (isAdmin) {
+    return "admin";
+  }
   if (String(contribution.investor) === String(userId)) {
     return "investor";
   }
@@ -50,6 +53,18 @@ async function createContribution({ fundingRoundId, amount, currency, note }, us
     }
     if (currency !== round.currency) {
       throw new ApiError(409, "Contribution currency must match the funding round's currency.");
+    }
+
+    // The round's own status/isArchived were already checked above, but
+    // neither reflects the parent Startup's own state - a suspended or
+    // already-deleted startup's still-"open" round could otherwise keep
+    // accepting new contributions indefinitely.
+    const startup = await Startup.findById(round.startup).lean();
+    if (!startup || startup.deletedAt) {
+      throw new ApiError(409, "This startup has been deleted and is not accepting contributions.");
+    }
+    if (startup.isSuspended) {
+      throw new ApiError(409, "This startup is suspended and is not accepting contributions.");
     }
 
     const user = await User.findById(userId).lean();
@@ -84,10 +99,10 @@ async function getContributionById(id) {
   }
 }
 
-async function getContributionForViewer(id, userId) {
+async function getContributionForViewer(id, userId, { isAdmin = false } = {}) {
   try {
     const contribution = await getContributionById(id);
-    const role = await resolveContributionRole(contribution, userId);
+    const role = await resolveContributionRole(contribution, userId, { isAdmin });
     if (!role) {
       throw new ApiError(403, "You are not authorized to view this contribution.");
     }
@@ -99,18 +114,27 @@ async function getContributionForViewer(id, userId) {
 
 // No public tier at all — every result is scoped so the caller never sees
 // anything beyond what's rightfully theirs. Startup owner/admin/contributor
-// see the full roster only when they explicitly filter by a round they
-// have a role on; every other case (including an investor, or staff with
-// no filter) is scoped to "my own contributions only."
-async function listContributionsForUser(userId, filter = {}, options = {}) {
+// (or a platform admin, same targeted-override shape as every other
+// module) see the full roster only when they explicitly filter by a round
+// they have a role on; every other case (including an investor, or staff
+// with no filter) is scoped to "my own contributions only."
+async function listContributionsForUser(userId, filter = {}, options = {}, { isAdmin = false } = {}) {
   try {
-    const base = normalizeFilter(filter);
+    const { search, ...rest } = normalizeFilter(filter);
+    const base = { ...rest };
+
+    if (search) {
+      const escaped = String(search).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      base.note = new RegExp(escaped, "i");
+    }
 
     if (base.fundingRound) {
-      const round = await fundingRoundService.getRoundById(base.fundingRound);
-      const access = await fundingRoundService.resolveStartupAccess(round.startup, userId);
-      if (!access.role) {
-        base.investor = userId;
+      if (!isAdmin) {
+        const round = await fundingRoundService.getRoundById(base.fundingRound);
+        const access = await fundingRoundService.resolveStartupAccess(round.startup, userId);
+        if (!access.role) {
+          base.investor = userId;
+        }
       }
     } else {
       base.investor = userId;
@@ -129,7 +153,7 @@ async function listContributionsForUser(userId, filter = {}, options = {}) {
 // concurrency guard: findOneAndUpdate's { status: "pledged" } filter
 // ensures only one caller can ever win the race and trigger the increments,
 // even under concurrent confirm calls for the same contribution.
-async function confirmContribution(id, userId) {
+async function confirmContribution(id, userId, { isAdmin = false } = {}) {
   try {
     const existing = await getContributionById(id);
     const round = await FundingRound.findById(existing.fundingRound).lean();
@@ -137,9 +161,11 @@ async function confirmContribution(id, userId) {
       throw new ApiError(404, "Funding round not found.");
     }
 
-    const access = await fundingRoundService.resolveStartupAccess(round.startup, userId);
-    if (access.role !== "owner" && access.role !== "admin") {
-      throw new ApiError(403, "You are not authorized to confirm this contribution.");
+    if (!isAdmin) {
+      const access = await fundingRoundService.resolveStartupAccess(round.startup, userId);
+      if (access.role !== "owner" && access.role !== "admin") {
+        throw new ApiError(403, "You are not authorized to confirm this contribution.");
+      }
     }
     assertValidContributionTransition(existing.status, "confirmed");
 
@@ -165,13 +191,15 @@ async function confirmContribution(id, userId) {
   }
 }
 
-async function rejectContribution(id, userId) {
+async function rejectContribution(id, userId, { isAdmin = false } = {}) {
   try {
     const existing = await getContributionById(id);
     const round = await fundingRoundService.getRoundById(existing.fundingRound);
-    const access = await fundingRoundService.resolveStartupAccess(round.startup, userId);
-    if (access.role !== "owner" && access.role !== "admin") {
-      throw new ApiError(403, "You are not authorized to reject this contribution.");
+    if (!isAdmin) {
+      const access = await fundingRoundService.resolveStartupAccess(round.startup, userId);
+      if (access.role !== "owner" && access.role !== "admin") {
+        throw new ApiError(403, "You are not authorized to reject this contribution.");
+      }
     }
     assertValidContributionTransition(existing.status, "rejected");
 
@@ -190,10 +218,12 @@ async function rejectContribution(id, userId) {
   }
 }
 
-async function withdraw(id, userId) {
+async function withdraw(id, userId, { isAdmin = false } = {}) {
   try {
     const existing = await getContributionById(id);
-    assertOwner(existing.investor, userId, "You are not authorized to withdraw this contribution.", 403);
+    if (!isAdmin) {
+      assertOwner(existing.investor, userId, "You are not authorized to withdraw this contribution.", 403);
+    }
     assertValidContributionTransition(existing.status, "withdrawn");
 
     const contribution = await FundingContribution.findOneAndUpdate(

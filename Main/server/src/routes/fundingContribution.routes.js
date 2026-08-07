@@ -1,6 +1,7 @@
 const express = require("express");
 const fundingContributionController = require("../controllers/fundingContributionController");
 const { authenticate } = require("../middlewares/auth");
+const { authorize } = require("../middlewares/authorize");
 const validate = require("../middlewares/validate");
 const { fundingContributionCreate } = require("../validators/fundingContribution.validators");
 
@@ -8,6 +9,8 @@ const router = express.Router();
 
 // No public tier at all, unlike funding-rounds — every route requires auth.
 router.use(authenticate);
+// No role list - just populates req.user.role for the platform-admin override.
+router.use(authorize());
 
 /**
  * @openapi
