@@ -16,6 +16,7 @@ function buildRegex(term) {
 async function searchUsers(term) {
   return User.find({
     isActive: true,
+    deletedAt: null,
     $or: [
       { fullName: buildRegex(term) },
       { username: buildRegex(term) },
@@ -29,6 +30,9 @@ async function searchUsers(term) {
 async function searchStartups(term) {
   return Startup.find({
     status: "active",
+    isPublic: true,
+    isSuspended: false,
+    deletedAt: null,
     $or: [
       { name: buildRegex(term) },
       { tagline: buildRegex(term) },
@@ -43,6 +47,8 @@ async function searchStartups(term) {
 async function searchCommunities(term) {
   return Community.find({
     isActive: true,
+    isHidden: false,
+    deletedAt: null,
     $or: [
       { name: buildRegex(term) },
       { description: buildRegex(term) },
@@ -57,6 +63,8 @@ async function searchCommunities(term) {
 async function searchPosts(term) {
   return Post.find({
     visibility: "public",
+    isHidden: false,
+    deletedAt: null,
     $or: [
       { title: buildRegex(term) },
       { content: buildRegex(term) },
