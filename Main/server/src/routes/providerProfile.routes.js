@@ -1,6 +1,7 @@
 const express = require("express");
 const providerProfileController = require("../controllers/providerProfileController");
-const { authenticate } = require("../middlewares/auth");
+const { authenticate, optionalAuthenticate } = require("../middlewares/auth");
+const { authorize } = require("../middlewares/authorize");
 const validate = require("../middlewares/validate");
 const { providerProfileCreate, providerProfileUpdate } = require("../validators/providerProfile.validators");
 
@@ -8,7 +9,9 @@ const router = express.Router();
 
 // GET / and GET /:id are public (provider directory) — authenticate is
 // applied per-route on the mutation endpoints only, same shape as
-// investor.routes.js.
+// investor.routes.js. optionalAuthenticate on the public GETs lets an
+// owner see their own suspended/deleted-account profile and a platform
+// admin bypass the view-concealment check, without requiring a token.
 
 /**
  * @openapi
@@ -32,7 +35,7 @@ router.post("/", authenticate, validate(providerProfileCreate), providerProfileC
  *     responses:
  *       200: { description: List of provider profiles }
  */
-router.get("/", providerProfileController.listProfiles);
+router.get("/", optionalAuthenticate, providerProfileController.listProfiles);
 
 /**
  * @openapi
@@ -46,7 +49,7 @@ router.get("/", providerProfileController.listProfiles);
  *       200: { description: Provider profile details }
  *       404: { description: Not found }
  */
-router.get("/:id", providerProfileController.getProfile);
+router.get("/:id", optionalAuthenticate, providerProfileController.getProfile);
 
 /**
  * @openapi
@@ -60,6 +63,12 @@ router.get("/:id", providerProfileController.getProfile);
  *     responses:
  *       200: { description: Updated provider profile }
  */
-router.put("/:id", authenticate, validate(providerProfileUpdate), providerProfileController.updateProfile);
+router.put(
+  "/:id",
+  authenticate,
+  authorize(),
+  validate(providerProfileUpdate),
+  providerProfileController.updateProfile
+);
 
 module.exports = router;
