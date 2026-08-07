@@ -19,26 +19,50 @@ Two distinct authority mechanisms meet in this module, more explicitly than any 
 
 ## Permissions model
 
-**ProviderProfile** — identical shape to `InvestorProfile`: public list/get; create (one per user)/update owner-only.
+**ProviderProfile** — identical shape to `InvestorProfile`: public list/get; create (one per user)/update owner-only. **Platform Admin override** (added in the Marketplace hardening phase) bypasses ownership on `updateProfile`.
 
 **ServiceListing**
 
-| Action | Provider (owner) | Any other user | Public |
-|---|---|---|---|
-| Create/update/archive/publish/unpublish | ✓ (must own the parent `ProviderProfile`) | ✗ | ✗ |
-| View | ✓ any state | — | ✓ only if `published` and not archived |
-| List | ✓ full roster for own profile | scoped to `published`-only | scoped to `published`-only |
+| Action | Provider (owner) | Any other user | Platform Admin | Public |
+|---|---|---|---|---|
+| Create | ✓ (must own a `ProviderProfile`) | ✗ | — | ✗ |
+| Update/archive/restore/publish/unpublish | ✓ (must own the parent `ProviderProfile`) | ✗ | ✓ override | ✗ |
+| View | ✓ any state | — | ✓ any state | ✓ only if `published`, not archived, and the provider's account is active |
+| List | ✓ full roster for own profile | scoped to `published`-only | ✓ unfiltered | scoped to `published`-only |
 
 **EngagementRequest**
 
-| Action | Startup Owner/Admin | Contributor | Provider (listing owner) | Public |
-|---|---|---|---|---|
-| Request (create) | ✓ (listing must be `published`) | ✗ | — | ✗ |
-| View | ✓ own Startup's requests | ✓ read-only | ✓ requests on their own listings | ✗ |
-| Advance status (accept/decline/start/complete) | ✗ | ✗ | ✓ | ✗ |
-| Cancel | ✓ own Startup's request, `requested`/`accepted` only | ✗ | ✗ | ✗ |
+| Action | Startup Owner/Admin | Contributor | Provider (listing owner) | Platform Admin | Public |
+|---|---|---|---|---|---|
+| Request (create) | ✓ (listing `published`, listing's provider active, requesting Startup active) | ✗ | — | — | ✗ |
+| View | ✓ own Startup's requests | ✓ read-only | ✓ requests on their own listings | ✓ unfiltered | ✗ |
+| Advance status (accept/decline/start/complete) | ✗ | ✗ | ✓ | ✓ override | ✗ |
+| Cancel | ✓ own Startup's request, `requested`/`accepted` only | ✗ | ✗ | ✓ override | ✗ |
 
-Contributor gets read-only — the same tier now established three times (Investment Interest, Funding, and here), not Application's zero-access tier. No public tier on `EngagementRequest` at all (`router.use(authenticate)` at the top of the route file).
+Contributor gets read-only — the same tier now established three times (Investment Interest, Funding, and here), not Application's zero-access tier. No public tier on `EngagementRequest` at all (`router.use(authenticate)`, then `router.use(authorize())` to populate `req.user.role` for the admin override, at the top of the route file).
+
+## Provider account-state gating (Marketplace hardening phase)
+
+`ProviderProfile` has no `isSuspended`/`deletedAt` of its own — it reuses the underlying `User`'s existing `isActive`/`deletedAt` (the platform's one suspend/delete mechanism, already set via `adminUserService.suspendUser`/`softDeleteUser`) instead of adding a parallel flag. This closes the "archived provider" / "deleted provider" edge cases end to end:
+
+- `providerProfileService.getProfileForViewer`/`listProfiles` conceal (404) or exclude a suspended/deleted provider's profile from anyone but the owner or a platform admin.
+- `serviceListingService.getListingForViewer`/`listListingsForUser` additionally hide a listing whose provider account is inactive, even if the listing itself is `published` and not archived.
+- `engagementRequestService.createRequest` rejects (409) a new request against a listing whose provider account is inactive.
+
+`providerProfileService.isProviderAccountActiveById`/`listInactiveProviderIds` are the shared entry points other files import (reuse, not duplication — this is the canonical owner of Provider account-state logic).
+
+## Startup-state guard on EngagementRequest (Marketplace hardening phase)
+
+`createRequest` previously checked only the listing's own state — a deleted, suspended, or non-`active` requesting Startup could still submit a request. `assertStartupAcceptingEngagement` closes this, same shape as `investmentInterestService.assertStartupAcceptingInterest`/`fundingRoundService.assertStartupActiveForFunding`.
+
+## ServiceListing restore + duplicate-title validation (Marketplace hardening phase)
+
+- `restoreListing` (new): `isArchived` existed with no way to undo it — same gap class `fundingRoundService.archiveRound`/`restoreRound` closed for FundingRound. Blocked for non-admins while `deletedAt` is set (that field is exclusively the admin-moderation "delete" action via `adminModerationService` — a provider can't self-service undo a platform admin's moderation decision through this endpoint).
+- `assertNoDuplicateTitle` (new): case-insensitive, per-provider, active-listings-only, mirrors `startupService.assertNoDuplicateName`. Enforced on create and on title-changing updates.
+
+## Verification awareness (Marketplace hardening phase)
+
+`getProfileForViewer`/`listProfiles` now attach a `verification: { isVerified, verificationStatus }` field sourced from the linked `User` — the model's own design comment claimed this reuse but it was never actually wired up until this phase. `InvestorProfile` has the identical unimplemented gap, not fixed here (out of scope for this phase).
 
 ## View concealment (ServiceListing only)
 
@@ -80,7 +104,7 @@ requested/accepted → cancelled                     (terminal, startup owner/ad
 
 **`/api/v1/provider-profiles`** — identical shape to `/investors`: `POST /`, `GET /`, `GET /:id`, `PUT /:id`.
 
-**`/api/v1/service-listings`** — identical shape to `/jobs`: `POST /`, `GET /` (scoped/downgraded, `?providerId=`), `GET /:id` (404-concealment), `PUT /:id`, `DELETE /:id` (archive), `PUT /:id/publish`, `PUT /:id/unpublish`.
+**`/api/v1/service-listings`** — `POST /`, `GET /` (scoped/downgraded, `?providerId=`, `?search=`), `GET /:id` (404-concealment), `PUT /:id`, `DELETE /:id` (archive), `POST /:id/restore` (new this phase), `PUT /:id/publish`, `PUT /:id/unpublish`. `GET /` and `GET /:id` use `optionalAuthenticate` (added this phase).
 
 **`/api/v1/engagement-requests`**
 
@@ -105,25 +129,27 @@ Two mutation endpoints rather than four-plus dedicated verb endpoints — an MVP
 Same convention established in Applications/Investors/Funding: services throw typed `ApiError(statusCode, message)`; all three controllers are pure pass-through (`try { ...call service... } catch (error) { const status = error instanceof ApiError ? error.statusCode : 500; ... }`).
 
 - **400** — malformed input (Joi), plus `validatePriceRange`'s own throw (the one business rule in this module that's a straightforward bad-input case, not a state conflict).
-- **403** — authorization failure: insufficient Startup role, provider-ownership mismatch.
-- **404** — resource not found; also used for `ServiceListing`'s view-concealment case (see above).
-- **409** — state conflict: no provider profile yet, listing not published (or archived) at request time, duplicate active request, terminal-state block, invalid transition.
+- **403** — authorization failure: insufficient Startup role, provider-ownership mismatch (bypassed by the platform-admin override, added this phase).
+- **404** — resource not found; also used for `ServiceListing`'s and `ProviderProfile`'s view-concealment cases (see above).
+- **409** — state conflict: no provider profile yet, listing not published (or archived, or provider account inactive) at request time, duplicate active request, duplicate listing title, terminal-state block, invalid transition, requesting Startup not active, self-restore blocked by admin moderation.
 
 ## Tests
 
-**Unit** (`test/providerProfile.test.js`, 5; `test/serviceListing.test.js`, 12; `test/engagementRequest.test.js`, 13): Joi validators for all three resources, `validatePriceRange`, `assertPublishReady`, `assertValidEngagementTransition` (every valid edge including both terminal exits, both skip-ahead cases, terminal-state immutability, `ApiError`/statusCode shape).
+**Unit** (`test/providerProfile.test.js`, 5; `test/serviceListing.test.js`, 11; `test/engagementRequest.test.js`, 13): Joi validators for all three resources, `validatePriceRange`, `assertPublishReady`, `assertValidEngagementTransition` (every valid edge including both terminal exits, both skip-ahead cases, terminal-state immutability, `ApiError`/statusCode shape).
 
-**Integration** (`test/integration/marketplaceAuthorization.test.js`, DB-backed, reuses `createStartupTeamFixture()` for the Startup side plus `createAuthenticatedTestUser()` + a created `ProviderProfile`/`ServiceListing` for the provider side — no new shared fixture needed): profile create/duplicate-block/public-read/owner-update/non-owner-block; listing create-requires-profile/publish-gate/view-concealment/list-filter-regression, plus the explicitly-requested coverage — **a provider cannot modify another provider's listing**, **a Startup owner cannot modify a provider-owned listing**; engagement create-gates (listing must be published, Startup owner/admin only, 404 for a missing listing), **duplicate-active-request blocked**, and **re-engagement allowed after each of the three terminal outcomes** (declined, cancelled, completed) tested as three separate cases; view/list authorization for both filter axes including **a provider cannot access unrelated engagement requests** and **a Startup cannot access another Startup's request**; full lifecycle coverage (happy path, provider-decline, startup-cancel from both `requested` and `accepted`, cancel-rejected-once-`in_progress`, terminal-state immutability, skip-ahead rejection) plus role-boundary checks (Startup cannot advance status, provider cannot cancel, contributor cannot cancel, a different Startup cannot cancel).
+**Integration**:
+- `test/integration/marketplaceAuthorization.test.js` (service-level, DB-backed, 42 tests): profile create/duplicate-block/public-read/owner-update/non-owner-block; listing create-requires-profile/publish-gate/view-concealment/list-filter-regression, **a provider cannot modify another provider's listing**, **a Startup owner cannot modify a provider-owned listing**; engagement create-gates, **duplicate-active-request blocked**, **re-engagement allowed after each of the three terminal outcomes**; view/list authorization for both filter axes; full lifecycle coverage plus role-boundary checks. Its Startup fixtures are explicitly activated (`status: "active"`) to satisfy this phase's new `assertStartupAcceptingEngagement` guard.
+- `test/integration/marketplaceLifecycle.test.js` (HTTP-level, new this phase, 14 tests): platform-admin override across profile-update/listing-update-archive-restore/status-advance/cancel; `verification` field on profile responses; suspended-provider concealment (profile directory+get, listing get+list); duplicate-title 409; archive/restore round-trip; self-restore blocked by admin-moderation delete; startup-state guard (draft/suspended/deleted all rejected) on engagement create; provider-account-state guard on engagement create; search; pagination.
 
-Combined suite: **369/369 passing** (`npm run test:all`), **132/132 unit-only** (`npm test`), no regressions in any prior module (Funding's 299 carried forward unchanged).
+Combined suite: **691/691 passing** (`npm run test:all`), no regressions in any prior module.
 
 ## Architectural concerns discovered
 
-- **Fifth duplication of Startup role-resolution logic** (`workspaceService`, `jobService`, `investmentInterestService`, `fundingRoundService`, now `engagementRequestService`). Tracked in `BACKLOG.md` per instruction — the strongest, most-repeated case yet for the dedicated authorization-cleanup phase flagged after Investor, again after Funding, and now a third time.
+- **Fifth duplication of Startup role-resolution logic** (`workspaceService`, `jobService`, `investmentInterestService`, `fundingRoundService`, `engagementRequestService`). Tracked in `BACKLOG.md` per instruction — the strongest, most-repeated case yet for the dedicated authorization-cleanup phase flagged after Investor, again after Funding, and now a third time. Not addressed in the Marketplace hardening phase either, per the same explicit instruction.
 - **First resource requiring two independent authority mechanisms simultaneously.** No prior module has this shape — Applications came closest (candidate-ownership + Startup-role) but only one side was Startup-scoped; here the fulfiller side is a completely independent User-ownership check (`ServiceListing → ProviderProfile → User`), resolved via `serviceListingService.resolveProviderOwnership()` and reused (not duplicated) by `engagementRequestService.resolveRequestRole()`. Both directions of the leak this could cause (provider seeing an unrelated Startup's request, Startup seeing an unrelated provider's request) have direct, explicit test coverage.
 - **`ServiceListing.provider` refs `ProviderProfile`, deliberately coupling** where Funding/Investor deliberately decoupled contribution/interest from profile. A real, considered inconsistency across modules — documented here so it reads as a choice (see Architecture), not a copy-paste inconsistency.
 - **Providers are individual Users, not Startups** — a Startup cannot itself be a service provider in this design (e.g. an agency-style Startup offering services to other Startups isn't representable). This is the scoping choice that avoided a sixth `resolveStartupAccess()` duplication on the supply side; a real capability limit, not just an implementation simplification, per the approved architecture.
 - **`{serviceListing, startup}` partial unique index excludes three terminal statuses**, more than any prior module's duplicate-prevention index. Re-engagement after a *successful* completed engagement is allowed by design and directly tested.
 - **Dual-filter list endpoint** (`?startupId=` vs `?serviceListingId=`) on `EngagementRequest` is a new shape — every prior scoped-list module had exactly one filter axis. Both axes independently regression-tested for the "downgrade, don't leak" guarantee.
-- **Same optional-auth gap Job and FundingRound already have** applies to `service-listings`' public GET routes too (`req.user` unpopulated without a token, so the "authenticated caller sees more" branch is unreachable in production today) — a third module inheriting a known, already-tracked limitation, not a new one.
-- **No rate limiting** on the public `GET /service-listings` directory — same standing gap as Job/Investor/Funding public surfaces, extends the existing `BACKLOG.md` entry rather than duplicating it.
+- **`InvestorProfile` has the identical "verification awareness claimed but never wired up" gap** this phase fixed for `ProviderProfile` — not retroactively fixed (out of scope; that module already shipped its own hardening phase and report).
+- **No rate limiting** on the public `GET /service-listings`/`GET /provider-profiles` directories — same standing gap as Job/Investor/Funding public surfaces, extends the existing `BACKLOG.md` entry rather than duplicating it.
