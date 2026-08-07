@@ -1,6 +1,7 @@
 const express = require("express");
 const serviceListingController = require("../controllers/serviceListingController");
-const { authenticate } = require("../middlewares/auth");
+const { authenticate, optionalAuthenticate } = require("../middlewares/auth");
+const { authorize } = require("../middlewares/authorize");
 const validate = require("../middlewares/validate");
 const { serviceListingCreate, serviceListingUpdate } = require("../validators/serviceListing.validators");
 
@@ -9,9 +10,10 @@ const router = express.Router();
 // Like job.routes.js, this file does NOT apply `router.use(authenticate)`
 // globally — GET / and GET /:id are public (published listings are a
 // public marketplace), so authenticate is applied per-route on the
-// mutation endpoints only. Same known limitation as Job/FundingRound: with
-// no optional-auth middleware in this codebase, req.user is unset on these
-// two routes today (see BACKLOG.md).
+// mutation endpoints only. GET / and GET /:id use optionalAuthenticate so
+// an authenticated owner/admin sees more than the public subset (previously
+// unreachable — tracked in BACKLOG.md, same fix already applied to Job and
+// FundingRound).
 
 /**
  * @openapi
@@ -24,7 +26,13 @@ const router = express.Router();
  *       201: { description: Service listing created }
  *       409: { description: No provider profile exists, or priceMin > priceMax }
  */
-router.post("/", authenticate, validate(serviceListingCreate), serviceListingController.createListing);
+router.post(
+  "/",
+  authenticate,
+  authorize(),
+  validate(serviceListingCreate),
+  serviceListingController.createListing
+);
 
 /**
  * @openapi
@@ -37,7 +45,7 @@ router.post("/", authenticate, validate(serviceListingCreate), serviceListingCon
  *     responses:
  *       200: { description: List of service listings }
  */
-router.get("/", serviceListingController.listListings);
+router.get("/", optionalAuthenticate, serviceListingController.listListings);
 
 /**
  * @openapi
@@ -51,7 +59,7 @@ router.get("/", serviceListingController.listListings);
  *       200: { description: Service listing details }
  *       404: { description: Listing not found (also returned for non-published listings the caller does not own) }
  */
-router.get("/:id", serviceListingController.getListing);
+router.get("/:id", optionalAuthenticate, serviceListingController.getListing);
 
 /**
  * @openapi
@@ -65,7 +73,13 @@ router.get("/:id", serviceListingController.getListing);
  *     responses:
  *       200: { description: Updated service listing }
  */
-router.put("/:id", authenticate, validate(serviceListingUpdate), serviceListingController.updateListing);
+router.put(
+  "/:id",
+  authenticate,
+  authorize(),
+  validate(serviceListingUpdate),
+  serviceListingController.updateListing
+);
 
 /**
  * @openapi
@@ -79,7 +93,22 @@ router.put("/:id", authenticate, validate(serviceListingUpdate), serviceListingC
  *     responses:
  *       200: { description: Service listing archived }
  */
-router.delete("/:id", authenticate, serviceListingController.archiveListing);
+router.delete("/:id", authenticate, authorize(), serviceListingController.archiveListing);
+
+/**
+ * @openapi
+ * /service-listings/{id}/restore:
+ *   post:
+ *     summary: Restore an archived service listing (owning provider or platform admin only; blocked if removed by admin moderation)
+ *     tags: [ServiceListings]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { name: id, in: path, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: Service listing restored }
+ *       409: { description: Removed by a platform administrator, cannot self-restore }
+ */
+router.post("/:id/restore", authenticate, authorize(), serviceListingController.restoreListing);
 
 /**
  * @openapi
@@ -94,7 +123,7 @@ router.delete("/:id", authenticate, serviceListingController.archiveListing);
  *       200: { description: Service listing published }
  *       409: { description: Archived, or missing required fields }
  */
-router.put("/:id/publish", authenticate, serviceListingController.publishListing);
+router.put("/:id/publish", authenticate, authorize(), serviceListingController.publishListing);
 
 /**
  * @openapi
@@ -108,6 +137,6 @@ router.put("/:id/publish", authenticate, serviceListingController.publishListing
  *     responses:
  *       200: { description: Service listing unpublished }
  */
-router.put("/:id/unpublish", authenticate, serviceListingController.unpublishListing);
+router.put("/:id/unpublish", authenticate, authorize(), serviceListingController.unpublishListing);
 
 module.exports = router;
