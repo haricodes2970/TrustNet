@@ -17,6 +17,9 @@ const {
   loginLimiter,
   forgotPasswordLimiter,
   resendVerificationLimiter,
+  twoFactorVerifyLimiter,
+  refreshLimiter,
+  sensitiveAccountActionLimiter,
 } = require('../middlewares/rateLimiter');
 
 const router = express.Router();
@@ -211,7 +214,7 @@ router.post('/login', loginLimiter, async (req, res, next) => {
   }
 });
 
-router.post('/login/2fa', async (req, res, next) => {
+router.post('/login/2fa', twoFactorVerifyLimiter, async (req, res, next) => {
   try {
     const challenge = String(req.body?.twoFactorToken || '');
     const token = String(req.body?.token || '');
@@ -411,7 +414,7 @@ router.get('/linkedin/callback', async (req, res) => {
   }
 });
 
-router.post('/refresh', async (req, res) => {
+router.post('/refresh', refreshLimiter, async (req, res) => {
   const token = req.cookies?.trustnet_refresh;
   if (!token) {
     return res.status(401).json({ success: false, message: 'No active session.' });
@@ -506,7 +509,7 @@ router.post('/2fa/setup', authenticate, async (req, res, next) => {
   }
 });
 
-router.post('/2fa/enable', authenticate, async (req, res, next) => {
+router.post('/2fa/enable', authenticate, sensitiveAccountActionLimiter, async (req, res, next) => {
   try {
     const user = await User.findById(req.user.id).select('+twoFactorPendingSecret +twoFactorSecret');
     if (!user) return res.status(401).json({ success: false, message: 'Your account is no longer available.' });
@@ -525,7 +528,7 @@ router.post('/2fa/enable', authenticate, async (req, res, next) => {
   }
 });
 
-router.post('/2fa/disable', authenticate, async (req, res, next) => {
+router.post('/2fa/disable', authenticate, sensitiveAccountActionLimiter, async (req, res, next) => {
   try {
     const currentPassword = String(req.body?.currentPassword || '');
     const user = await User.findById(req.user.id).select('+password +twoFactorSecret +twoFactorPendingSecret');
@@ -625,7 +628,7 @@ router.post('/reset-password', async (req, res, next) => {
   }
 });
 
-router.put('/change-password', authenticate, async (req, res, next) => {
+router.put('/change-password', authenticate, sensitiveAccountActionLimiter, async (req, res, next) => {
   try {
     const currentPassword = String(req.body?.currentPassword || '');
     const newPassword = String(req.body?.newPassword || '');

@@ -19,6 +19,18 @@ module.exports = {
     windowMs: 60 * 60 * 1000, // 1 hour
     limit: 3,
   },
+  twoFactorVerify: {
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    limit: 10,
+  },
+  refresh: {
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    limit: 30,
+  },
+  sensitiveAccountAction: {
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    limit: 5,
+  },
   search: {
     windowMs: 60 * 1000, // 1 minute
     limit: 30,
