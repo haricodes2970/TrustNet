@@ -70,7 +70,23 @@ async function assertAnyRole(startupId, userId) {
     throw new ApiError(400, "startupId is required.");
   }
 
-  const startup = await Startup.findById(startupId).lean();
+  let startup;
+  try {
+    startup = await Startup.findById(startupId).lean();
+  } catch (error) {
+    // A malformed startupId (not a 24-char hex ObjectId) throws a raw
+    // Mongoose CastError here, which handleServiceError passes through
+    // unchanged (it's a real Error with a message) - the controller then
+    // has no ApiError.statusCode to read and falls back to 500, leaking an
+    // internal Mongoose message for what is really a 400 bad request. This
+    // is the single choke point every Analytics/Reports/AI call goes
+    // through, so fixing it here covers all three.
+    if (error.name === "CastError") {
+      throw new ApiError(400, "Invalid startupId.");
+    }
+    throw error;
+  }
+
   if (!startup) {
     throw new ApiError(404, "Startup not found.");
   }
@@ -259,10 +275,28 @@ async function computeTeamSize(startupId) {
   return team.members.filter((m) => m.status === "active").length;
 }
 
+// Every getXAnalytics function below passes `startup._id` (a real
+// Mongoose ObjectId, already fetched by assertAnyRole) into its compute
+// function - never the raw `startupId` route-param string. This matters:
+// Model.aggregate()'s `$match` stage does NOT get Mongoose's automatic
+// string->ObjectId casting the way `.find()`/`.findOne()` does, so an
+// aggregate $match against a string startupId silently matches zero
+// documents instead of throwing - a query that looks correct and returns
+// a clean, plausible-looking empty result. computeHiringAnalytics,
+// computeMarketplaceAnalytics, and computeInvestorAnalytics (via
+// getOverview below) all have an aggregate $match on `startup` and were
+// hitting exactly this - confirmed empirically (Job.aggregate with a
+// string id returns 0 docs against real seeded data, .find() with the
+// same string returns 1). The existing unit tests never caught this
+// because they call these service functions directly with
+// `fx.startup._id` (already a real ObjectId from Startup.create()),
+// never with the plain string every real HTTP request actually sends as
+// `req.query.startupId`.
+
 async function getProjectAnalytics(startupId, userId) {
   try {
-    await assertAnyRole(startupId, userId);
-    return await computeProjectAnalytics(startupId);
+    const startup = await assertAnyRole(startupId, userId);
+    return await computeProjectAnalytics(startup._id);
   } catch (error) {
     throw handleServiceError(error, "Failed to compute project analytics.");
   }
@@ -270,8 +304,8 @@ async function getProjectAnalytics(startupId, userId) {
 
 async function getTaskAnalytics(startupId, userId) {
   try {
-    await assertAnyRole(startupId, userId);
-    return await computeTaskAnalytics(startupId);
+    const startup = await assertAnyRole(startupId, userId);
+    return await computeTaskAnalytics(startup._id);
   } catch (error) {
     throw handleServiceError(error, "Failed to compute task analytics.");
   }
@@ -279,8 +313,8 @@ async function getTaskAnalytics(startupId, userId) {
 
 async function getHiringAnalytics(startupId, userId) {
   try {
-    await assertAnyRole(startupId, userId);
-    return await computeHiringAnalytics(startupId);
+    const startup = await assertAnyRole(startupId, userId);
+    return await computeHiringAnalytics(startup._id);
   } catch (error) {
     throw handleServiceError(error, "Failed to compute hiring analytics.");
   }
@@ -297,8 +331,8 @@ async function getFundingAnalytics(startupId, userId) {
 
 async function getMarketplaceAnalytics(startupId, userId) {
   try {
-    await assertAnyRole(startupId, userId);
-    return await computeMarketplaceAnalytics(startupId);
+    const startup = await assertAnyRole(startupId, userId);
+    return await computeMarketplaceAnalytics(startup._id);
   } catch (error) {
     throw handleServiceError(error, "Failed to compute marketplace analytics.");
   }
@@ -313,13 +347,13 @@ async function getOverview(startupId, userId) {
     const startup = await assertAnyRole(startupId, userId);
 
     const [projects, tasks, hiring, investors, funding, marketplace, teamSize] = await Promise.all([
-      computeProjectAnalytics(startupId),
-      computeTaskAnalytics(startupId),
-      computeHiringAnalytics(startupId),
-      computeInvestorAnalytics(startupId),
+      computeProjectAnalytics(startup._id),
+      computeTaskAnalytics(startup._id),
+      computeHiringAnalytics(startup._id),
+      computeInvestorAnalytics(startup._id),
       computeFundingAnalytics(startup),
-      computeMarketplaceAnalytics(startupId),
-      computeTeamSize(startupId),
+      computeMarketplaceAnalytics(startup._id),
+      computeTeamSize(startup._id),
     ]);
 
     return {
