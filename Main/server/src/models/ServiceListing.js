@@ -66,6 +66,15 @@ const serviceListingSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    isHidden: {
+      type: Boolean,
+      default: false,
+    },
+    deletedAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
   },
   {
     timestamps: true,

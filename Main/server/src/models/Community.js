@@ -61,6 +61,15 @@ const communitySchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    isHidden: {
+      type: Boolean,
+      default: false,
+    },
+    deletedAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
   },
   {
     timestamps: true,

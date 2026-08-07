@@ -132,7 +132,7 @@ async function getJobById(id) {
 // every other module — Job's read path deliberately does NOT follow that
 // convention; see docs/modules/hiring.md).
 async function assertJobViewAccess(job, userId) {
-  const isPubliclyVisible = job.status === "published" && !job.isArchived;
+  const isPubliclyVisible = job.status === "published" && !job.isArchived && !job.isHidden && !job.deletedAt;
   if (isPubliclyVisible) {
     return { role: userId ? (await resolveStartupAccess(job.startup, userId)).role : null };
   }
@@ -163,15 +163,19 @@ async function listJobsForUser(userId, filter = {}, options = {}) {
         // anonymous visitor could already see for this startup.
         base.status = "published";
         base.isArchived = false;
+        base.isHidden = false;
+        base.deletedAt = null;
       }
     } else if (accessibleStartupIds.length > 0) {
       base.$or = [
-        { status: "published", isArchived: false },
-        { startup: { $in: accessibleStartupIds } },
+        { status: "published", isArchived: false, isHidden: false, deletedAt: null },
+        { startup: { $in: accessibleStartupIds }, deletedAt: null },
       ];
     } else {
       base.status = "published";
       base.isArchived = false;
+      base.isHidden = false;
+      base.deletedAt = null;
     }
 
     const query = Job.find(base);

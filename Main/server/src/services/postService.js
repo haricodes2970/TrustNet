@@ -50,9 +50,13 @@ async function deletePost(id) {
   }
 }
 
+// isHidden/deletedAt default to excluded so an admin moderation action
+// actually removes content from view; an explicit filter value (e.g. the
+// admin moderation queue passing { isHidden: true }) overrides the default.
 async function listPosts(filter = {}, options = {}) {
   try {
-    const query = Post.find(normalizeFilter(filter));
+    const withDefaults = { isHidden: false, deletedAt: null, ...normalizeFilter(filter) };
+    const query = Post.find(withDefaults);
     return applyQueryOptions(query, options).lean();
   } catch (error) {
     throw handleServiceError(error, "Failed to list posts.");

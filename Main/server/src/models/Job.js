@@ -75,6 +75,15 @@ const jobSchema = new mongoose.Schema(
       default: false,
       index: true,
     },
+    isHidden: {
+      type: Boolean,
+      default: false,
+    },
+    deletedAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
   },
   {
     timestamps: true,

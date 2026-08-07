@@ -64,7 +64,8 @@ async function deleteCommunity(id) {
 
 async function listCommunities(filter = {}, options = {}) {
   try {
-    const query = Community.find(normalizeFilter(filter));
+    const withDefaults = { isHidden: false, deletedAt: null, ...normalizeFilter(filter) };
+    const query = Community.find(withDefaults);
     return applyQueryOptions(query, options).lean();
   } catch (error) {
     throw handleServiceError(error, "Failed to list communities.");

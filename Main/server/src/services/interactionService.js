@@ -65,7 +65,7 @@ async function unlikePost(postId, email) {
 
 async function listComments(postId, options = {}) {
   try {
-    const query = Comment.find({ post: postId }).populate(
+    const query = Comment.find({ post: postId, isHidden: false, deletedAt: null }).populate(
       "author",
       "fullName username avatarUrl email"
     );

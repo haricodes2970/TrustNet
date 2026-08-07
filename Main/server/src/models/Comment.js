@@ -21,6 +21,15 @@ const commentSchema = new mongoose.Schema(
       minlength: 1,
       maxlength: 2000,
     },
+    isHidden: {
+      type: Boolean,
+      default: false,
+    },
+    deletedAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
   },
   {
     timestamps: true,

@@ -92,7 +92,8 @@ async function getListingById(id) {
 async function getListingForViewer(id, userId) {
   try {
     const listing = await getListingById(id);
-    const isPubliclyVisible = listing.status === "published" && !listing.isArchived;
+    const isPubliclyVisible =
+      listing.status === "published" && !listing.isArchived && !listing.isHidden && !listing.deletedAt;
     if (isPubliclyVisible) {
       return listing;
     }
@@ -123,15 +124,19 @@ async function listListingsForUser(userId, filter = {}, options = {}) {
       if (!isOwnProvider) {
         base.status = "published";
         base.isArchived = false;
+        base.isHidden = false;
+        base.deletedAt = null;
       }
     } else if (ownProfile) {
       base.$or = [
-        { status: "published", isArchived: false },
-        { provider: ownProfile._id },
+        { status: "published", isArchived: false, isHidden: false, deletedAt: null },
+        { provider: ownProfile._id, deletedAt: null },
       ];
     } else {
       base.status = "published";
       base.isArchived = false;
+      base.isHidden = false;
+      base.deletedAt = null;
     }
 
     const query = ServiceListing.find(base);
