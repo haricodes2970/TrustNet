@@ -1,6 +1,7 @@
 const express = require("express");
 const investorController = require("../controllers/investorController");
 const { authenticate } = require("../middlewares/auth");
+const { authorize } = require("../middlewares/authorize");
 const validate = require("../middlewares/validate");
 const { investorProfileCreate, investorProfileUpdate } = require("../validators/investor.validators");
 
@@ -60,6 +61,6 @@ router.get("/:id", investorController.getProfile);
  *     responses:
  *       200: { description: Updated investor profile }
  */
-router.put("/:id", authenticate, validate(investorProfileUpdate), investorController.updateProfile);
+router.put("/:id", authenticate, authorize(), validate(investorProfileUpdate), investorController.updateProfile);
 
 module.exports = router;

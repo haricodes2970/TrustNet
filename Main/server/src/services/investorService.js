@@ -61,10 +61,12 @@ async function listProfiles(filter = {}, options = {}) {
   }
 }
 
-async function updateProfile(id, userId, updateData) {
+async function updateProfile(id, userId, updateData, { isAdmin = false } = {}) {
   try {
     const existing = await getProfileById(id);
-    assertOwner(existing.user, userId, "You are not authorized to update this investor profile.", 403);
+    if (!isAdmin) {
+      assertOwner(existing.user, userId, "You are not authorized to update this investor profile.", 403);
+    }
 
     const safeUpdate = { ...updateData };
     delete safeUpdate.user;

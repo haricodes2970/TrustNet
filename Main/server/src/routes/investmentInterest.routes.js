@@ -1,6 +1,7 @@
 const express = require("express");
 const investmentInterestController = require("../controllers/investmentInterestController");
 const { authenticate } = require("../middlewares/auth");
+const { authorize } = require("../middlewares/authorize");
 const validate = require("../middlewares/validate");
 const { investmentInterestCreate, statusUpdate } = require("../validators/investmentInterest.validators");
 
@@ -8,6 +9,8 @@ const router = express.Router();
 
 // No public tier at all, unlike investor.routes.js — every route requires auth.
 router.use(authenticate);
+// No role list - just populates req.user.role for the platform-admin override.
+router.use(authorize());
 
 /**
  * @openapi
@@ -79,6 +82,21 @@ router.put("/:id/status", validate(statusUpdate), investmentInterestController.u
  *       200: { description: Investment interest archived }
  */
 router.delete("/:id", investmentInterestController.archiveInterest);
+
+/**
+ * @openapi
+ * /investment-interests/{id}/restore:
+ *   post:
+ *     summary: Restore an archived investment interest (Startup owner/admin, or platform admin)
+ *     tags: [InvestmentInterests]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { name: id, in: path, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: Investment interest restored }
+ *       409: { description: The startup is still deleted }
+ */
+router.post("/:id/restore", investmentInterestController.restoreInterest);
 
 /**
  * @openapi

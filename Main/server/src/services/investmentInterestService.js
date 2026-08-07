@@ -14,7 +14,8 @@ const { handleServiceError, normalizeFilter, applyQueryOptions, assertOwner } = 
 // both left untouched, no shared authorization service was introduced. See
 // docs/modules/investors.md and BACKLOG.md for the standing note that this
 // is now the third instance of this duplication, the clearest case yet for
-// a future dedicated refactor.
+// a future dedicated refactor. Re-verified during the Investors & Funding
+// phase audit — still intentional, still documented, left unchanged.
 //
 // Error typing: 404 not found, 403 authorization failure (role/ownership,
 // including the acting user's own inactive-account check), 409 state
@@ -67,7 +68,29 @@ function assertValidInterestTransition(currentStatus, nextStatus) {
   }
 }
 
-async function resolveInterestRole(interest, userId) {
+// Startup must exist, not be soft-deleted or admin-suspended, and be in the
+// "active" lifecycle status — previously only the last of these three was
+// checked, so a suspended or already-deleted startup (independent booleans/
+// fields from `status`) could still receive brand-new investment interest.
+function assertStartupAcceptingInterest(startup) {
+  if (!startup) {
+    throw new ApiError(404, "Startup not found.");
+  }
+  if (startup.deletedAt) {
+    throw new ApiError(409, "This startup has been deleted and is not accepting investment interest.");
+  }
+  if (startup.isSuspended) {
+    throw new ApiError(409, "This startup is suspended and is not accepting investment interest.");
+  }
+  if (startup.status !== "active") {
+    throw new ApiError(409, "This startup is not currently accepting investment interest.");
+  }
+}
+
+async function resolveInterestRole(interest, userId, { isAdmin = false } = {}) {
+  if (isAdmin) {
+    return "admin";
+  }
   if (String(interest.investor) === String(userId)) {
     return "investor";
   }
@@ -80,12 +103,7 @@ async function resolveInterestRole(interest, userId) {
 async function createInterest({ startupId, message }, userId) {
   try {
     const startup = await Startup.findById(startupId).lean();
-    if (!startup) {
-      throw new ApiError(404, "Startup not found.");
-    }
-    if (startup.status !== "active") {
-      throw new ApiError(409, "This startup is not currently accepting investment interest.");
-    }
+    assertStartupAcceptingInterest(startup);
 
     const user = await User.findById(userId).lean();
     if (!user || !user.isActive) {
@@ -129,10 +147,10 @@ async function getInterestById(id) {
   }
 }
 
-async function getInterestForViewer(id, userId) {
+async function getInterestForViewer(id, userId, { isAdmin = false } = {}) {
   try {
     const interest = await getInterestById(id);
-    const role = await resolveInterestRole(interest, userId);
+    const role = await resolveInterestRole(interest, userId, { isAdmin });
     if (!role) {
       throw new ApiError(403, "You are not authorized to view this investment interest.");
     }
@@ -142,21 +160,28 @@ async function getInterestForViewer(id, userId) {
   }
 }
 
-// No public tier, unlike Job — every result is scoped so the caller never
-// sees anything beyond what's rightfully theirs. Startup owner/admin/
-// contributor see the full roster only when they explicitly filter by a
-// startup they have a role on; every other case (including an investor,
-// or staff with no filter) is scoped to "my own expressed interests only."
-async function listInterestsForUser(userId, filter = {}, options = {}) {
+// isArchived defaults to excluded (override-friendly, same pattern as
+// every collaboration-chain module's listing default) — previously an
+// archived interest never left the default view. No public tier, unlike
+// Job — every result is scoped so the caller never sees anything beyond
+// what's rightfully theirs. Startup owner/admin/contributor (or a platform
+// admin, same "targeted override" shape as every other module) see the
+// full roster only when they explicitly filter by a startup they have a
+// role on; every other case (including an investor, or staff with no
+// filter) is scoped to "my own expressed interests only."
+async function listInterestsForUser(userId, filter = {}, options = {}, { isAdmin = false } = {}) {
   try {
-    const base = normalizeFilter(filter);
+    const rest = normalizeFilter(filter);
+    const base = { isArchived: false, ...rest };
 
     if (base.startup) {
-      const access = await resolveStartupAccess(base.startup, userId);
-      if (!access.role) {
-        base.investor = userId;
+      if (!isAdmin) {
+        const access = await resolveStartupAccess(base.startup, userId);
+        if (!access.role) {
+          base.investor = userId;
+        }
       }
-      // owner/admin/contributor: no further restriction, see the full roster.
+      // owner/admin/contributor/platform-admin: no further restriction, see the full roster.
     } else {
       base.investor = userId;
     }
@@ -168,12 +193,14 @@ async function listInterestsForUser(userId, filter = {}, options = {}) {
   }
 }
 
-async function updateStatus(id, userId, { status }) {
+async function updateStatus(id, userId, { status }, { isAdmin = false } = {}) {
   try {
     const existing = await getInterestById(id);
-    const access = await resolveStartupAccess(existing.startup, userId);
-    if (access.role !== "owner" && access.role !== "admin") {
-      throw new ApiError(403, "You are not authorized to update this investment interest's status.");
+    if (!isAdmin) {
+      const access = await resolveStartupAccess(existing.startup, userId);
+      if (access.role !== "owner" && access.role !== "admin") {
+        throw new ApiError(403, "You are not authorized to update this investment interest's status.");
+      }
     }
 
     assertValidInterestTransition(existing.status, status);
@@ -193,12 +220,14 @@ async function updateStatus(id, userId, { status }) {
   }
 }
 
-async function archiveInterest(id, userId) {
+async function archiveInterest(id, userId, { isAdmin = false } = {}) {
   try {
     const existing = await getInterestById(id);
-    const access = await resolveStartupAccess(existing.startup, userId);
-    if (access.role !== "owner" && access.role !== "admin") {
-      throw new ApiError(403, "You are not authorized to archive this investment interest.");
+    if (!isAdmin) {
+      const access = await resolveStartupAccess(existing.startup, userId);
+      if (access.role !== "owner" && access.role !== "admin") {
+        throw new ApiError(403, "You are not authorized to archive this investment interest.");
+      }
     }
 
     const interest = await InvestmentInterest.findByIdAndUpdate(
@@ -216,10 +245,42 @@ async function archiveInterest(id, userId) {
   }
 }
 
-async function withdraw(id, userId) {
+async function restoreInterest(id, userId, { isAdmin = false } = {}) {
   try {
     const existing = await getInterestById(id);
-    assertOwner(existing.investor, userId, "You are not authorized to withdraw this investment interest.", 403);
+    if (!isAdmin) {
+      const access = await resolveStartupAccess(existing.startup, userId);
+      if (access.role !== "owner" && access.role !== "admin") {
+        throw new ApiError(403, "You are not authorized to restore this investment interest.");
+      }
+    }
+
+    const startup = await Startup.findById(existing.startup).lean();
+    if (!startup || startup.deletedAt) {
+      throw new ApiError(409, "Restore the startup before restoring its investment interests.");
+    }
+
+    const interest = await InvestmentInterest.findByIdAndUpdate(
+      id,
+      { isArchived: false, updatedBy: userId },
+      { new: true }
+    ).lean();
+
+    if (!interest) {
+      throw new ApiError(404, "Investment interest not found.");
+    }
+    return interest;
+  } catch (error) {
+    throw handleServiceError(error, "Failed to restore investment interest.");
+  }
+}
+
+async function withdraw(id, userId, { isAdmin = false } = {}) {
+  try {
+    const existing = await getInterestById(id);
+    if (!isAdmin) {
+      assertOwner(existing.investor, userId, "You are not authorized to withdraw this investment interest.", 403);
+    }
 
     if (TERMINAL_STATUSES.includes(existing.status)) {
       throw new ApiError(409, `Investment interest is in a terminal state ("${existing.status}") and cannot be withdrawn.`);
@@ -243,6 +304,7 @@ async function withdraw(id, userId) {
 module.exports = {
   resolveStartupAccess,
   assertValidInterestTransition,
+  assertStartupAcceptingInterest,
   resolveInterestRole,
   createInterest,
   getInterestById,
@@ -250,5 +312,6 @@ module.exports = {
   listInterestsForUser,
   updateStatus,
   archiveInterest,
+  restoreInterest,
   withdraw,
 };
