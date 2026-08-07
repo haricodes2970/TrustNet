@@ -8,6 +8,7 @@ const adminDashboardController = require("../controllers/adminDashboardControlle
 const adminUserController = require("../controllers/adminUserController");
 const adminModerationController = require("../controllers/adminModerationController");
 const adminStartupController = require("../controllers/adminStartupController");
+const adminActivityController = require("../controllers/adminActivityController");
 
 const router = express.Router();
 
@@ -38,5 +39,7 @@ router.post(
 router.get("/startups", adminStartupController.listStartups);
 router.post("/startups/:id/suspend", validate(adminValidators.moderationReason), adminStartupController.suspendStartup);
 router.post("/startups/:id/restore", adminStartupController.restoreStartup);
+
+router.get("/activity-logs", adminActivityController.listActivityLogs);
 
 module.exports = router;
