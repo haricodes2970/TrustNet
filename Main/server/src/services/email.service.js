@@ -39,4 +39,39 @@ async function sendEmail({ to, subject, text, html }) {
   });
 }
 
-module.exports = { sendPasswordResetEmail, sendEmail };
+async function sendVerificationApprovedEmail({ to }) {
+  await sendEmail({
+    to,
+    subject: "Your TrustNet verification was approved",
+    text: "Your account verification has been approved. You now have full access to TrustNet.",
+    html: "<p>Your account verification has been approved. You now have full access to TrustNet.</p>",
+  });
+}
+
+async function sendVerificationRejectedEmail({ to, reason }) {
+  const reasonLine = reason ? `Reason: ${reason}` : "";
+  await sendEmail({
+    to,
+    subject: "Your TrustNet verification was rejected",
+    text: `Your account verification has been rejected. ${reasonLine}`,
+    html: `<p>Your account verification has been rejected.</p>${reason ? `<p>Reason: ${reason}</p>` : ""}`,
+  });
+}
+
+async function sendVerificationResubmissionEmail({ to, reason }) {
+  const reasonLine = reason ? `Reason: ${reason}` : "";
+  await sendEmail({
+    to,
+    subject: "Action needed: resubmit your TrustNet verification documents",
+    text: `An admin has requested that you resubmit your verification documents. ${reasonLine}`,
+    html: `<p>An admin has requested that you resubmit your verification documents.</p>${reason ? `<p>Reason: ${reason}</p>` : ""}`,
+  });
+}
+
+module.exports = {
+  sendPasswordResetEmail,
+  sendEmail,
+  sendVerificationApprovedEmail,
+  sendVerificationRejectedEmail,
+  sendVerificationResubmissionEmail,
+};

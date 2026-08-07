@@ -121,7 +121,7 @@ const userSchema = new mongoose.Schema(
     },
     verificationStatus: {
       type: String,
-      enum: ["not_submitted", "draft", "pending", "approved", "rejected"],
+      enum: ["not_submitted", "draft", "pending", "approved", "rejected", "resubmission_requested"],
       default: "draft",
     },
     verificationSubmittedAt: {
