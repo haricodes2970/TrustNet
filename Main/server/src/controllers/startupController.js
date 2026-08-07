@@ -109,9 +109,25 @@ async function restoreStartup(req, res) {
   }
 }
 
+// Express 5's default query parser doesn't do bracket-nesting (no `qs`),
+// so `options[limit]=2` never reaches here as a nested object - only
+// `req.query.options` being a literal JSON string, or flat `limit`/`skip`/
+// `sort` params, actually work over real HTTP. Accepting both keeps
+// req.query.options working for any existing caller while making
+// pagination actually usable from a plain query string (regression found
+// via integration testing - it silently did nothing before).
+function parseOptions(query) {
+  const base = typeof query.options === "string" ? JSON.parse(query.options) : query.options || {};
+  const options = { ...base };
+  if (query.limit !== undefined) options.limit = query.limit;
+  if (query.skip !== undefined) options.skip = query.skip;
+  if (query.sort !== undefined) options.sort = query.sort;
+  return options;
+}
+
 async function listStartups(req, res) {
   try {
-    const startups = await startupService.listStartups(req.query.filter || {}, req.query.options || {});
+    const startups = await startupService.listStartups(req.query.filter || {}, parseOptions(req.query));
     return res.status(200).json({ success: true, data: startups });
   } catch (error) {
     return res.status(400).json({ success: false, message: error.message });

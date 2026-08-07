@@ -7,6 +7,13 @@ const { startupCreate, startupUpdate } = require("../validators/startup.validato
 
 const router = express.Router();
 
+// GET /me MUST be registered before GET /:id — Express matches routes in
+// registration order, so with /:id first, a request for /me was being
+// captured by /:id with id="me" (regression found via integration testing:
+// GET /me was completely unreachable, for anonymous AND authenticated
+// callers alike, since route matching happens before any middleware runs).
+router.get("/me", authenticate, startupController.getMyStartups);
+
 // Public read endpoints. optionalAuthenticate never rejects - it just
 // populates req.user (id + role) when a valid token is present, so
 // getStartup/getStartupBySlug can let the founder or an admin see a
@@ -20,7 +27,6 @@ router.get("/slug/:slug", optionalAuthenticate, startupController.getStartupBySl
 // authenticate to have run and populates req.user.role - used here purely
 // to let the controller check for an admin override, not to restrict access
 // to a role list.
-router.get("/me", authenticate, startupController.getMyStartups);
 router.post("/", authenticate, validate(startupCreate), startupController.createStartup);
 router.put("/:id", authenticate, authorize(), validate(startupUpdate), startupController.updateStartup);
 router.delete("/:id", authenticate, authorize(), startupController.deleteStartup);
