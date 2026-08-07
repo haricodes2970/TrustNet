@@ -1,6 +1,7 @@
 const fs = require("fs/promises");
 const path = require("path");
 const crypto = require("crypto");
+const jwtConfig = require("../config/jwt");
 
 // Storage abstraction for the Documents module. Exposes exactly three
 // operations — upload/downloadUrl/remove — so a future provider (S3,
@@ -15,6 +16,35 @@ const crypto = require("crypto");
 // branch inside these three functions, not a rewrite of their signatures.
 
 const STORAGE_ROOT = path.join(__dirname, "..", "..", "storage", "documents");
+
+const DOWNLOAD_URL_TTL_MS = 15 * 60 * 1000; // 15 minutes
+
+// Reuses the existing JWT access secret rather than inventing a new
+// secret-management surface for a URL-signing feature this small.
+function signDownload(storageKey, expiresAt) {
+  return crypto.createHmac("sha256", jwtConfig.accessSecret).update(`${storageKey}.${expiresAt}`).digest("hex");
+}
+
+// verifyDownloadToken(storageKey, expiresAt, signature) -> boolean
+// No file-delivery route consumes this yet (still out of scope — none was
+// requested this phase), but the sign/verify pair is real and tested: even
+// though GET /documents/:id is itself auth-gated, a returned URL can be
+// copied out of that response and shared/cached elsewhere, so it needs its
+// own tamper-evident, time-limited guarantee independent of that request's
+// auth — the same reason S3 presigned URLs expire.
+function verifyDownloadToken(storageKey, expiresAt, signature) {
+  const expiresNum = Number(expiresAt);
+  if (!expiresNum || Number.isNaN(expiresNum) || Date.now() > expiresNum) {
+    return false;
+  }
+  const expected = signDownload(storageKey, expiresNum);
+  const expectedBuf = Buffer.from(expected, "hex");
+  const givenBuf = Buffer.from(String(signature || ""), "hex");
+  if (expectedBuf.length !== givenBuf.length) {
+    return false;
+  }
+  return crypto.timingSafeEqual(expectedBuf, givenBuf);
+}
 
 async function ensureStorageRoot() {
   await fs.mkdir(STORAGE_ROOT, { recursive: true });
@@ -39,15 +69,18 @@ async function upload({ buffer, originalFileName }) {
 }
 
 // downloadUrl(storageProvider, storageKey) -> string
-// Generated on demand, never persisted. For the local provider this is a
-// deterministic path only — no HTTP route currently serves it (out of scope
-// for this phase: no file-delivery endpoint was requested). A future
-// provider (e.g. S3) would return a real signed/expiring URL here instead.
+// Generated on demand, never persisted. Signed and time-limited (15 min) -
+// a bare deterministic path was previously guessable and never expired. No
+// HTTP route currently serves this yet (still out of scope: no file-
+// delivery endpoint was requested), but the signature is real and checked
+// via verifyDownloadToken() below, ready for that route when it's built.
 async function downloadUrl(storageProvider, storageKey) {
   if (storageProvider !== "local") {
     throw new Error(`Unsupported storage provider: ${storageProvider}`);
   }
-  return `/local-storage/documents/${storageKey}`;
+  const expiresAt = Date.now() + DOWNLOAD_URL_TTL_MS;
+  const signature = signDownload(storageKey, expiresAt);
+  return `/local-storage/documents/${storageKey}?expires=${expiresAt}&signature=${signature}`;
 }
 
 // remove(storageProvider, storageKey) -> void
@@ -67,4 +100,4 @@ async function remove(storageProvider, storageKey) {
   }
 }
 
-module.exports = { upload, downloadUrl, remove };
+module.exports = { upload, downloadUrl, verifyDownloadToken, remove };
