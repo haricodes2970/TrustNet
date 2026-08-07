@@ -35,8 +35,16 @@ An independently-developed TrustNet backend (`trustnet 2.zip`, "Developer 1") wa
 
 ## Validation & ownership (Phase 4)
 
-- [ ] Audit validator coverage for startup/community/post/collaboration write routes
-- [ ] Resolve `resolveUser` auto-creation policy repo-wide (dashboard instance fixed in commit `5909ade`, check other call sites)
+- [x] ~~Audit validator coverage for startup/community/post/collaboration write routes~~ — startup/community already had validators; `post.validators.js` added in the Communities/Posts/Comments/Likes hardening phase (Post had none at all before then).
+- [ ] Resolve `resolveUser` auto-creation policy repo-wide — `interactionService.js`'s copy removed in the Communities/Posts/Comments/Likes hardening phase (`authenticate` already guarantees `req.user.id` references a real, persisted User, so the email-lookup-with-silent-create fallback was dead weight at best). `profileController.js` and `settingsController.js` still have their own copies; both are outside that phase's scope (Profile/Settings, not Communities/Posts/Comments/Likes) - revisit in a dedicated Profile/Settings hardening pass.
+
+## Communities + Posts + Comments + Likes (Social hardening phase) — explicit, instructed tradeoffs
+
+- [ ] **No invite/request system for private/restricted Community membership.** Self-join now only works for `type: "public"` (previously ANY authenticated user could self-join a private/restricted community, a real gap); a private/restricted community's membership can only be granted by its owner directly, out-of-band - no endpoint exists for that yet. A real invite flow (mirroring Team's pending/accepted shape) is a distinct, larger feature deliberately not built this phase.
+- [ ] **No true concurrency stress test for Like/Community-membership counters.** The atomic aggregation-pipeline update (`$setUnion`/`$filter` + `$size`, single `findByIdAndUpdate` call) is provably race-free per MongoDB's per-document atomicity guarantee, but the test suite verifies correctness via sequential multi-user calls, not literal concurrent requests - `mongodb-memory-server`'s single-node setup make a genuine concurrency race hard to deterministically reproduce in a test.
+- [ ] **Mongoose 9 gotcha for future modules:** any `findByIdAndUpdate`/`updateOne` call passed an aggregation-pipeline (array) update **must** pass `{ updatePipeline: true }` explicitly - Mongoose 9 no longer auto-detects an array as a pipeline like older versions did, and throws at call time instead of falling back to a plain update. Caught immediately by this phase's own integration suite (every join/like call 500'd on the first attempt), but worth flagging before another module reaches for this same atomic-counter pattern.
+- [ ] **`Post.startup` field exists on the schema and is accepted by the validator, but has no dedicated authorization/visibility treatment** (unlike `Post.community`) - out of scope this phase, which only covered "Community posts"/"Personal posts" per the phase's own VERIFY checklist, not Startup-linked posts specifically.
+- [ ] **No notification triggers wired for comment/like/community-join events**, despite `notificationService` already existing and being used elsewhere (Team invites, messages). Reviewed and deliberately not added - no other module completed this session (Job, Application, Investment Interest, Funding, Marketplace) wired notifications from its own domain events either, despite equally plausible cases; treating this module differently would have been scope creep against the session's established pattern, not a fix.
 
 ## Scalability (Phase 5)
 
