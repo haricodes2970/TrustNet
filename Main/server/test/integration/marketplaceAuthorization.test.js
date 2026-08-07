@@ -14,6 +14,7 @@ const providerProfileService = require("../../src/services/providerProfileServic
 const serviceListingService = require("../../src/services/serviceListingService");
 const engagementRequestService = require("../../src/services/engagementRequestService");
 const ApiError = require("../../src/utils/ApiError");
+const Startup = require("../../src/models/Startup");
 
 before(async () => {
   await setupTestDB();
@@ -41,6 +42,15 @@ async function createProviderWithPublishedListing() {
   const built = await createProviderWithDraftListing();
   const listing = await serviceListingService.publishListing(built.listing._id, built.provider.user._id);
   return { ...built, listing };
+}
+
+// createStartupTeamFixture()'s Startup defaults to status:"draft" -
+// engagementRequestService.createRequest now requires "active" (this
+// phase's startup-state guard), same activation step
+// investorAuthorization.test.js/fundingLifecycle.test.js already use for
+// their own fixtures.
+async function activateStartup(startupId) {
+  await Startup.findByIdAndUpdate(startupId, { status: "active" });
 }
 
 // --- ProviderProfile: create, update-own, public read ---
@@ -188,6 +198,7 @@ test("owner listing with an explicit provider filter sees the full roster (inclu
 test("Startup owner can request engagement with a published listing", async () => {
   const { listing } = await createProviderWithPublishedListing();
   const fx = await createStartupTeamFixture();
+  await activateStartup(fx.startup._id);
 
   const request = await engagementRequestService.createRequest(
     { serviceListingId: listing._id, startupId: fx.startup._id, message: "Interested in your services." },
@@ -200,6 +211,7 @@ test("Startup owner can request engagement with a published listing", async () =
 test("cannot request engagement with a draft (not-published) listing — ApiError 409", async () => {
   const { listing } = await createProviderWithDraftListing();
   const fx = await createStartupTeamFixture();
+  await activateStartup(fx.startup._id);
 
   await assert.rejects(
     () => engagementRequestService.createRequest({ serviceListingId: listing._id, startupId: fx.startup._id }, fx.founder.user._id),
@@ -210,6 +222,7 @@ test("cannot request engagement with a draft (not-published) listing — ApiErro
 test("contributor CANNOT request engagement on behalf of the startup — ApiError 403", async () => {
   const { listing } = await createProviderWithPublishedListing();
   const fx = await createStartupTeamFixture();
+  await activateStartup(fx.startup._id);
 
   await assert.rejects(
     () =>
@@ -224,6 +237,7 @@ test("contributor CANNOT request engagement on behalf of the startup — ApiErro
 test("unrelated user CANNOT request engagement on behalf of a startup — ApiError 403", async () => {
   const { listing } = await createProviderWithPublishedListing();
   const fx = await createStartupTeamFixture();
+  await activateStartup(fx.startup._id);
 
   await assert.rejects(
     () =>
@@ -237,6 +251,7 @@ test("unrelated user CANNOT request engagement on behalf of a startup — ApiErr
 
 test("requesting engagement for a non-existent listing throws ApiError 404", async () => {
   const fx = await createStartupTeamFixture();
+  await activateStartup(fx.startup._id);
   await assert.rejects(
     () =>
       engagementRequestService.createRequest(
@@ -252,6 +267,7 @@ test("requesting engagement for a non-existent listing throws ApiError 404", asy
 test("DUPLICATE ACTIVE requests from the same startup to the same listing are blocked — ApiError 409", async () => {
   const { listing } = await createProviderWithPublishedListing();
   const fx = await createStartupTeamFixture();
+  await activateStartup(fx.startup._id);
   await engagementRequestService.createRequest({ serviceListingId: listing._id, startupId: fx.startup._id }, fx.founder.user._id);
 
   await assert.rejects(
@@ -263,6 +279,7 @@ test("DUPLICATE ACTIVE requests from the same startup to the same listing are bl
 test("RE-ENGAGEMENT is allowed after a request is declined", async () => {
   const { provider, listing } = await createProviderWithPublishedListing();
   const fx = await createStartupTeamFixture();
+  await activateStartup(fx.startup._id);
   const first = await engagementRequestService.createRequest({ serviceListingId: listing._id, startupId: fx.startup._id }, fx.founder.user._id);
   await engagementRequestService.updateStatus(first._id, provider.user._id, { status: "declined" });
 
@@ -273,6 +290,7 @@ test("RE-ENGAGEMENT is allowed after a request is declined", async () => {
 test("RE-ENGAGEMENT is allowed after a request is cancelled", async () => {
   const { listing } = await createProviderWithPublishedListing();
   const fx = await createStartupTeamFixture();
+  await activateStartup(fx.startup._id);
   const first = await engagementRequestService.createRequest({ serviceListingId: listing._id, startupId: fx.startup._id }, fx.founder.user._id);
   await engagementRequestService.cancelRequest(first._id, fx.founder.user._id);
 
@@ -283,6 +301,7 @@ test("RE-ENGAGEMENT is allowed after a request is cancelled", async () => {
 test("RE-ENGAGEMENT is allowed after a request is completed", async () => {
   const { provider, listing } = await createProviderWithPublishedListing();
   const fx = await createStartupTeamFixture();
+  await activateStartup(fx.startup._id);
   const first = await engagementRequestService.createRequest({ serviceListingId: listing._id, startupId: fx.startup._id }, fx.founder.user._id);
   await engagementRequestService.updateStatus(first._id, provider.user._id, { status: "accepted" });
   await engagementRequestService.updateStatus(first._id, provider.user._id, { status: "in_progress" });
@@ -297,6 +316,7 @@ test("RE-ENGAGEMENT is allowed after a request is completed", async () => {
 test("startup owner/admin/contributor can view their startup's engagement request", async () => {
   const { listing } = await createProviderWithPublishedListing();
   const fx = await createStartupTeamFixture();
+  await activateStartup(fx.startup._id);
   const request = await engagementRequestService.createRequest({ serviceListingId: listing._id, startupId: fx.startup._id }, fx.founder.user._id);
 
   for (const actor of [fx.founder, fx.adminMember, fx.contributorMember]) {
@@ -308,6 +328,7 @@ test("startup owner/admin/contributor can view their startup's engagement reques
 test("the owning provider can view an engagement request on their listing", async () => {
   const { provider, listing } = await createProviderWithPublishedListing();
   const fx = await createStartupTeamFixture();
+  await activateStartup(fx.startup._id);
   const request = await engagementRequestService.createRequest({ serviceListingId: listing._id, startupId: fx.startup._id }, fx.founder.user._id);
 
   const viewed = await engagementRequestService.getRequestForViewer(request._id, provider.user._id);
@@ -317,6 +338,7 @@ test("the owning provider can view an engagement request on their listing", asyn
 test("PROVIDER CANNOT access unrelated engagement requests — ApiError 403", async () => {
   const { listing } = await createProviderWithPublishedListing();
   const fx = await createStartupTeamFixture();
+  await activateStartup(fx.startup._id);
   const request = await engagementRequestService.createRequest({ serviceListingId: listing._id, startupId: fx.startup._id }, fx.founder.user._id);
 
   const unrelatedProvider = await createAuthenticatedTestUser();
@@ -331,7 +353,9 @@ test("PROVIDER CANNOT access unrelated engagement requests — ApiError 403", as
 test("STARTUP CANNOT access another startup's engagement request — ApiError 403", async () => {
   const { listing } = await createProviderWithPublishedListing();
   const fxA = await createStartupTeamFixture();
+  await activateStartup(fxA.startup._id);
   const fxB = await createStartupTeamFixture();
+  await activateStartup(fxB.startup._id);
   const request = await engagementRequestService.createRequest({ serviceListingId: listing._id, startupId: fxA.startup._id }, fxA.founder.user._id);
 
   await assert.rejects(
@@ -343,6 +367,7 @@ test("STARTUP CANNOT access another startup's engagement request — ApiError 40
 test("REGRESSION: an unrelated user cannot bypass authorization via an explicit ?startup= filter", async () => {
   const { listing } = await createProviderWithPublishedListing();
   const fx = await createStartupTeamFixture();
+  await activateStartup(fx.startup._id);
   await engagementRequestService.createRequest({ serviceListingId: listing._id, startupId: fx.startup._id }, fx.founder.user._id);
 
   const unrelatedUser = await createAuthenticatedTestUser();
@@ -353,6 +378,7 @@ test("REGRESSION: an unrelated user cannot bypass authorization via an explicit 
 test("REGRESSION: an unrelated user cannot bypass authorization via an explicit ?serviceListing= filter", async () => {
   const { listing } = await createProviderWithPublishedListing();
   const fx = await createStartupTeamFixture();
+  await activateStartup(fx.startup._id);
   await engagementRequestService.createRequest({ serviceListingId: listing._id, startupId: fx.startup._id }, fx.founder.user._id);
 
   const unrelatedUser = await createAuthenticatedTestUser();
@@ -363,6 +389,7 @@ test("REGRESSION: an unrelated user cannot bypass authorization via an explicit 
 test("startup owner/admin/contributor listing with an explicit startup filter sees the full roster", async () => {
   const { listing } = await createProviderWithPublishedListing();
   const fx = await createStartupTeamFixture();
+  await activateStartup(fx.startup._id);
   await engagementRequestService.createRequest({ serviceListingId: listing._id, startupId: fx.startup._id }, fx.founder.user._id);
 
   const asContributor = await engagementRequestService.listRequestsForUser(fx.contributorMember.user._id, { startup: fx.startup._id }, {});
@@ -372,7 +399,9 @@ test("startup owner/admin/contributor listing with an explicit startup filter se
 test("owning provider listing with an explicit serviceListing filter sees the full roster", async () => {
   const { provider, listing } = await createProviderWithPublishedListing();
   const fxA = await createStartupTeamFixture();
+  await activateStartup(fxA.startup._id);
   const fxB = await createStartupTeamFixture();
+  await activateStartup(fxB.startup._id);
   await engagementRequestService.createRequest({ serviceListingId: listing._id, startupId: fxA.startup._id }, fxA.founder.user._id);
   await engagementRequestService.createRequest({ serviceListingId: listing._id, startupId: fxB.startup._id }, fxB.founder.user._id);
 
@@ -385,6 +414,7 @@ test("owning provider listing with an explicit serviceListing filter sees the fu
 test("owning provider can advance the full happy-path lifecycle", async () => {
   const { provider, listing } = await createProviderWithPublishedListing();
   const fx = await createStartupTeamFixture();
+  await activateStartup(fx.startup._id);
   const request = await engagementRequestService.createRequest({ serviceListingId: listing._id, startupId: fx.startup._id }, fx.founder.user._id);
 
   const accepted = await engagementRequestService.updateStatus(request._id, provider.user._id, { status: "accepted" });
@@ -398,6 +428,7 @@ test("owning provider can advance the full happy-path lifecycle", async () => {
 test("owning provider can decline a requested engagement", async () => {
   const { provider, listing } = await createProviderWithPublishedListing();
   const fx = await createStartupTeamFixture();
+  await activateStartup(fx.startup._id);
   const request = await engagementRequestService.createRequest({ serviceListingId: listing._id, startupId: fx.startup._id }, fx.founder.user._id);
 
   const declined = await engagementRequestService.updateStatus(request._id, provider.user._id, { status: "declined" });
@@ -407,6 +438,7 @@ test("owning provider can decline a requested engagement", async () => {
 test("STARTUP OWNER CANNOT advance engagement status — ApiError 403", async () => {
   const { listing } = await createProviderWithPublishedListing();
   const fx = await createStartupTeamFixture();
+  await activateStartup(fx.startup._id);
   const request = await engagementRequestService.createRequest({ serviceListingId: listing._id, startupId: fx.startup._id }, fx.founder.user._id);
 
   await assert.rejects(
@@ -418,6 +450,7 @@ test("STARTUP OWNER CANNOT advance engagement status — ApiError 403", async ()
 test("provider CANNOT skip ahead in the status lifecycle — ApiError 409", async () => {
   const { provider, listing } = await createProviderWithPublishedListing();
   const fx = await createStartupTeamFixture();
+  await activateStartup(fx.startup._id);
   const request = await engagementRequestService.createRequest({ serviceListingId: listing._id, startupId: fx.startup._id }, fx.founder.user._id);
 
   await assert.rejects(
@@ -429,6 +462,7 @@ test("provider CANNOT skip ahead in the status lifecycle — ApiError 409", asyn
 test("startup owner can cancel their own request while requested", async () => {
   const { listing } = await createProviderWithPublishedListing();
   const fx = await createStartupTeamFixture();
+  await activateStartup(fx.startup._id);
   const request = await engagementRequestService.createRequest({ serviceListingId: listing._id, startupId: fx.startup._id }, fx.founder.user._id);
 
   const cancelled = await engagementRequestService.cancelRequest(request._id, fx.founder.user._id);
@@ -438,6 +472,7 @@ test("startup owner can cancel their own request while requested", async () => {
 test("startup admin can cancel while accepted", async () => {
   const { provider, listing } = await createProviderWithPublishedListing();
   const fx = await createStartupTeamFixture();
+  await activateStartup(fx.startup._id);
   const request = await engagementRequestService.createRequest({ serviceListingId: listing._id, startupId: fx.startup._id }, fx.founder.user._id);
   await engagementRequestService.updateStatus(request._id, provider.user._id, { status: "accepted" });
 
@@ -448,6 +483,7 @@ test("startup admin can cancel while accepted", async () => {
 test("cancel is rejected once the engagement is in_progress — ApiError 409", async () => {
   const { provider, listing } = await createProviderWithPublishedListing();
   const fx = await createStartupTeamFixture();
+  await activateStartup(fx.startup._id);
   const request = await engagementRequestService.createRequest({ serviceListingId: listing._id, startupId: fx.startup._id }, fx.founder.user._id);
   await engagementRequestService.updateStatus(request._id, provider.user._id, { status: "accepted" });
   await engagementRequestService.updateStatus(request._id, provider.user._id, { status: "in_progress" });
@@ -461,6 +497,7 @@ test("cancel is rejected once the engagement is in_progress — ApiError 409", a
 test("contributor CANNOT cancel an engagement request — ApiError 403", async () => {
   const { listing } = await createProviderWithPublishedListing();
   const fx = await createStartupTeamFixture();
+  await activateStartup(fx.startup._id);
   const request = await engagementRequestService.createRequest({ serviceListingId: listing._id, startupId: fx.startup._id }, fx.founder.user._id);
 
   await assert.rejects(
@@ -472,6 +509,7 @@ test("contributor CANNOT cancel an engagement request — ApiError 403", async (
 test("the owning provider CANNOT cancel an engagement request — ApiError 403", async () => {
   const { provider, listing } = await createProviderWithPublishedListing();
   const fx = await createStartupTeamFixture();
+  await activateStartup(fx.startup._id);
   const request = await engagementRequestService.createRequest({ serviceListingId: listing._id, startupId: fx.startup._id }, fx.founder.user._id);
 
   await assert.rejects(
@@ -483,7 +521,9 @@ test("the owning provider CANNOT cancel an engagement request — ApiError 403",
 test("a different startup CANNOT cancel someone else's request — ApiError 403", async () => {
   const { listing } = await createProviderWithPublishedListing();
   const fxA = await createStartupTeamFixture();
+  await activateStartup(fxA.startup._id);
   const fxB = await createStartupTeamFixture();
+  await activateStartup(fxB.startup._id);
   const request = await engagementRequestService.createRequest({ serviceListingId: listing._id, startupId: fxA.startup._id }, fxA.founder.user._id);
 
   await assert.rejects(
@@ -495,6 +535,7 @@ test("a different startup CANNOT cancel someone else's request — ApiError 403"
 test("transitioning out of a terminal state is rejected — ApiError 409", async () => {
   const { provider, listing } = await createProviderWithPublishedListing();
   const fx = await createStartupTeamFixture();
+  await activateStartup(fx.startup._id);
   const request = await engagementRequestService.createRequest({ serviceListingId: listing._id, startupId: fx.startup._id }, fx.founder.user._id);
   await engagementRequestService.updateStatus(request._id, provider.user._id, { status: "declined" });
 

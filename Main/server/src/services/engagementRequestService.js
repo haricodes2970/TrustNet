@@ -3,6 +3,7 @@ const Startup = require("../models/Startup");
 const Team = require("../models/Team");
 const ApiError = require("../utils/ApiError");
 const serviceListingService = require("./serviceListingService");
+const providerProfileService = require("./providerProfileService");
 const { handleServiceError, normalizeFilter, applyQueryOptions } = require("./serviceUtils");
 
 // EngagementRequest -> ServiceListing (provider side, flat ownership,
@@ -50,6 +51,25 @@ async function resolveStartupAccess(startupId, userId) {
   return { role: member.role === "admin" ? "admin" : "contributor" };
 }
 
+// Same shape as investmentInterestService.assertStartupAcceptingInterest /
+// fundingRoundService.assertStartupActiveForFunding - the requesting
+// Startup's own state (deleted/suspended/not-active) is independent of the
+// listing's state and was previously never checked here at all.
+function assertStartupAcceptingEngagement(startup) {
+  if (!startup) {
+    throw new ApiError(404, "Startup not found.");
+  }
+  if (startup.deletedAt) {
+    throw new ApiError(409, "This startup has been deleted and cannot request engagements.");
+  }
+  if (startup.isSuspended) {
+    throw new ApiError(409, "This startup is suspended and cannot request engagements.");
+  }
+  if (startup.status !== "active") {
+    throw new ApiError(409, "This startup is not currently active.");
+  }
+}
+
 const TERMINAL_STATUSES = ["declined", "completed", "cancelled"];
 const ALLOWED_TRANSITIONS = {
   requested: ["accepted", "declined", "cancelled"],
@@ -87,6 +107,18 @@ async function createRequest({ serviceListingId, startupId, message }, userId) {
     if (listing.status !== "published" || listing.isArchived) {
       throw new ApiError(409, "This service listing is not currently accepting engagement requests.");
     }
+
+    // The listing's own status/isArchived were already checked above, but
+    // neither reflects the provider's underlying account state - a
+    // suspended or deleted provider account could otherwise keep receiving
+    // new engagement requests against a still-"published" listing.
+    const providerActive = await providerProfileService.isProviderAccountActiveById(listing.provider);
+    if (!providerActive) {
+      throw new ApiError(409, "This provider is not currently accepting engagement requests.");
+    }
+
+    const startup = await Startup.findById(startupId).lean();
+    assertStartupAcceptingEngagement(startup);
 
     const access = await resolveStartupAccess(startupId, userId);
     if (access.role !== "owner" && access.role !== "admin") {
@@ -130,9 +162,12 @@ async function getRequestById(id) {
   }
 }
 
-async function getRequestForViewer(id, userId) {
+async function getRequestForViewer(id, userId, { isAdmin = false } = {}) {
   try {
     const request = await getRequestById(id);
+    if (isAdmin) {
+      return request;
+    }
     const role = await resolveRequestRole(request, userId);
     if (!role) {
       throw new ApiError(403, "You are not authorized to view this engagement request.");
@@ -147,24 +182,34 @@ async function getRequestForViewer(id, userId) {
 // Listing= for the provider side — each downgrading to "my own submissions"
 // (via createdBy) when the caller has no role on that axis. No filter at
 // all also scopes to createdBy: userId. "Scope, don't reject" throughout,
-// same convention every prior list-scoped module uses.
-async function listRequestsForUser(userId, filter = {}, options = {}) {
+// same convention every prior list-scoped module uses. Platform admin sees
+// everything unfiltered.
+async function listRequestsForUser(userId, filter = {}, options = {}, { isAdmin = false } = {}) {
   try {
-    const base = normalizeFilter(filter);
+    const { search, ...rest } = normalizeFilter(filter);
+    const base = { ...rest };
 
-    if (base.startup) {
-      const access = await resolveStartupAccess(base.startup, userId);
-      if (!access.role) {
+    if (search) {
+      const escaped = String(search).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const regex = new RegExp(escaped, "i");
+      base.message = regex;
+    }
+
+    if (!isAdmin) {
+      if (base.startup) {
+        const access = await resolveStartupAccess(base.startup, userId);
+        if (!access.role) {
+          base.createdBy = userId;
+        }
+      } else if (base.serviceListing) {
+        const listing = await serviceListingService.getListingById(base.serviceListing);
+        const isProvider = await serviceListingService.resolveProviderOwnership(listing, userId);
+        if (!isProvider) {
+          base.createdBy = userId;
+        }
+      } else {
         base.createdBy = userId;
       }
-    } else if (base.serviceListing) {
-      const listing = await serviceListingService.getListingById(base.serviceListing);
-      const isProvider = await serviceListingService.resolveProviderOwnership(listing, userId);
-      if (!isProvider) {
-        base.createdBy = userId;
-      }
-    } else {
-      base.createdBy = userId;
     }
 
     const query = EngagementRequest.find(base);
@@ -174,16 +219,18 @@ async function listRequestsForUser(userId, filter = {}, options = {}) {
   }
 }
 
-// Provider-only: accept / decline / start / complete, via a single
-// staff-settable-style endpoint, same shape investmentInterestService's
-// updateStatus uses.
-async function updateStatus(id, userId, { status }) {
+// Provider-only (or platform admin): accept / decline / start / complete,
+// via a single staff-settable-style endpoint, same shape
+// investmentInterestService's updateStatus uses.
+async function updateStatus(id, userId, { status }, { isAdmin = false } = {}) {
   try {
     const existing = await getRequestById(id);
-    const listing = await serviceListingService.getListingById(existing.serviceListing);
-    const isProvider = await serviceListingService.resolveProviderOwnership(listing, userId);
-    if (!isProvider) {
-      throw new ApiError(403, "You are not authorized to update this engagement request's status.");
+    if (!isAdmin) {
+      const listing = await serviceListingService.getListingById(existing.serviceListing);
+      const isProvider = await serviceListingService.resolveProviderOwnership(listing, userId);
+      if (!isProvider) {
+        throw new ApiError(403, "You are not authorized to update this engagement request's status.");
+      }
     }
 
     assertValidEngagementTransition(existing.status, status);
@@ -203,14 +250,16 @@ async function updateStatus(id, userId, { status }) {
   }
 }
 
-// Startup owner/admin-only: cancel their own request, from requested/
-// accepted only.
-async function cancelRequest(id, userId) {
+// Startup owner/admin-only (or platform admin): cancel their own request,
+// from requested/accepted only.
+async function cancelRequest(id, userId, { isAdmin = false } = {}) {
   try {
     const existing = await getRequestById(id);
-    const access = await resolveStartupAccess(existing.startup, userId);
-    if (access.role !== "owner" && access.role !== "admin") {
-      throw new ApiError(403, "You are not authorized to cancel this engagement request.");
+    if (!isAdmin) {
+      const access = await resolveStartupAccess(existing.startup, userId);
+      if (access.role !== "owner" && access.role !== "admin") {
+        throw new ApiError(403, "You are not authorized to cancel this engagement request.");
+      }
     }
 
     assertValidEngagementTransition(existing.status, "cancelled");
@@ -232,6 +281,7 @@ async function cancelRequest(id, userId) {
 
 module.exports = {
   resolveStartupAccess,
+  assertStartupAcceptingEngagement,
   assertValidEngagementTransition,
   resolveRequestRole,
   createRequest,

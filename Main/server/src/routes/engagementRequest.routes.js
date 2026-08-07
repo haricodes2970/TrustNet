@@ -1,6 +1,7 @@
 const express = require("express");
 const engagementRequestController = require("../controllers/engagementRequestController");
 const { authenticate } = require("../middlewares/auth");
+const { authorize } = require("../middlewares/authorize");
 const validate = require("../middlewares/validate");
 const { engagementRequestCreate, statusUpdate } = require("../validators/engagementRequest.validators");
 
@@ -8,6 +9,8 @@ const router = express.Router();
 
 // No public tier at all — every route requires auth.
 router.use(authenticate);
+// No role list - just populates req.user.role for the platform-admin override.
+router.use(authorize());
 
 /**
  * @openapi
