@@ -30,7 +30,51 @@ function applyQueryOptions(query, options = {}) {
   return query;
 }
 
+// Phase 17 (final audit): raw Mongoose errors were reaching API consumers
+// verbatim - a malformed :id produced
+// `Cast to ObjectId failed for value "abc" (type string) at path "_id" for
+// model "Project"`, leaking internal model names and query internals, with
+// an inconsistent status code per module (404/500/403 for the same class of
+// input). Mongoose's own error types are normalized here, at the single
+// choke point almost every service already funnels through, so no
+// per-module changes are needed:
+//   CastError      -> 400 "Invalid ID." (a malformed id is a bad request)
+//   ValidationError -> 400 with the field messages only, not the raw dump
+//   duplicate key   -> 409
+// ApiError instances pass through untouched - services that already chose a
+// deliberate status code keep it. The central errorHandler applies the same
+// normalization for anything that reaches it via next(error) instead.
+function normalizeMongooseError(error) {
+  const ApiError = require("../utils/ApiError");
+
+  if (error instanceof ApiError) {
+    return error;
+  }
+
+  if (error && error.name === "CastError") {
+    return new ApiError(400, error.path === "_id" ? "Invalid ID." : `Invalid value for "${error.path}".`);
+  }
+
+  if (error && error.name === "ValidationError") {
+    const details = Object.values(error.errors || {})
+      .map((e) => e.message)
+      .filter(Boolean);
+    return new ApiError(400, details.length ? details.join(" ") : "Validation failed.");
+  }
+
+  if (error && error.code === 11000) {
+    return new ApiError(409, "That record already exists.");
+  }
+
+  return null;
+}
+
 function handleServiceError(error, fallbackMessage) {
+  const normalized = normalizeMongooseError(error);
+  if (normalized) {
+    return normalized;
+  }
+
   if (error instanceof Error && error.message) {
     return error;
   }
@@ -70,6 +114,7 @@ module.exports = {
   normalizeFilter,
   applyQueryOptions,
   handleServiceError,
+  normalizeMongooseError,
   assertOwner,
   canMutateTask,
 };
