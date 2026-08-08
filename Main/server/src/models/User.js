@@ -147,6 +147,19 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // Phase 16C: unified, derived summary of email-verification + KYC
+    // progress. Never written directly by any user-facing update path -
+    // only by the specific transition points in accountStatus.service.js's
+    // computeAccountStatus() output (registration default, OTP verify,
+    // KYC submit, admin approve/reject/resubmission, and the one-time
+    // backfill script for pre-existing accounts). Independent of
+    // isActive/deletedAt - see accountStatus.service.js for the full
+    // rationale and state mapping.
+    accountStatus: {
+      type: String,
+      enum: ["EMAIL_PENDING", "KYC_PENDING", "UNDER_REVIEW", "APPROVED", "REJECTED", "RESUBMISSION_REQUIRED"],
+      default: "EMAIL_PENDING",
+    },
     verificationStatus: {
       type: String,
       enum: ["not_submitted", "draft", "pending", "approved", "rejected", "resubmission_requested"],
