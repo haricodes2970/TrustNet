@@ -19,7 +19,10 @@ async function getDashboard(email) {
   ] = await Promise.all([
     startupService.listStartups({}, {}),
     communityService.listCommunities({}, {}),
-    collaborationService.listCollaborationRequests({}, {}),
+    // Scoped to the dashboard's own user. Before Phase 17 this passed an
+    // empty filter, so the "collaborations" stat counted every
+    // collaboration request on the platform rather than the viewer's own.
+    collaborationService.listCollaborationRequests(user._id, {}),
     postService.listPostsForUser({}, {}, { limit: 5, sort: "-createdAt" }),
     startupService.listStartups({}, { sort: "-createdAt", limit: 5 }),
     postService.listPostsForUser(
