@@ -80,6 +80,72 @@ Files: `src/routes/auth.routes.js`, `src/config/jwt.js`, `src/config/oauth.js`, 
 - **Admin notification** - a new submission becomes visible to admins immediately through the existing `GET /admin/verifications` pending-queue query (filters `verificationStatus: "pending"`). No separate notification mechanism was added, per instruction.
 - **Rejecting an already-*approved*** account is still permitted (an admin can act on new information after the fact) - only *repeating the exact same decision* is now idempotent. This is a deliberate, narrow scope choice, not a full state-transition matrix; see `BACKLOG.md` for the Phase 16C follow-up.
 
+## Unified accountStatus (Phase 16C)
+
+**Audit first, minimum states, no redesign** - this phase's mandate was to unify the *view* of account state, not to change how `emailVerified`/`verificationStatus`/`isVerified`/`isActive` themselves are read, written, or guarded. Every one of those four fields is unchanged in shape and behavior; `accountStatus` is a fifth, purely *derived* field layered on top.
+
+### The four existing state fields (audited this phase)
+
+| Field | Owns | Consumers |
+|---|---|---|
+| `emailVerified` / `emailVerifiedAt` | "Does this account control the email it registered with" (Phase 16A) | `requireVerifiedEmail` (gates KYC document upload/submit), OTP verify/resend, OAuth signup, `toUserResponse` |
+| `verificationStatus` / `isVerified` / `verificationDocuments` | Government ID/KYC admin-approval workflow (Phase 16B) | `verificationController`, `requireApprovedVerification` (gates `/dashboard` only - **not** login), `adminVerificationService`, `adminDashboardService` counts, `adminUserService` filter, `providerProfileService`'s read-only "verification awareness", search results |
+| `isActive` / `deletedAt` / `suspensionReason` | Account suspension/deletion, independent of verification | `authenticate` (the login/every-request gate - checks **only** this, nothing about verification), `adminUserService` suspend/reactivate/soft-delete, every module that filters "is the other party's account active" (messaging, search, providers, investments, funding) |
+| `accountStatus` (new) | A derived external summary of `emailVerified` + `verificationStatus` combined | Exposed in `toUserResponse`, `GET /verification`; **never independently written** |
+
+Confirmed via direct inspection of `middlewares/auth.js`: **login requires only `isActive !== false` and `!deletedAt`** - not `emailVerified`, not KYC approval. This was already true before this phase (Phase 16A's own documented decision) and is preserved unchanged. `requireApprovedVerification` is applied to exactly one route group (`dashboard.routes.js`), not to login.
+
+### AccountStatus state machine
+
+Six states - the phase's conceptual 7-rung lifecycle (`EMAIL_PENDING -> EMAIL_VERIFIED -> KYC_PENDING -> ...`) is collapsed to six because no existing field combination (and no code path) distinguishes "just verified email" from "verified but hasn't submitted KYC yet" - both are `emailVerified: true, verificationStatus: "draft"`. Per the phase's own "do not invent additional states" instruction, they're merged into one `KYC_PENDING` state.
+
+```
+EMAIL_PENDING --(OTP verify)--> KYC_PENDING --(submit)--> UNDER_REVIEW --(admin approve)--> APPROVED
+                                                              |    \
+                                                    (admin reject)  (admin request-resubmission)
+                                                              |               |
+                                                              v               v
+                                                          REJECTED   RESUBMISSION_REQUIRED
+                                                              |               |
+                                                              +---(re-submit)-+
+                                                                      |
+                                                                      v
+                                                                UNDER_REVIEW
+```
+
+### State transition table
+
+| From | Event | To | Where enforced |
+|---|---|---|---|
+| (new account) | `POST /register`, or OAuth signup with unverified provider email | `EMAIL_PENDING` | schema default; OAuth create call |
+| (new account) | OAuth signup with provider `email_verified: true` | `KYC_PENDING` | OAuth create call |
+| `EMAIL_PENDING` | `POST /verify-email` (correct, unexpired OTP) | `KYC_PENDING` | `auth.routes.js`, same atomic `findOneAndUpdate` Phase 16A already used |
+| `KYC_PENDING` | `POST /verification/submit` (all 4 docs uploaded) | `UNDER_REVIEW` | `verificationController.submitVerification` |
+| `UNDER_REVIEW` | admin `POST .../approve` | `APPROVED` | `adminVerificationService.approveVerification`, same status-guarded `findOneAndUpdate` Phase 16B already used |
+| `UNDER_REVIEW` | admin `POST .../reject` | `REJECTED` | `adminVerificationService.rejectVerification` |
+| `UNDER_REVIEW` | admin `POST .../request-resubmission` | `RESUBMISSION_REQUIRED` | `adminVerificationService.requestResubmission` |
+| `REJECTED` / `RESUBMISSION_REQUIRED` | re-upload + `POST /verification/submit` | `UNDER_REVIEW` | same `submitVerification` path - re-submission is not a separate code path |
+
+**No new transition-guard code was needed.** `accountStatus` has no direct write path of its own - it is only ever set as a side effect of `emailVerified` or `verificationStatus` changing, and both of those already carry their own guards (Phase 16A's atomic single-use OTP consumption; Phase 16B's `assertPendingOrIdempotent`, which is *why* an admin can only decide on a genuinely-`pending` submission and can't skip straight from `RESUBMISSION_REQUIRED`/`REJECTED` to a new decision without a fresh submission in between). Every existing guard is inherited for free, including "rejecting an already-*approved* account is refused" (`assertPendingOrIdempotent` throws 409 unless the current state is `pending`).
+
+`isActive`/`deletedAt` are **not** part of this state machine and never appear in `computeAccountStatus`. An account can be `accountStatus: "APPROVED"` and still fully blocked by `isActive: false` - suspension and verification progress are orthogonal by design (see `src/services/accountStatus.service.js`'s header comment for the full rationale).
+
+### Login policy (preserved, not changed)
+
+Login (`POST /login`, `authenticate` middleware, every authenticated route) is gated **only** on `isActive !== false` and `!deletedAt`. It is **not** gated on `emailVerified` or on `accountStatus`/`verificationStatus`. This was true before this phase and remains true - the phase brief explicitly allows preserving existing behavior here ("if the existing system intentionally allows login before KYC approval, preserve that"). `accountStatus` is exposed in `/me`, `/login`, `/register`, `/verify-email`, and `GET /verification` responses purely for the client to render the right UI state (verify-email banner, KYC prompt, "under review" notice, etc.) - it has no server-side access-control effect beyond what `emailVerified`/`verificationStatus`/`isActive` already independently enforce.
+
+### Mass-assignment closure
+
+Neither of the two "update my own profile" endpoints (`PUT /profile` -> `profileController.updateProfile`, `PUT /settings/profile` -> `settingsController.updateProfile` -> `settingsService.updateProfile`) can set `accountStatus` - both use an explicit field whitelist (`mapProfileInput`) that `accountStatus` is deliberately never added to. Regression-tested (`test/integration/accountStatus.test.js`).
+
+### Migration
+
+Adding a schema field with a `default` does **not** retroactively populate pre-existing MongoDB documents - only new documents get it at creation time. `scripts/backfillAccountStatus.js` derives and persists `accountStatus` for every existing user from their *current* `emailVerified`/`verificationStatus` values via the same `computeAccountStatus()` every live transition path uses. Idempotent and non-destructive: re-running only rewrites users whose derived value actually changed, and touches no other field.
+
+```bash
+node scripts/backfillAccountStatus.js
+```
+
 ## Notes
 
 - Handlers currently live inline in `auth.routes.js` rather than a dedicated `authController.js` — extraction is a Phase 3 roadmap item ([ROADMAP.md](../../ROADMAP.md)).
