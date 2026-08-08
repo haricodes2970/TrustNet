@@ -17,11 +17,18 @@ An independently-developed TrustNet backend (`trustnet 2.zip`, "Developer 1") wa
 
 ## Security & stability (Phase 1)
 
-- [ ] Confirm/fix JWT refresh verification secret bug in `src/middlewares/auth.js` (see [SECURITY.md](SECURITY.md))
+- [x] ~~Confirm/fix JWT refresh verification secret bug in `src/middlewares/auth.js`~~ — fixed (`fix(auth): remove broken refresh-cookie fallback in authenticate/me`): `authenticate`/`GET /me` fell back to reading the refresh cookie but verified it with the access-token secret, which always failed (fail-closed, not exploitable, but dead code). Removed; `/me` now reuses `authenticate` directly. Regression-tested (`authAuthorization.test.js`: "GET /me rejects a refresh cookie presented with no Bearer header").
 - [x] ~~Rate limiting on `/auth/*` routes~~ — done via the Developer 1 backend merge: `signupLimiter`/`loginLimiter`/`forgotPasswordLimiter`/`resendVerificationLimiter` on the specific routes, plus a global `defaultLimiter` (100/15min) on all of `/api/v1`. See "Backend merge" section below.
 - [ ] Lock CORS to explicit origin allowlist (currently `CLIENT_URL` or `*`)
 - [ ] Enforce password policy on register/reset/change-password
 - [ ] Confirm `.env` gitignored + `.env.example` committed
+
+## Authentication Completion — Phase 16A: Email OTP + Email Verification (done)
+
+- [x] **Email OTP + Email Verification implemented.** `POST /register` now issues and emails a 6-digit, sha256-hashed, 10-minute-expiring OTP for a new `emailVerified: false` account; `POST /verify-email` (replaces the old `GET` no-op stub) and `POST /resend-verification` (replaces the old no-op stub) are fully implemented, atomic, enumeration-safe, and brute-force-protected (5-attempt per-account lockout + a new 20/15min `emailVerifyLimiter`). See `docs/modules/auth.md` for full behavior.
+- [ ] **Login is not gated on `emailVerified`.** Deliberately out of scope for Phase 16A ("do not introduce unrelated authentication changes," "existing login behavior remains correct"). `emailVerified`/`emailVerifiedAt` are exposed via `/register`, `/verify-email`, and `/me` so a client can show a "please verify" banner, but the server does not currently block an unverified account from logging in, refreshing, or using any endpoint. **Phase 16C decision needed:** should login (or specific endpoints) require `emailVerified: true`? If so, where in the login flow (before/after password check, to avoid a timing/enumeration signal) and how does it interact with 2FA?
+- [ ] **Government ID/KYC verification and the admin approval workflow already exist** (`verificationController.js`, `adminVerificationService.js`, `src/middlewares/verification.js`, built in the Admin Dashboard phase) - they were *not* missing, contrary to how they were described going into this phase. What's still genuinely open: `User` currently tracks account state via **three independent signals** - `emailVerified` (new, Phase 16A), `verificationStatus`/`isVerified` (KYC, pre-existing), and `isActive`/`deletedAt` (suspension/deletion, pre-existing) - with no single `accountStatus` field unifying them and no defined relationship between them (e.g., must an account be `emailVerified` before it can submit KYC documents? Today, nothing stops an unverified-email account from doing so). **This is the concrete design question for Phase 16C**, not building KYC from scratch.
+- [ ] `profileController.js`/`settingsController.js` still resolve the acting user via `userService.getUserByEmail(req.user.email)` per request - same pattern fixed in five other call sites across four phases now; still out of scope (not part of the email-verification flow this phase touched).
 
 ## RBAC / admin (Phase 2)
 
