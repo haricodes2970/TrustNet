@@ -46,9 +46,40 @@ An independently-developed TrustNet backend (`trustnet 2.zip`, "Developer 1") wa
 - [ ] **`profileController.js`/`settingsController.js`'s duplicated `mapProfileInput` whitelist** (two near-identical, independently-maintained copies - one in each file, with slightly different field lists) was reviewed as part of this phase's mass-assignment audit and confirmed safe (neither includes `accountStatus`), but the duplication itself predates this phase and consolidating it is out of scope (touches the Profile/Settings modules, not Auth). Worth a small dedicated cleanup pass.
 - [ ] **OAuth (Google/LinkedIn) signup's `accountStatus` derivation is not covered by an HTTP-level integration test** - consistent with `authAuthorization.test.js`'s existing "OAuth requires a live provider, out of scope" boundary. It reuses the same `computeAccountStatus()` exercised directly and via every other transition path; a provider-mocked test would need OAuth's HTTP flow mocked, which no existing test in this codebase does yet.
 
+## Phase 17 — Final Backend Production Audit (done)
+
+Fixed this phase:
+
+- [x] **BLOCKER: `/api/v1/collaborations` was mounted with no authentication at all.** Unauthenticated, any caller could list every collaboration request on the platform including private message bodies, read/update/delete any request by id, and create one with a forged `sender` (impersonation + notification spam to the victim's recipient). The list endpoint also took an arbitrary caller-supplied Mongo filter with no limit clamp. Fixed to the convention every other module already follows; 12 regression tests in `test/integration/collaborationAuthorization.test.js`.
+- [x] **HIGH: raw Mongoose errors were relayed to API consumers verbatim** across 12 modules - a malformed `:id` returned `Cast to ObjectId failed for value "abc" ... for model "Project"`, leaking internal model names, with an inconsistent status per module (404/500/403 for the same input class). Normalized centrally in `serviceUtils.handleServiceError` + `errorHandler`. 5xx no longer relays the underlying message outside development.
+- [x] **HIGH: every list endpoint was unbounded.** `applyQueryOptions` applied no limit when the caller passed none, and honoured `?limit=1000000` verbatim, across ~23 services. Now defaults to 100 and caps at 200.
+- [x] **MEDIUM: the dashboard's "collaborations" stat counted every request on the platform**, not the viewer's own (empty-filter call). Scoped to the user.
+- [x] **MEDIUM: dead `userController.js`** was wired to no route but exposed `createUser`/`updateUser` passing `req.body` straight into the User model with no auth and no whitelist (`role`/`accountStatus`/`isVerified` all settable) - a privilege-escalation shape one route registration from being live. Deleted. The two `/api/v1/users` stubs that answered `200 {success:true}` for unimplemented endpoints now return 501.
+- [x] **MEDIUM: `Main/server/.env.example` did not exist** despite `.gitignore` whitelisting it, so a tester had no reference for the ten variables `env.js` hard-requires (the server exits non-zero on the first missing one). Added and verified to satisfy the startup validator. README's inline env block was also missing three required variables.
+- [x] **Stale docs corrected:** README and ARCHITECTURE claimed there is no automated test suite (there are 849 tests); ARCHITECTURE's file counts were roughly half the actual.
+
+Verified sound, no change needed (regression cover added where it was missing):
+
+- [x] Financial integrity under real concurrency - 8 simultaneous confirms of one contribution apply the amount exactly once to both the round and the startup total; concurrent confirms of different contributions produce no lost update; confirm-after-reject is refused. The atomic `$inc` + status-matched `findOneAndUpdate` guards were already correct.
+- [x] Social counter integrity under concurrency - concurrent like/unlike/comment from one and many users.
+- [x] No credential or secret field (password hash, reset token, 2FA secret, OTP hash) appears in any authenticated, public, or admin read path.
+- [x] Public search correctly excludes suspended and soft-deleted users, private/suspended startups, hidden posts and communities, and inactive providers' listings; limits are clamped and regex input escaped.
+- [x] Rate limiting covers login, 2FA verify, OTP verify/resend, password reset, password change, refresh, signup, search, and AI, plus a global default limiter.
+- [x] Government ID/KYC documents remain reachable only via short-lived signed URLs (Phase 16B), unchanged.
+
+Remaining technical debt (not blockers):
+
+- [ ] **No CI pipeline.** The suite is real and green but nothing runs it automatically on push.
+- [ ] **No public user-profile-by-id endpoint.** `GET /api/v1/users/:id` is a documented 501; `/profile` (self), `/search?type=users` (public lookup), and `/admin/users/:id` (admin) cover current needs. The frontend already works around its absence.
+- [ ] **Pagination response shape is still inconsistent across modules** (some return a bare array, some an envelope). The new default/max limit applies uniformly, but the response contract does not. Worth one normalizing pass before the API is considered stable.
+- [ ] **`profileController.js`/`settingsController.js` duplicate `mapProfileInput`** (carried over from Phase 16C) and both still resolve the acting user by email per request rather than by `req.user.id` - the pattern fixed in five other call sites. Safe today; a small dedicated cleanup.
+- [ ] **`src/config/jwt.js` has hardcoded fallback secrets.** Unreachable in a correctly-booted app (`env.js` hard-exits on missing JWT secrets and is always loaded transitively), so not exploitable, but the fallbacks should be removed so the failure mode stays "refuse to start" rather than "start insecurely" if the load order ever changes.
+- [ ] **Oversized-file uploads in the Documents module** likely still return a raw 500 rather than 400 (carried over from Phase 16B - same `MulterError` root cause fixed in `verification.routes.js`).
+- [ ] **OAuth signup paths have no HTTP-level test coverage** (carried over) - they need a mocked provider flow, which no test in this repo does yet.
+
 ## RBAC / admin (Phase 2)
 
-- [ ] First-admin bootstrap mechanism (how does the very first admin get created?)
+- [ ] First-admin bootstrap mechanism (how does the very first admin get created?) — `scripts/seed-admin.js` covers this operationally; the open question is whether a non-script path should exist.
 
 ## Code quality (Phase 3)
 
