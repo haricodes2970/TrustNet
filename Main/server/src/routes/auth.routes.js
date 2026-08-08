@@ -529,11 +529,17 @@ router.post('/logout', async (req, res) => {
 });
 
 async function deleteVerificationAssets(documents = []) {
+  // Verification documents are uploaded with type:"authenticated" (Phase
+  // 16B - see verificationDocument.service.js) - Cloudinary's destroy API
+  // is keyed by public_id + resource_type + type together, so a destroy
+  // call that omits `type` looks for the (different) default "upload"-type
+  // asset and silently fails to find/delete the real one, leaking the file
+  // in Cloudinary after the account is gone.
   for (const document of documents) {
     if (!document.publicId) continue;
     await Promise.all([
-      cloudinary.uploader.destroy(document.publicId, { resource_type: 'image', invalidate: true }),
-      cloudinary.uploader.destroy(document.publicId, { resource_type: 'raw', invalidate: true }),
+      cloudinary.uploader.destroy(document.publicId, { resource_type: 'image', type: 'authenticated', invalidate: true }),
+      cloudinary.uploader.destroy(document.publicId, { resource_type: 'raw', type: 'authenticated', invalidate: true }),
     ]);
   }
 }

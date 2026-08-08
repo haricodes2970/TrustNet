@@ -178,6 +178,18 @@ const userSchema = new mongoose.Schema(
           type: String,
           required: true,
         },
+        // resourceType/format let a signed, short-lived access URL be
+        // regenerated on demand (Phase 16B) - documents are uploaded to
+        // Cloudinary with type:"authenticated" (see verificationController.
+        // uploadDocument), so the raw `url` captured at upload time is not
+        // independently fetchable and is kept for reference only. See
+        // verificationDocument.service.js.
+        resourceType: {
+          type: String,
+        },
+        format: {
+          type: String,
+        },
         status: {
           type: String,
           enum: ["draft", "pending", "approved", "rejected"],
