@@ -16,6 +16,7 @@ const auditLogService = require('../services/auditLogService');
 const { authenticate } = require('../middlewares/auth');
 const cloudinary = require('../services/cloudinary.service');
 const { encryptTwoFactorSecret, decryptTwoFactorSecret } = require('../services/twoFactor.service');
+const { computeAccountStatus } = require('../services/accountStatus.service');
 const {
   signupLimiter,
   loginLimiter,
@@ -91,6 +92,7 @@ function toUserResponse(user) {
     emailVerifiedAt: obj.emailVerifiedAt || null,
     isVerified: obj.isVerified || false,
     verificationStatus: obj.verificationStatus || 'draft',
+    accountStatus: obj.accountStatus || 'EMAIL_PENDING',
     onboardingCompleted: obj.onboardingCompleted || false,
     interests: obj.interests || [],
     skills: obj.skills || [],
@@ -386,6 +388,7 @@ router.get('/google/callback', async (req, res) => {
         isVerified: !!profile.email_verified,
         emailVerified,
         emailVerifiedAt: emailVerified ? new Date() : undefined,
+        accountStatus: computeAccountStatus({ emailVerified, verificationStatus: 'draft' }),
       });
     } else if (!user.googleId) {
       user.googleId = profile.sub;
@@ -471,6 +474,7 @@ router.get('/linkedin/callback', async (req, res) => {
         isVerified: !!profile.email_verified,
         emailVerified,
         emailVerifiedAt: emailVerified ? new Date() : undefined,
+        accountStatus: computeAccountStatus({ emailVerified, verificationStatus: 'draft' }),
       });
     } else if (!user.linkedinId) {
       user.linkedinId = profile.sub;
@@ -719,6 +723,12 @@ router.post('/verify-email', emailVerifyLimiter, async (req, res, next) => {
       {
         emailVerified: true,
         emailVerifiedAt: new Date(),
+        // Always KYC_PENDING, never straight to APPROVED - verificationStatus
+        // is still whatever it already was (draft for a brand-new account,
+        // since this branch is only reached once, pre-KYC), and
+        // computeAccountStatus deterministically resolves that to
+        // KYC_PENDING once emailVerified flips true.
+        accountStatus: computeAccountStatus({ emailVerified: true, verificationStatus: user.verificationStatus }),
         $unset: { emailVerificationCodeHash: '', emailVerificationExpires: '', emailVerificationAttempts: '' },
       },
       { new: true }
