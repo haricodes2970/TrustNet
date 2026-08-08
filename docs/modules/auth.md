@@ -1,6 +1,6 @@
 # Module: Auth
 
-Files: `src/routes/auth.routes.js`, `src/config/jwt.js`, `src/config/oauth.js`, `src/services/twoFactor.service.js`, `src/services/email.service.js`, `src/models/User.js`. See [SECURITY.md](../../SECURITY.md), [docs/AUTH_FLOW.md](../AUTH_FLOW.md), [ARCHITECTURE.md](../../ARCHITECTURE.md).
+Files: `src/routes/auth.routes.js`, `src/config/jwt.js`, `src/config/oauth.js`, `src/services/twoFactor.service.js`, `src/services/email.service.js`, `src/models/User.js`. Government ID/KYC verification (Phase 16B): `src/routes/verification.routes.js`, `src/controllers/verificationController.js`, `src/middlewares/verification.js`, `src/services/verificationDocument.service.js`; admin side: `src/routes/admin.routes.js` (verification section), `src/controllers/adminVerificationController.js`, `src/services/adminVerificationService.js`. See [SECURITY.md](../../SECURITY.md), [docs/AUTH_FLOW.md](../AUTH_FLOW.md), [ARCHITECTURE.md](../../ARCHITECTURE.md).
 
 ## Routes (`/api/v1/auth`)
 
@@ -46,6 +46,39 @@ Files: `src/routes/auth.routes.js`, `src/config/jwt.js`, `src/config/oauth.js`, 
 **OAuth interaction:** Google/LinkedIn signups set `emailVerified`/`emailVerifiedAt` from the provider's own `email_verified` signal at creation time - no OTP is ever issued for an OAuth account, so without this an OAuth user would be permanently stuck unverified. The pre-existing `isVerified: !!profile.email_verified` line (writing to the unrelated KYC field) is untouched.
 
 **Login/refresh/logout/password-reset/change-password are unaffected on purpose.** This phase does not gate login on `emailVerified` - whether/how to do that is an `accountStatus`-state-machine decision explicitly deferred to Phase 16C (see `BACKLOG.md`). `emailVerified`/`emailVerifiedAt` are exposed via the `/register`, `/verify-email`, and `/me` response shapes so a client can show a "please verify your email" banner without any server-side access restriction today.
+
+## Government ID / KYC Verification (Phase 16B)
+
+**This functionality already existed** (built in the Admin Dashboard phase) - Phase 16B was an audit-and-fix pass against it, not a rebuild. `verificationStatus`/`isVerified`/`verificationDocuments` on `User` remain the KYC fields, unchanged in shape; nothing here touches `emailVerified` (Phase 16A) or introduces a unified `accountStatus`.
+
+**Routes (`/api/v1/verification`, auth required):**
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/` | current user's own verification status + documents (signed URLs) |
+| POST | `/documents/:type` | upload/replace one document (`government_id`\|`company_registration`\|`business_website`\|`linkedin`\|`startup_registration`); requires `emailVerified: true` |
+| POST | `/submit` | submit for review once all four required document types are uploaded; requires `emailVerified: true` |
+
+**Admin routes (`/api/v1/admin/verifications`, admin-only):** `GET /` (pending queue, metadata-only), `GET /:userId` (single user, signed document URLs), `POST /:userId/approve`, `POST /:userId/reject` (`{reason}`), `POST /:userId/request-resubmission` (`{reason}`).
+
+**Lifecycle:** `draft` (or `not_submitted`) → upload documents → `POST /submit` sets every document to `pending` and `verificationStatus: "pending"` → admin `approve` (→ `approved`, `isVerified: true`) **or** `reject` (→ `rejected`, `isVerified: false`, documents marked `rejected` with an optional `rejectionReason`) **or** `request-resubmission` (→ `resubmission_requested`, same document-marking as reject, but a distinct status signaling "not final, please re-upload"). From `rejected`/`resubmission_requested`, the user can re-upload and re-submit, returning to `pending`. No additional states were introduced this phase, per instruction.
+
+### What was audited and fixed
+
+- **Critical: verification documents (government IDs) were publicly exposed.** Uploaded via Cloudinary's default public delivery type; the stored URL required no authentication to view and was returned as-is in every API response. Fixed by uploading with `type: "authenticated"` and generating a fresh, signed, 15-minute-expiring URL on every read (`verificationDocument.service.js`, reuses the existing Cloudinary provider - no new storage system). See that file's own header comment for the full explanation. Account-deletion cleanup (`deleteVerificationAssets` in `auth.routes.js`) updated to match, or it would have silently stopped finding/deleting the (now differently-typed) assets.
+- **KYC submission had no prerequisite check on email verification**, despite the specified workflow starting with "Email Verified → User uploads Government ID." New `requireVerifiedEmail` middleware gates the two mutating verification routes (not `GET`, not login - Phase 16A's decision to leave login ungated is unchanged).
+- **No audit logging on the user-facing side** (document upload/replacement, submission) despite admin approve/reject/resubmission already logging. Added `verification.document_upload` (`{documentType}` only, never the file) and `verification.submit`.
+- **No "under review" confirmation email**, despite being an explicit step in the specified workflow. Added `sendVerificationSubmittedEmail`.
+- **Oversized uploads returned a raw 500** (multer's `MulterError` has no `.statusCode`, and the centralized error handler only reads that field) instead of a clean 400. Normalized in `verification.routes.js`; the same gap likely exists in the Documents module's own multer usage, not fixed here (out of scope) - see `BACKLOG.md`.
+- **No state guards on admin decisions.** An admin could "approve" an account that never submitted anything (`verificationStatus` still `draft`), or reject an already-rejected account (sending a duplicate email every time), and two concurrent decisions on the same account could race via an unconditional update. Fixed: a decision requires `verificationStatus === "pending"` (409 otherwise - "missing documents cannot be approved"); reaching the *same* status again is now an idempotent no-op (no duplicate email); mutations use a conditional `findOneAndUpdate({_id, verificationStatus:"pending"}, ...)` instead of an unconditional update, closing the race.
+- **`adminVerificationController` hardcoded every error to 404** regardless of cause. Fixed to the standard `error instanceof ApiError ? error.statusCode : 500` convention used everywhere else in this codebase.
+- **Malformed `userId` on any admin verification endpoint** now returns a clean `400` instead of a raw Mongoose `CastError`-derived failure.
+
+### Reviewed, not changed
+
+- **Cross-user document access was never actually possible** - every user-facing route operates on `req.user.id` only; there is no endpoint that accepts a target user id from a non-admin caller. Confirmed via test, not a gap.
+- **Admin notification** - a new submission becomes visible to admins immediately through the existing `GET /admin/verifications` pending-queue query (filters `verificationStatus: "pending"`). No separate notification mechanism was added, per instruction.
+- **Rejecting an already-*approved*** account is still permitted (an admin can act on new information after the fact) - only *repeating the exact same decision* is now idempotent. This is a deliberate, narrow scope choice, not a full state-transition matrix; see `BACKLOG.md` for the Phase 16C follow-up.
 
 ## Notes
 
