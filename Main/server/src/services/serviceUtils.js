@@ -14,17 +14,41 @@
   return filter;
 }
 
+// Phase 17 (final audit): this helper previously applied NO limit at all
+// when the caller didn't pass one, and no upper bound when they did - so
+// every list endpoint across the ~23 services that use it would return an
+// entire collection by default, and `?limit=1000000` was honoured
+// verbatim. That is an unbounded query and an unbounded response payload
+// on user-controlled input.
+//
+// A default page size is now always applied, and an explicit limit is
+// clamped to MAX_LIMIT. Safe to apply centrally: no caller sums or
+// aggregates over the returned array (analytics uses real aggregate()
+// pipelines, and funding totals use an atomic $inc), so a page cap cannot
+// silently corrupt a computed total.
+const DEFAULT_QUERY_LIMIT = 100;
+const MAX_QUERY_LIMIT = 200;
+
+function clampQueryLimit(limit) {
+  const parsed = Number(limit);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DEFAULT_QUERY_LIMIT;
+  }
+  return Math.min(Math.floor(parsed), MAX_QUERY_LIMIT);
+}
+
 function applyQueryOptions(query, options = {}) {
   if (options.sort) {
     query.sort(options.sort);
   }
 
-  if (options.limit) {
-    query.limit(Number(options.limit));
-  }
+  query.limit(clampQueryLimit(options.limit));
 
   if (options.skip) {
-    query.skip(Number(options.skip));
+    const skip = Number(options.skip);
+    if (Number.isFinite(skip) && skip > 0) {
+      query.skip(Math.floor(skip));
+    }
   }
 
   return query;
@@ -113,6 +137,9 @@ function canMutateTask(task, userId, workspaceRole) {
 module.exports = {
   normalizeFilter,
   applyQueryOptions,
+  clampQueryLimit,
+  DEFAULT_QUERY_LIMIT,
+  MAX_QUERY_LIMIT,
   handleServiceError,
   normalizeMongooseError,
   assertOwner,
