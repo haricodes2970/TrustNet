@@ -48,6 +48,15 @@ async function sendOtpVerificationEmail({ to, otp, expiresInMinutes }) {
   });
 }
 
+async function sendVerificationSubmittedEmail({ to }) {
+  await sendEmail({
+    to,
+    subject: "Your TrustNet verification is under review",
+    text: "We've received your verification documents. Our team will review them and notify you of the outcome by email.",
+    html: "<p>We've received your verification documents. Our team will review them and notify you of the outcome by email.</p>",
+  });
+}
+
 async function sendVerificationApprovedEmail({ to }) {
   await sendEmail({
     to,
@@ -81,6 +90,7 @@ module.exports = {
   sendPasswordResetEmail,
   sendEmail,
   sendOtpVerificationEmail,
+  sendVerificationSubmittedEmail,
   sendVerificationApprovedEmail,
   sendVerificationRejectedEmail,
   sendVerificationResubmissionEmail,

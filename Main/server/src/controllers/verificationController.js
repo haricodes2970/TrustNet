@@ -1,5 +1,8 @@
 const User = require("../models/User");
 const cloudinary = require("../services/cloudinary.service");
+const emailService = require("../services/email.service");
+const auditLogService = require("../services/auditLogService");
+const { mapVerificationDocuments } = require("../services/verificationDocument.service");
 const ApiError = require("../utils/ApiError");
 
 const REQUIRED_DOCUMENT_TYPES = ["government_id", "company_registration", "business_website", "linkedin"];
@@ -9,15 +12,16 @@ function serializeVerification(user) {
     status: user.verificationStatus || "draft",
     submittedAt: user.verificationSubmittedAt || null,
     reviewedAt: user.verificationReviewedAt || null,
-    documents: (user.verificationDocuments || []).map((document) => ({
-      type: document.type,
-      name: document.name,
-      url: document.url,
-      status: document.status,
-      rejectionReason: document.rejectionReason || "",
-      uploadedAt: document.uploadedAt,
-    })),
+    documents: mapVerificationDocuments(user.verificationDocuments || []),
   };
+}
+
+function logAction(req, action, details) {
+  auditLogService
+    .createLog({ actor: req.user.id, action, targetType: "User", targetId: req.user.id, details, ip: req.ip })
+    .catch((error) => {
+      console.error(`[audit] Failed to log "${action}" by ${req.user.id}: ${error.message}`);
+    });
 }
 
 async function getVerification(req, res, next) {
@@ -44,10 +48,16 @@ async function uploadDocument(req, res, next) {
     const type = req.params.type;
     const publicId = `verification_${user._id}_${type}`;
     const dataUri = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
+    // type: "authenticated" - Cloudinary refuses to serve this resource to
+    // an unsigned request, closing the public-document-exposure gap (see
+    // verificationDocument.service.js). resource_type/format from the
+    // upload result are persisted so a signed access URL can be
+    // regenerated later without needing to re-derive them.
     const result = await cloudinary.uploader.upload(dataUri, {
       folder: "trustnet/verification",
       public_id: publicId,
       resource_type: "auto",
+      type: "authenticated",
       overwrite: true,
       invalidate: true,
     });
@@ -57,6 +67,8 @@ async function uploadDocument(req, res, next) {
       name: req.file.originalname,
       url: result.secure_url,
       publicId: result.public_id,
+      resourceType: result.resource_type,
+      format: result.format,
       status: "draft",
       rejectionReason: "",
       uploadedAt: new Date(),
@@ -66,6 +78,10 @@ async function uploadDocument(req, res, next) {
     else user.verificationDocuments.push(document);
 
     await user.save();
+
+    // Never logs the file itself - only the document type, matching "do
+    // not log government ID images/raw document contents."
+    logAction(req, "verification.document_upload", { documentType: type });
 
     return res.status(200).json({ success: true, data: serializeVerification(user) });
   } catch (error) {
@@ -95,6 +111,17 @@ async function submitVerification(req, res, next) {
     user.verificationSubmittedAt = new Date();
     user.verificationReviewedAt = undefined;
     await user.save();
+
+    logAction(req, "verification.submit", {});
+
+    // "User receives confirmation that verification is under review" -
+    // never blocks the submission itself on delivery failure, same
+    // "notifications must never block the primary action" convention used
+    // throughout this codebase.
+    emailService.sendVerificationSubmittedEmail({ to: user.email }).catch((error) => {
+      console.error(`[email] Failed to send verification-submitted email to ${user.email}: ${error.message}`);
+    });
+
     return res.status(200).json({ success: true, data: serializeVerification(user) });
   } catch (error) {
     return next(error);

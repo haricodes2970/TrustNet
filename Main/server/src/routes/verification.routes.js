@@ -1,6 +1,7 @@
 const express = require("express");
 const multer = require("multer");
 const { authenticate } = require("../middlewares/auth");
+const { requireVerifiedEmail } = require("../middlewares/verification");
 const verificationController = require("../controllers/verificationController");
 const ApiError = require("../utils/ApiError");
 
@@ -17,14 +18,37 @@ const upload = multer({
   },
 });
 
+// Normalizes multer's own error types (MulterError - e.g. an oversized
+// file - and the ApiError thrown by fileFilter above) into a clean 400
+// through the centralized error handler. Previously, an oversized file's
+// MulterError had no `.statusCode`, so errorHandler.js's `err.statusCode
+// || 500` fallback turned it into a raw 500 instead of a 400.
+function handleUpload(req, res, next) {
+  upload.single("document")(req, res, (err) => {
+    if (!err) return next();
+    if (err instanceof multer.MulterError) {
+      if (err.code === "LIMIT_FILE_SIZE") {
+        return next(new ApiError(400, "Document file is too large (maximum 10MB)."));
+      }
+      return next(new ApiError(400, err.message));
+    }
+    return next(err);
+  });
+}
+
 router.use(authenticate);
 router.get("/", verificationController.getVerification);
-router.post("/documents/:type", (req, res, next) => {
-  if (!documentTypes.includes(req.params.type)) {
-    return next(new ApiError(400, "Unsupported verification document type."));
-  }
-  return upload.single("document")(req, res, next);
-}, verificationController.uploadDocument);
-router.post("/submit", verificationController.submitVerification);
+router.post(
+  "/documents/:type",
+  requireVerifiedEmail,
+  (req, res, next) => {
+    if (!documentTypes.includes(req.params.type)) {
+      return next(new ApiError(400, "Unsupported verification document type."));
+    }
+    return handleUpload(req, res, next);
+  },
+  verificationController.uploadDocument
+);
+router.post("/submit", requireVerifiedEmail, verificationController.submitVerification);
 
 module.exports = router;
