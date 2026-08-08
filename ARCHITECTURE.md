@@ -48,12 +48,12 @@ Main/server/
     controllers/      16 controllers
     docs/            swagger.js
     middlewares/      auth, authorize, cors, compression, helmet, logger, errorHandler, notFound, validate, verification
-    models/           11 Mongoose models
-    routes/           17 route files, aggregated in index.js
-    services/         19 service files
+    models/           26 Mongoose models
+    routes/           35 route files, aggregated in index.js
+    services/         45 service files
     utils/            ApiError, asyncHandler
-    validators/       7 Joi validator files
-  test/               placeholder only, no test suite
+    validators/       26 Joi validator files
+  test/               node --test suite: unit tests + test/integration/ HTTP tests
   scripts/
 ```
 
@@ -121,9 +121,9 @@ Each backend module below has its own doc in [docs/modules/](docs/modules/):
 Tracked in [ROADMAP.md](ROADMAP.md) / [BACKLOG.md](BACKLOG.md):
 
 - No repository layer (services hit Mongoose models directly) despite README claim.
-- No automated test suite (`test/` is a placeholder, `npm test` echoes a message).
+- ~~No automated test suite.~~ Resolved: `test/` holds a real `node --test` suite (~844 tests). `npm test` runs the unit tests, `npm run test:integration` the HTTP-level ones, `npm run test:all` both.
 - No CI/CD configuration found in repo.
 - ~~No rate limiting middleware yet.~~ Resolved via the Developer 1 merge — see Request lifecycle above.
-- Auth middleware bug: refresh-token verification path reportedly uses the access secret instead of refresh secret (see [SECURITY.md](SECURITY.md)).
+- ~~Auth middleware bug: refresh-token verification path uses the access secret instead of the refresh secret.~~ Resolved — the broken refresh-cookie fallback was removed from `authenticate`/`/me` and is regression-tested.
 
 TODO: add sequence diagrams for auth flow once flow is stabilized (see [docs/AUTH_FLOW.md](docs/AUTH_FLOW.md)).
