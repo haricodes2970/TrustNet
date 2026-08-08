@@ -1,5 +1,6 @@
 const adminVerificationService = require("../services/adminVerificationService");
 const auditLogService = require("../services/auditLogService");
+const ApiError = require("../utils/ApiError");
 
 function logAdminAction(req, action, targetId, details) {
   auditLogService
@@ -29,7 +30,8 @@ async function listVerifications(req, res) {
     const users = await adminVerificationService.listPendingVerifications(options);
     return res.status(200).json({ success: true, data: users });
   } catch (error) {
-    return res.status(400).json({ success: false, message: error.message });
+    const status = error instanceof ApiError ? error.statusCode : 500;
+    return res.status(status).json({ success: false, message: error.message });
   }
 }
 
@@ -38,7 +40,8 @@ async function getVerification(req, res) {
     const user = await adminVerificationService.getVerification(req.params.userId);
     return res.status(200).json({ success: true, data: user });
   } catch (error) {
-    return res.status(404).json({ success: false, message: error.message });
+    const status = error instanceof ApiError ? error.statusCode : 500;
+    return res.status(status).json({ success: false, message: error.message });
   }
 }
 
@@ -48,7 +51,8 @@ async function approveVerification(req, res) {
     logAdminAction(req, "verification.approve", req.params.userId, {});
     return res.status(200).json({ success: true, data: user });
   } catch (error) {
-    return res.status(404).json({ success: false, message: error.message });
+    const status = error instanceof ApiError ? error.statusCode : 500;
+    return res.status(status).json({ success: false, message: error.message });
   }
 }
 
@@ -59,7 +63,8 @@ async function rejectVerification(req, res) {
     logAdminAction(req, "verification.reject", req.params.userId, { reason: reason || null });
     return res.status(200).json({ success: true, data: user });
   } catch (error) {
-    return res.status(404).json({ success: false, message: error.message });
+    const status = error instanceof ApiError ? error.statusCode : 500;
+    return res.status(status).json({ success: false, message: error.message });
   }
 }
 
@@ -70,7 +75,8 @@ async function requestResubmission(req, res) {
     logAdminAction(req, "verification.request_resubmission", req.params.userId, { reason: reason || null });
     return res.status(200).json({ success: true, data: user });
   } catch (error) {
-    return res.status(404).json({ success: false, message: error.message });
+    const status = error instanceof ApiError ? error.statusCode : 500;
+    return res.status(status).json({ success: false, message: error.message });
   }
 }
 
