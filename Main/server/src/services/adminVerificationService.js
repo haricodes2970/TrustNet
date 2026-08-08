@@ -4,6 +4,7 @@ const userService = require("./userService");
 const emailService = require("../services/email.service");
 const ApiError = require("../utils/ApiError");
 const { mapVerificationDocuments, mapVerificationDocumentSummaries } = require("./verificationDocument.service");
+const { computeAccountStatus } = require("./accountStatus.service");
 
 // All reads go through the existing userService so business logic stays in
 // one place; mutations go straight to the User model with a conditional
@@ -84,7 +85,12 @@ async function approveVerification(userId) {
   // account concurrently can't both "win").
   const user = await User.findOneAndUpdate(
     { _id: userId, verificationStatus: "pending" },
-    { verificationStatus: "approved", verificationReviewedAt: new Date(), isVerified: true },
+    {
+      verificationStatus: "approved",
+      verificationReviewedAt: new Date(),
+      isVerified: true,
+      accountStatus: computeAccountStatus({ emailVerified: true, verificationStatus: "approved" }),
+    },
     { new: true, runValidators: true }
   ).lean();
 
@@ -110,6 +116,7 @@ async function rejectVerification(userId, reason) {
     verificationStatus: "rejected",
     verificationReviewedAt: new Date(),
     isVerified: false,
+    accountStatus: computeAccountStatus({ emailVerified: true, verificationStatus: "rejected" }),
     "verificationDocuments.$[].status": "rejected",
   };
   if (reason !== undefined && reason !== null && reason !== "") {
@@ -146,6 +153,7 @@ async function requestResubmission(userId, reason) {
     verificationStatus: "resubmission_requested",
     verificationReviewedAt: new Date(),
     isVerified: false,
+    accountStatus: computeAccountStatus({ emailVerified: true, verificationStatus: "resubmission_requested" }),
     "verificationDocuments.$[].status": "rejected",
   };
   if (reason !== undefined && reason !== null && reason !== "") {

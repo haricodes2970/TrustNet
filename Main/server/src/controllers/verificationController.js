@@ -3,6 +3,7 @@ const cloudinary = require("../services/cloudinary.service");
 const emailService = require("../services/email.service");
 const auditLogService = require("../services/auditLogService");
 const { mapVerificationDocuments } = require("../services/verificationDocument.service");
+const { computeAccountStatus } = require("../services/accountStatus.service");
 const ApiError = require("../utils/ApiError");
 
 const REQUIRED_DOCUMENT_TYPES = ["government_id", "company_registration", "business_website", "linkedin"];
@@ -10,6 +11,7 @@ const REQUIRED_DOCUMENT_TYPES = ["government_id", "company_registration", "busin
 function serializeVerification(user) {
   return {
     status: user.verificationStatus || "draft",
+    accountStatus: user.accountStatus || "EMAIL_PENDING",
     submittedAt: user.verificationSubmittedAt || null,
     reviewedAt: user.verificationReviewedAt || null,
     documents: mapVerificationDocuments(user.verificationDocuments || []),
@@ -110,6 +112,7 @@ async function submitVerification(req, res, next) {
     user.verificationStatus = "pending";
     user.verificationSubmittedAt = new Date();
     user.verificationReviewedAt = undefined;
+    user.accountStatus = computeAccountStatus({ emailVerified: user.emailVerified, verificationStatus: "pending" });
     await user.save();
 
     logAction(req, "verification.submit", {});
