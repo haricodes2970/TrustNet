@@ -115,6 +115,34 @@ const userSchema = new mongoose.Schema(
     },
     interests: [{ type: String, trim: true, maxlength: 50 }],
     skills: [{ type: String, trim: true, maxlength: 50 }],
+    // Email OTP verification (Phase 16A) - deliberately separate from
+    // isVerified/verificationStatus/verificationDocuments below, which are
+    // the Government ID/KYC admin-approval workflow (Phase 16B/16C), a
+    // completely different concern. Conflating the two would break the
+    // existing KYC gate (requireApprovedVerification) and admin
+    // verification queue. emailVerificationCodeHash/Expires/Attempts are
+    // select:false, same as resetPasswordToken/Expires - never returned by
+    // a normal query, only fetched with an explicit .select("+...").
+    emailVerified: {
+      type: Boolean,
+      default: false,
+    },
+    emailVerifiedAt: {
+      type: Date,
+    },
+    emailVerificationCodeHash: {
+      type: String,
+      select: false,
+    },
+    emailVerificationExpires: {
+      type: Date,
+      select: false,
+    },
+    emailVerificationAttempts: {
+      type: Number,
+      default: 0,
+      select: false,
+    },
     isVerified: {
       type: Boolean,
       default: false,

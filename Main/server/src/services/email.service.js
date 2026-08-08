@@ -39,6 +39,15 @@ async function sendEmail({ to, subject, text, html }) {
   });
 }
 
+async function sendOtpVerificationEmail({ to, otp, expiresInMinutes }) {
+  await sendEmail({
+    to,
+    subject: "Verify your TrustNet email address",
+    text: `Your TrustNet email verification code is: ${otp}\n\nThis code expires in ${expiresInMinutes} minutes. If you did not create a TrustNet account, you can ignore this email.`,
+    html: `<p>Your TrustNet email verification code is:</p><p style="font-size:24px;font-weight:bold;letter-spacing:4px;">${otp}</p><p>This code expires in ${expiresInMinutes} minutes. If you did not create a TrustNet account, you can ignore this email.</p>`,
+  });
+}
+
 async function sendVerificationApprovedEmail({ to }) {
   await sendEmail({
     to,
@@ -71,6 +80,7 @@ async function sendVerificationResubmissionEmail({ to, reason }) {
 module.exports = {
   sendPasswordResetEmail,
   sendEmail,
+  sendOtpVerificationEmail,
   sendVerificationApprovedEmail,
   sendVerificationRejectedEmail,
   sendVerificationResubmissionEmail,

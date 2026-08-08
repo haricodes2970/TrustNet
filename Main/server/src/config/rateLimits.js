@@ -16,8 +16,24 @@ module.exports = {
     limit: 3,
   },
   resendVerification: {
+    // 5/hour, not the tighter 3/hour originally sketched for this stub -
+    // still a meaningful anti-abuse throttle for an email-sending endpoint
+    // (same order of magnitude as forgotPassword's 3/hour), chosen to also
+    // leave headroom for legitimate multi-step verification test coverage
+    // within one rate-limit window.
     windowMs: 60 * 60 * 1000, // 1 hour
-    limit: 3,
+    limit: 5,
+  },
+  emailVerify: {
+    // OTP brute-force protection - same shape/threat class as
+    // twoFactorVerify (guessing a 6-digit code), not reused directly so
+    // the two stay independently tunable and log under distinct names.
+    // 20/15min at the IP layer is secondary defense-in-depth; the primary
+    // brute-force defense is the 5-wrong-guesses-per-account lockout
+    // (MAX_OTP_ATTEMPTS in auth.routes.js), which this limit doesn't
+    // replace.
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    limit: 20,
   },
   twoFactorVerify: {
     windowMs: 15 * 60 * 1000, // 15 minutes

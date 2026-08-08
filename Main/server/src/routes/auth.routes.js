@@ -8,7 +8,11 @@ const User = require('../models/User');
 const jwtConfig = require('../config/jwt');
 const oauthConfig = require('../config/oauth');
 const env = require('../config/env');
-const { sendPasswordResetEmail } = require('../services/email.service');
+// Required as a namespace object (not destructured) so tests can
+// monkey-patch emailService.sendOtpVerificationEmail - same technique
+// aiService.js's own tests already rely on for aiProviderService.
+const emailService = require('../services/email.service');
+const auditLogService = require('../services/auditLogService');
 const { authenticate } = require('../middlewares/auth');
 const cloudinary = require('../services/cloudinary.service');
 const { encryptTwoFactorSecret, decryptTwoFactorSecret } = require('../services/twoFactor.service');
@@ -17,6 +21,7 @@ const {
   loginLimiter,
   forgotPasswordLimiter,
   resendVerificationLimiter,
+  emailVerifyLimiter,
   twoFactorVerifyLimiter,
   refreshLimiter,
   sensitiveAccountActionLimiter,
@@ -26,6 +31,46 @@ const router = express.Router();
 
 const REFRESH_COOKIE_NAME = 'trustnet_refresh';
 const COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
+
+// Email OTP verification (Phase 16A).
+const OTP_EXPIRY_MINUTES = 10;
+const OTP_EXPIRY_MS = OTP_EXPIRY_MINUTES * 60 * 1000;
+const MAX_OTP_ATTEMPTS = 5;
+const GENERIC_OTP_ERROR = { success: false, message: 'Invalid or expired verification code.' };
+
+// crypto.randomInt is a CSPRNG (Node's crypto module), not Math.random() -
+// 6 digits, same length convention this codebase's own 2FA TOTP already
+// uses. Only ever handled as plaintext long enough to hash it for storage
+// and hand it to the email service - never logged, never returned in an
+// API response, never included in an audit log.
+function generateEmailOtp() {
+  return String(crypto.randomInt(100000, 1000000));
+}
+
+function hashOtp(otp) {
+  return crypto.createHash('sha256').update(otp).digest('hex');
+}
+
+async function issueEmailVerificationOtp(user) {
+  const otp = generateEmailOtp();
+  user.emailVerificationCodeHash = hashOtp(otp);
+  user.emailVerificationExpires = new Date(Date.now() + OTP_EXPIRY_MS);
+  user.emailVerificationAttempts = 0;
+  await user.save();
+
+  try {
+    await emailService.sendOtpVerificationEmail({ to: user.email, otp, expiresInMinutes: OTP_EXPIRY_MINUTES });
+  } catch (emailError) {
+    // Never block the primary request (registration/resend) on email
+    // delivery failure - same "notifications/email must not block the
+    // real action" reasoning used elsewhere in this codebase (messageService,
+    // forgot-password's own rollback-on-failure is the one deliberate
+    // exception, because there the email IS the entire point of the
+    // request). The OTP is already persisted, so a subsequent
+    // resend-verification call can simply issue a fresh one.
+    console.error(`[email] Failed to send verification OTP to ${user.email}: ${emailError.message}`);
+  }
+}
 
 function toUserResponse(user) {
   if (!user) return null;
@@ -42,6 +87,8 @@ function toUserResponse(user) {
     linkedin: obj.linkedin || '',
     websiteUrl: obj.websiteUrl || '',
     role: obj.role,
+    emailVerified: obj.emailVerified || false,
+    emailVerifiedAt: obj.emailVerifiedAt || null,
     isVerified: obj.isVerified || false,
     verificationStatus: obj.verificationStatus || 'draft',
     onboardingCompleted: obj.onboardingCompleted || false,
@@ -168,6 +215,13 @@ router.post('/register', signupLimiter, async (req, res, next) => {
       username: finalUsername,
       designation: designation || 'Founder',
     });
+
+    // Registration must still succeed even if the OTP email fails to send
+    // (issueEmailVerificationOtp swallows that failure internally) - the
+    // account is real either way, and resend-verification covers delivery
+    // failures. This preserves the existing "register always succeeds once
+    // validation/uniqueness checks pass" contract.
+    await issueEmailVerificationOtp(user);
 
     return res.status(201).json({
       success: true,
@@ -317,13 +371,21 @@ router.get('/google/callback', async (req, res) => {
 
     if (!user) {
       const finalUsername = await generateUniqueUsername(normalizedEmail);
+      const emailVerified = !!profile.email_verified;
       user = await User.create({
         email: normalizedEmail,
         googleId: profile.sub,
         fullName: profile.name || normalizedEmail.split('@')[0],
         username: finalUsername,
         avatarUrl: profile.picture || '',
+        // isVerified here is the pre-existing KYC field, left untouched
+        // (out of this phase's scope - see the User model's own comment).
+        // emailVerified is the new, separate Phase 16A field: Google
+        // already confirmed this email, so there's no reason to force an
+        // OTP round-trip for it.
         isVerified: !!profile.email_verified,
+        emailVerified,
+        emailVerifiedAt: emailVerified ? new Date() : undefined,
       });
     } else if (!user.googleId) {
       user.googleId = profile.sub;
@@ -399,6 +461,7 @@ router.get('/linkedin/callback', async (req, res) => {
 
     if (!user) {
       const finalUsername = await generateUniqueUsername(normalizedEmail);
+      const emailVerified = !!profile.email_verified;
       user = await User.create({
         email: normalizedEmail,
         linkedinId: profile.sub,
@@ -406,6 +469,8 @@ router.get('/linkedin/callback', async (req, res) => {
         username: finalUsername,
         avatarUrl: profile.picture || '',
         isVerified: !!profile.email_verified,
+        emailVerified,
+        emailVerifiedAt: emailVerified ? new Date() : undefined,
       });
     } else if (!user.linkedinId) {
       user.linkedinId = profile.sub;
@@ -579,12 +644,126 @@ router.get('/me', authenticate, async (req, res) => {
   return res.json({ success: true, data: toUserResponse(user) });
 });
 
-router.get('/verify-email', (req, res) => {
-  res.json({ success: true, message: 'Email verified successfully.' });
+// POST, not GET (the original stub) - a sensitive one-time code belongs in
+// a request body, not a query string that ends up in proxy/access logs.
+// Nothing depended on the stub's GET shape (it did nothing), so this isn't
+// a breaking change to any real behavior.
+//
+// Enumeration/timing posture: "no such account" and "wrong/expired/locked
+// OTP" all return the exact same GENERIC_OTP_ERROR (400) - a caller cannot
+// distinguish "this email has no account" from "this email exists but you
+// guessed wrong," closing the account-enumeration and cross-account
+// verification angles at once (you cannot verify an account without also
+// knowing its live, unexpired, unused OTP). "Already verified" is the one
+// case given a distinct response - reaching it already requires knowing a
+// valid email *and* format-correct OTP, so it isn't a new enumeration
+// surface, and returning the same generic 400 there would make a
+// perfectly working double-submit look like a failure.
+router.post('/verify-email', emailVerifyLimiter, async (req, res, next) => {
+  try {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const otp = String(req.body?.otp || '').trim();
+
+    if (!/^\S+@\S+\.\S+$/.test(email) || !/^\d{6}$/.test(otp)) {
+      return res.status(400).json(GENERIC_OTP_ERROR);
+    }
+
+    const user = await User.findOne({ email }).select(
+      '+emailVerificationCodeHash +emailVerificationExpires +emailVerificationAttempts'
+    );
+    if (!user) {
+      return res.status(400).json(GENERIC_OTP_ERROR);
+    }
+    if (user.emailVerified) {
+      return res.status(200).json({ success: true, message: 'Email is already verified.' });
+    }
+
+    const noActiveOtp =
+      !user.emailVerificationCodeHash ||
+      !user.emailVerificationExpires ||
+      user.emailVerificationExpires < new Date() ||
+      (user.emailVerificationAttempts || 0) >= MAX_OTP_ATTEMPTS;
+    if (noActiveOtp) {
+      return res.status(400).json(GENERIC_OTP_ERROR);
+    }
+
+    const submittedHash = hashOtp(otp);
+    if (submittedHash !== user.emailVerificationCodeHash) {
+      // Atomic increment - concurrent wrong guesses can't undercount each
+      // other the way a read-then-write would.
+      await User.findByIdAndUpdate(user._id, { $inc: { emailVerificationAttempts: 1 } });
+      return res.status(400).json(GENERIC_OTP_ERROR);
+    }
+
+    // Atomic, condition-checked update: only succeeds if the account is
+    // still unverified AND the hash/expiry still match what was just read.
+    // Two concurrent requests with the correct OTP can both reach this
+    // point, but only one findOneAndUpdate call can match+mutate - the
+    // loser sees emailVerified already flipped (or the hash already
+    // unset) and gets null back, handled as the generic error below. This
+    // is what guarantees "marked verified exactly once" under a race,
+    // not just under normal sequential use.
+    const verified = await User.findOneAndUpdate(
+      {
+        _id: user._id,
+        emailVerified: false,
+        emailVerificationCodeHash: submittedHash,
+        emailVerificationExpires: { $gt: new Date() },
+      },
+      {
+        emailVerified: true,
+        emailVerifiedAt: new Date(),
+        $unset: { emailVerificationCodeHash: '', emailVerificationExpires: '', emailVerificationAttempts: '' },
+      },
+      { new: true }
+    );
+
+    if (!verified) {
+      return res.status(400).json(GENERIC_OTP_ERROR);
+    }
+
+    auditLogService
+      .createLog({ actor: verified._id, action: 'auth.email_verified', targetType: 'User', targetId: verified._id, details: {}, ip: req.ip })
+      .catch((error) => {
+        console.error(`[audit] Failed to log "auth.email_verified" by ${verified._id}: ${error.message}`);
+      });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Email verified successfully.',
+      data: { user: toUserResponse(verified) },
+    });
+  } catch (err) {
+    return next(err);
+  }
 });
 
-router.post('/resend-verification', resendVerificationLimiter, (req, res) => {
-  res.json({ success: true, message: 'Verification email sent.' });
+// Enumeration-safe: unlike /verify-email, this endpoint requires no proof
+// of account ownership at all (just an email address), so - like
+// /forgot-password - it always returns the same generic success message
+// regardless of whether the account exists or is already verified. Only a
+// real, existing, unverified account actually gets a new OTP issued and
+// emailed.
+router.post('/resend-verification', resendVerificationLimiter, async (req, res, next) => {
+  try {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const successMessage = 'If an account exists for that email and needs verification, a new code has been sent.';
+    if (!/^\S+@\S+\.\S+$/.test(email)) {
+      return res.status(400).json({ success: false, message: 'Enter a valid email address.' });
+    }
+
+    const user = await User.findOne({ email });
+    if (user && !user.emailVerified) {
+      // Issuing a fresh OTP overwrites the previous hash/expiry/attempts
+      // outright - the old code stops working immediately, not just once
+      // it expires ("previous OTP invalidation on resend").
+      await issueEmailVerificationOtp(user);
+    }
+
+    return res.json({ success: true, message: successMessage });
+  } catch (err) {
+    return next(err);
+  }
 });
 
 router.post('/forgot-password', forgotPasswordLimiter, async (req, res, next) => {
@@ -605,7 +784,7 @@ router.post('/forgot-password', forgotPasswordLimiter, async (req, res, next) =>
 
     const resetUrl = `${env.CLIENT_URL.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(resetToken)}`;
     try {
-      await sendPasswordResetEmail({ to: user.email, resetUrl });
+      await emailService.sendPasswordResetEmail({ to: user.email, resetUrl });
     } catch (emailError) {
       user.resetPasswordToken = undefined;
       user.resetPasswordExpires = undefined;

@@ -38,6 +38,7 @@ module.exports = {
   loginLimiter: createLimiter(rateLimitsConfig.login),
   forgotPasswordLimiter: createLimiter(rateLimitsConfig.forgotPassword),
   resendVerificationLimiter: createLimiter(rateLimitsConfig.resendVerification),
+  emailVerifyLimiter: createLimiter(rateLimitsConfig.emailVerify),
   twoFactorVerifyLimiter: createLimiter(rateLimitsConfig.twoFactorVerify),
   refreshLimiter: createLimiter(rateLimitsConfig.refresh),
   sensitiveAccountActionLimiter: createLimiter(rateLimitsConfig.sensitiveAccountAction, byUserOrIp),
