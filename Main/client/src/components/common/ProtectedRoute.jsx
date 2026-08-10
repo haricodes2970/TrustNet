@@ -4,17 +4,17 @@ import { useAuth } from '../../context/AuthContext';
 import { SkeletonPage } from '../ui/SkeletonLoaders';
 
 export const ProtectedRoute = ({ children, allowedRoles = [] }) => {
-  const { currentUser, isAuthenticated, isLoading } = useAuth();
+  const { currentUser, isAuthenticated, isLoading, authState } = useAuth();
   const location = useLocation();
 
   // Still resolving the stored token via GET /auth/me on initial load --
   // don't redirect to /login yet, that would bounce an already-logged-in
   // user on every page refresh.
-  if (isLoading) {
+  if (isLoading || authState === 'initializing') {
     return <SkeletonPage />;
   }
 
-  if (!isAuthenticated && !currentUser) {
+  if (!isAuthenticated || authState === 'unauthenticated' || authState === 'expired') {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
