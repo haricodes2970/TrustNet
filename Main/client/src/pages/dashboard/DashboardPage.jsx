@@ -150,7 +150,7 @@ export const DashboardPage = () => {
                 <p className="text-xs text-slate-600 leading-relaxed">
                   Based on your MRR trajectory, schedule pitch calls with Tier 1 Seed VCs this week.
                 </p>
-                <Button variant="primary" size="sm" className="w-full" onClick={() => navigate('/app/startups/my')}>
+                <Button variant="primary" size="sm" className="w-full" onClick={() => navigate('/app/startups')}>
                   <span>Manage My Startups</span>
                 </Button>
               </Card>

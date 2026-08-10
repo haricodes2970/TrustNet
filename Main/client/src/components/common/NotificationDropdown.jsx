@@ -16,8 +16,8 @@ export const NotificationDropdown = () => {
   const navigate = useNavigate();
 
   const [notifications, setNotifications] = useState([
-    { id: '1', type: 'Investor', title: 'Horizon Ventures requested pitch deck', subtitle: 'Sarah Chen sent an investor view request.', timeAgo: '10 mins ago', isUnread: true, link: '/app/startups/my' },
-    { id: '2', type: 'Funding', title: 'New $500,000 commitment received', subtitle: 'NexusAI Seed round update', timeAgo: '2 hours ago', isUnread: true, link: '/app/startups/my' },
+    { id: '1', type: 'Investor', title: 'Horizon Ventures requested pitch deck', subtitle: 'Sarah Chen sent an investor view request.', timeAgo: '10 mins ago', isUnread: true, link: '/app/startups' },
+    { id: '2', type: 'Funding', title: 'New $500,000 commitment received', subtitle: 'NexusAI Seed round update', timeAgo: '2 hours ago', isUnread: true, link: '/app/startups' },
     { id: '3', type: 'Verification', title: 'Identity Verification Approved', subtitle: 'You are now a Verified Founder on TrustNet', timeAgo: 'Yesterday', isUnread: true, link: '/verification' },
     { id: '4', type: 'Community', title: 'Y Combinator Applicants thread highlight', subtitle: '34 new founder replies', timeAgo: '2 days ago', isUnread: false, link: '/app/communities' }
   ]);

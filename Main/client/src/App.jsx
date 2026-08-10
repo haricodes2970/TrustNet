@@ -144,9 +144,9 @@ export function App() {
 
                   {/* Startup Operating System */}
                   <Route path="discover" element={<StartupDiscoveryPage />} />
-                  <Route path="startups" element={<StartupsPage />} />
+                  <Route path="startups" element={<MyStartupsPage />} />
                   <Route path="startups/discover" element={<StartupDiscoveryPage />} />
-                  <Route path="startups/my" element={<MyStartupsPage />} />
+                  <Route path="startups/my" element={<Navigate to="/app/startups" replace />} />
                   <Route path="startups/create" element={<CreateStartupPage />} />
                   <Route path="startups/:id" element={<StartupDetailPage />} />
                   <Route path="startups/:id/manage" element={<StartupManagementDashboard />} />

@@ -6,21 +6,13 @@ import {
   Search,
   Grid,
   List,
-  TrendingUp,
-  Users,
-  DollarSign,
-  Share2,
   ExternalLink,
   Settings,
-  Activity,
-  CheckCircle2,
-  AlertCircle
 } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
-import { Badge } from '../../components/ui/Badge';
 import { Input } from '../../components/ui/Input';
-import { EmptyState } from '../../components/common/EmptyState';
+import { LedgerStamp } from '../../components/ui/LedgerStamp';
 import { useApp } from '../../context/AppContext';
 import * as startupApi from '../../lib/startupApi';
 import { normalizeStartups, STAGE_OPTIONS } from '../../lib/adapters/startupAdapter';
@@ -53,195 +45,254 @@ export const MyStartupsPage = () => {
     };
   }, []);
 
-  const stages = [{ value: 'All', label: 'All' }, ...STAGE_OPTIONS];
+  const stages = [{ value: 'All', label: 'All Stages' }, ...STAGE_OPTIONS];
 
   const filteredStartups = myStartups.filter(s => {
-    const matchesSearch = s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          s.tagline.toLowerCase().includes(searchQuery.toLowerCase());
+    const nameMatch = s.name ? s.name.toLowerCase().includes(searchQuery.toLowerCase()) : false;
+    const taglineMatch = s.tagline ? s.tagline.toLowerCase().includes(searchQuery.toLowerCase()) : false;
+    const descriptionMatch = s.description ? s.description.toLowerCase().includes(searchQuery.toLowerCase()) : false;
+    
+    const matchesSearch = nameMatch || taglineMatch || descriptionMatch;
     const matchesStage = selectedStage === 'All' || s.stage === selectedStage;
     return matchesSearch && matchesStage;
   });
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="bg-[#F7F5EF] text-[#0E1A2B] font-sans p-6 sm:p-8 min-h-screen -m-6 sm:-m-8 space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
-            My Startups
-            <Badge variant="emerald">{myStartups.length} Active</Badge>
-          </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Manage operations, investor pipeline, hiring boards, and health scores for your ventures.
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl sm:text-3xl font-display font-black text-[#0E1A2B] tracking-tight">
+              My Startups
+            </h1>
+            <span className="font-mono text-xs bg-[#0F6E5C]/10 text-[#0F6E5C] border border-[#0F6E5C]/20 px-2 py-0.5 rounded-[4px] font-bold">
+              {myStartups.length} Active
+            </span>
+          </div>
+          <p className="text-xs text-[#5B6472] mt-1 font-sans">
+            Manage operations, team rosters, milestones, and workspace components for your ventures.
           </p>
         </div>
 
-        <Button variant="primary" size="md" onClick={() => navigate('/app/startups/create')}>
+        <Button
+          variant="primary"
+          size="md"
+          className="bg-[#0F6E5C] hover:bg-[#0F6E5C]/90 text-white rounded-[4px] border-0 shadow-[0_2px_8px_rgba(14,26,43,0.08)] active:bg-[#0F6E5C]/80"
+          onClick={() => navigate('/app/startups/create')}
+        >
           <Plus className="w-4 h-4" />
           <span>New Startup</span>
         </Button>
       </div>
 
       {/* Filter & Search Bar */}
-      <Card className="p-4 border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row gap-4 items-center justify-between">
-        <div className="flex items-center gap-3 w-full sm:w-auto flex-1">
+      <div className="bg-white p-4 rounded-[8px] border border-[#5B6472]/20 shadow-[0_2px_8px_rgba(14,26,43,0.08)] flex flex-col sm:flex-row gap-4 items-center justify-between">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto flex-1">
           <Input
             icon={Search}
             placeholder="Search my startups..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full sm:w-72"
+            className="w-full sm:w-72 rounded-[4px] border-[#5B6472]/30 focus:ring-[#0F6E5C]/30 focus:border-[#0F6E5C]"
           />
 
           <select
             value={selectedStage}
             onChange={(e) => setSelectedStage(e.target.value)}
-            className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs rounded-xl px-3 py-2 text-slate-800 dark:text-slate-100"
+            className="bg-[#F7F5EF] border border-[#5B6472]/30 text-xs rounded-[4px] px-3 py-2 text-[#0E1A2B] h-11 focus:outline-none focus:ring-2 focus:ring-[#0F6E5C]/30 focus:border-[#0F6E5C]"
           >
             {stages.map((stg) => (
-              <option key={stg.value} value={stg.value}>{stg.value === 'All' ? 'All Stages' : stg.label}</option>
+              <option key={stg.value} value={stg.value}>{stg.label}</option>
             ))}
           </select>
         </div>
 
         {/* Grid / List View Toggle */}
-        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+        <div className="flex items-center gap-1 bg-[#F7F5EF] p-1 rounded-[4px] border border-[#5B6472]/20">
           <button
             onClick={() => setViewMode('grid')}
-            className={`p-1.5 rounded-lg text-xs font-bold transition-all ${
+            className={`p-1.5 rounded-[4px] text-xs font-bold transition-all ${
               viewMode === 'grid'
-                ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
+                ? 'bg-white text-[#0F6E5C] shadow-[0_2px_8px_rgba(14,26,43,0.08)]'
+                : 'text-[#5B6472] hover:text-[#0E1A2B]'
             }`}
           >
             <Grid className="w-4 h-4" />
           </button>
           <button
             onClick={() => setViewMode('list')}
-            className={`p-1.5 rounded-lg text-xs font-bold transition-all ${
+            className={`p-1.5 rounded-[4px] text-xs font-bold transition-all ${
               viewMode === 'list'
-                ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
+                ? 'bg-white text-[#0F6E5C] shadow-[0_2px_8px_rgba(14,26,43,0.08)]'
+                : 'text-[#5B6472] hover:text-[#0E1A2B]'
             }`}
           >
             <List className="w-4 h-4" />
           </button>
         </div>
-      </Card>
+      </div>
 
-      {isLoading && <p className="text-sm text-slate-500">Loading your startups…</p>}
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {isLoading && (
+        <div className="flex items-center justify-center p-12">
+          <p className="text-sm font-mono text-[#5B6472] animate-pulse">Loading startups...</p>
+        </div>
+      )}
+      
+      {error && (
+        <div className="p-4 bg-[#B23A32]/10 border border-[#B23A32]/20 rounded-[4px] text-[#B23A32] text-sm font-mono">
+          Error: {error}
+        </div>
+      )}
+
       {!isLoading && !error && filteredStartups.length === 0 && (
-        <EmptyState
-          icon={Rocket}
-          title="No Startups Yet"
-          description="You haven't published a startup yet."
-          actionLabel="Publish Startup"
-          onAction={() => navigate('/app/startups/create')}
-        />
+        <div className="flex flex-col items-center justify-center text-center p-8 sm:p-12 bg-white rounded-[8px] border border-dashed border-[#5B6472]/30 shadow-[0_2px_8px_rgba(14,26,43,0.08)]">
+          <div className="w-14 h-14 rounded-[4px] bg-[#0F6E5C]/10 text-[#0F6E5C] flex items-center justify-center mb-4">
+            <Rocket className="w-7 h-7" />
+          </div>
+          <h3 className="text-base font-display font-black text-[#0E1A2B] mb-1">No Startups Found</h3>
+          <p className="text-xs text-[#5B6472] max-w-sm leading-relaxed mb-5">
+            You haven't added any startups matching these filters yet.
+          </p>
+          <Button
+            variant="primary"
+            size="sm"
+            className="bg-[#0F6E5C] hover:bg-[#0F6E5C]/90 text-white rounded-[4px] border-0"
+            onClick={() => navigate('/app/startups/create')}
+          >
+            Create Your First Startup
+          </Button>
+        </div>
       )}
 
       {/* Startups Grid or List View */}
       {!isLoading && filteredStartups.length > 0 && (viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredStartups.map((startup) => (
-            <Card
+            <div
               key={startup.id}
-              className="overflow-hidden border-slate-200 dark:border-slate-800 hover:-translate-y-1 transition-all duration-300 shadow-soft-sm hover:shadow-soft-md group"
+              className="bg-white rounded-[8px] border border-[#5B6472]/20 overflow-hidden shadow-[0_2px_8px_rgba(14,26,43,0.08)] hover:shadow-[0_4px_12px_rgba(14,26,43,0.12)] transition-shadow group flex flex-col justify-between"
             >
-              {/* Banner */}
-              <div className="h-28 w-full bg-gradient-to-br from-emerald-500/20 to-slate-200 dark:bg-slate-800 relative">
-                {startup.banner && <img src={startup.banner} alt={startup.name} className="w-full h-full object-cover" />}
-                <div className="absolute top-3 right-3 flex gap-2">
-                  <Badge variant="emerald" className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-md shadow-sm">
-                    {startup.stageLabel}
-                  </Badge>
+              {/* Top Section */}
+              <div>
+                {/* Banner - neutral light gray, no gradients */}
+                <div className="h-24 w-full bg-[#5B6472]/10 relative flex items-center justify-center p-4">
+                  {startup.logo ? (
+                    <img src={startup.logo} alt={startup.name} className="w-16 h-16 object-contain rounded-[4px] border border-[#5B6472]/20 bg-white" />
+                  ) : (
+                    <div className="w-16 h-16 rounded-[4px] border border-[#5B6472]/20 bg-white flex items-center justify-center">
+                      <span className="text-[#0F6E5C] font-display font-black text-xl">{startup.name?.charAt(0)}</span>
+                    </div>
+                  )}
+                  <div className="absolute top-2 right-2">
+                    <span className="text-[10px] font-mono font-bold bg-white border border-[#5B6472]/20 px-2 py-0.5 rounded-[4px] text-[#0E1A2B]">
+                      {startup.stageLabel}
+                    </span>
+                  </div>
                 </div>
-              </div>
 
-              <div className="p-5 relative pt-0">
-                <div className="flex items-end justify-between -mt-8 mb-3">
-                  <div className="w-14 h-14 rounded-2xl overflow-hidden border-2 border-white dark:border-slate-900 shadow-md bg-white flex items-center justify-center">
-                    {startup.logo ? (
-                      <img src={startup.logo} alt={startup.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <span className="text-emerald-600 font-bold">{startup.name?.charAt(0)}</span>
-                    )}
+                <div className="p-4 space-y-3">
+                  <div>
+                    <h3 className="text-lg font-display font-black text-[#0E1A2B] group-hover:text-[#0F6E5C] transition-colors line-clamp-1">
+                      {startup.name}
+                    </h3>
+                    <p className="text-xs text-[#5B6472] line-clamp-2 mt-1 min-h-[32px] leading-relaxed">
+                      {startup.tagline || startup.description}
+                    </p>
                   </div>
 
-                  <Badge variant="slate">{startup.status}</Badge>
-                </div>
+                  {/* Ledger Stamp for Status */}
+                  <div className="pt-2">
+                    <LedgerStamp status={startup.status} date={startup.createdAt} />
+                  </div>
 
-                <div>
-                  <h3 className="text-lg font-black text-slate-900 dark:text-white tracking-tight group-hover:text-emerald-600 transition-colors">
-                    {startup.name}
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">
-                    {startup.tagline}
-                  </p>
-
-                  <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+                  {/* Financial figures in IBM Plex Mono */}
+                  <div className="grid grid-cols-2 gap-2 text-xs font-mono border-t border-[#5B6472]/10 pt-3 mt-2">
                     <div>
-                      <span className="text-slate-400 text-[10px] block">FUNDING GOAL</span>
-                      <strong className="font-bold text-slate-900 dark:text-white">
-                        {startup.fundingTarget ? `$${(startup.fundingTarget / 1000000).toFixed(1)}M` : '—'}
+                      <span className="text-[#5B6472] text-[10px] block uppercase">Funding Goal</span>
+                      <strong className="text-[#0E1A2B]">
+                        {startup.fundingTarget ? `$${startup.fundingTarget.toLocaleString()}` : '—'}
                       </strong>
                     </div>
                     <div className="text-right">
-                      <span className="text-slate-400 text-[10px] block">RAISED</span>
-                      <strong className="font-bold text-slate-900 dark:text-white">
-                        ${(startup.fundingRaised / 1000).toFixed(0)}k
+                      <span className="text-[#5B6472] text-[10px] block uppercase">Raised</span>
+                      <strong className="text-[#0E1A2B]">
+                        ${startup.fundingRaised.toLocaleString()}
                       </strong>
                     </div>
                   </div>
                 </div>
+              </div>
 
-                {/* Card Actions */}
-                <div className="grid grid-cols-2 gap-2 mt-5">
+              {/* Card Actions */}
+              <div className="p-4 bg-[#F7F5EF]/40 border-t border-[#5B6472]/10 grid grid-cols-2 gap-2">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="w-full bg-[#0F6E5C] hover:bg-[#0F6E5C]/90 text-white rounded-[4px] border-0"
+                  onClick={() => navigate(`/app/startups/${startup.id}/manage`)}
+                >
+                  <Settings className="w-3.5 h-3.5" />
+                  <span>Manage</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full border border-[#5B6472]/30 hover:border-[#0F6E5C] text-[#0E1A2B] hover:text-[#0F6E5C] hover:bg-white rounded-[4px] bg-transparent"
+                  onClick={() => navigate(`/app/startups/${startup.id}`)}
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>View Details</span>
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="bg-white border border-[#5B6472]/20 rounded-[8px] divide-y divide-[#5B6472]/10 shadow-[0_2px_8px_rgba(14,26,43,0.08)]">
+          {filteredStartups.map((startup) => (
+            <div key={startup.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-[#F7F5EF]/30 transition-colors">
+              <div className="flex items-center gap-4">
+                {startup.logo ? (
+                  <img src={startup.logo} alt={startup.name} className="w-12 h-12 rounded-[4px] object-contain border border-[#5B6472]/20 bg-white" />
+                ) : (
+                  <div className="w-12 h-12 rounded-[4px] border border-[#5B6472]/20 bg-white flex items-center justify-center">
+                    <span className="text-[#0F6E5C] font-display font-black">{startup.name?.charAt(0)}</span>
+                  </div>
+                )}
+                <div>
+                  <h3 className="text-sm font-display font-black text-[#0E1A2B]">{startup.name}</h3>
+                  <p className="text-xs text-[#5B6472] line-clamp-1">{startup.tagline || startup.description}</p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-4 sm:gap-6">
+                <span className="text-[10px] font-mono font-bold bg-[#F7F5EF] border border-[#5B6472]/20 px-2 py-0.5 rounded-[4px] text-[#0E1A2B]">
+                  {startup.stageLabel}
+                </span>
+                <LedgerStamp status={startup.status} date={startup.createdAt} />
+                <div className="flex items-center gap-2">
                   <Button
                     variant="primary"
                     size="sm"
-                    className="w-full"
+                    className="bg-[#0F6E5C] hover:bg-[#0F6E5C]/90 text-white rounded-[4px] border-0"
                     onClick={() => navigate(`/app/startups/${startup.id}/manage`)}
                   >
-                    <Settings className="w-3.5 h-3.5" />
                     <span>Manage</span>
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
-                    className="w-full"
+                    className="border border-[#5B6472]/30 hover:border-[#0F6E5C] text-[#0E1A2B] hover:text-[#0F6E5C] hover:bg-white rounded-[4px]"
                     onClick={() => navigate(`/app/startups/${startup.id}`)}
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
-                    <span>Public View</span>
                   </Button>
                 </div>
               </div>
-            </Card>
-          ))}
-        </div>
-      ) : (
-        <Card className="divide-y divide-slate-100 dark:divide-slate-800 border-slate-200 dark:border-slate-800">
-          {filteredStartups.map((startup) => (
-            <div key={startup.id} className="p-4 flex items-center justify-between gap-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-              <div className="flex items-center gap-4">
-                <img src={startup.logo} alt={startup.name} className="w-12 h-12 rounded-xl object-cover border border-slate-200 dark:border-slate-700" />
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">{startup.name}</h3>
-                  <p className="text-xs text-slate-500">{startup.tagline}</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-6 text-xs">
-                <Badge variant="emerald">{startup.stageLabel}</Badge>
-                <Button variant="primary" size="sm" onClick={() => navigate(`/app/startups/${startup.id}/manage`)}>
-                  <span>Manage</span>
-                </Button>
-              </div>
             </div>
           ))}
-        </Card>
+        </div>
       ))}
     </div>
   );
