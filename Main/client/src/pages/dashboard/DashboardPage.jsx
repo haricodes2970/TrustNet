@@ -5,16 +5,10 @@ import {
   DollarSign,
   Users,
   Sparkles,
-  Plus,
-  Lock,
   ArrowRight,
   Loader2,
   AlertCircle,
-  Briefcase,
-  Layers,
-  MessageSquare,
-  FileCheck,
-  TrendingUp,
+  Lock,
   MapPin,
   Clock,
   Compass
@@ -22,6 +16,7 @@ import {
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
+import { Skeleton } from '../../components/ui/Skeleton';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { ProfileCompletionCard } from '../../components/cards/ProfileCompletionCard';
@@ -108,9 +103,47 @@ export const DashboardPage = () => {
 
   if (isPageLoading) {
     return (
-      <div className="min-h-[500px] flex flex-col items-center justify-center space-y-4">
-        <Loader2 className="w-10 h-10 text-emerald-500 animate-spin" />
-        <p className="text-xs text-slate-500">Loading your ecosystem overview...</p>
+      <div className="space-y-8 max-w-[1440px] mx-auto animate-pulse" aria-hidden="true">
+        {/* Role switcher skeleton */}
+        <div className="h-16 w-full bg-slate-100 rounded-2xl" />
+        
+        {/* Header skeleton */}
+        <div className="space-y-2">
+          <Skeleton className="h-8 w-64" />
+          <Skeleton className="h-4 w-96" />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          {/* Main Content skeleton */}
+          <div className="lg:col-span-8 space-y-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="h-24 bg-slate-100 rounded-2xl" />
+              ))}
+            </div>
+            
+            <div className="space-y-4">
+              <Skeleton className="h-6 w-48" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div className="h-48 bg-slate-100 rounded-2xl" />
+                <div className="h-48 bg-slate-100 rounded-2xl" />
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <Skeleton className="h-6 w-48" />
+              <div className="h-32 bg-slate-100 rounded-2xl" />
+              <div className="h-32 bg-slate-100 rounded-2xl" />
+            </div>
+          </div>
+
+          {/* Sidebar skeleton */}
+          <div className="lg:col-span-4 space-y-6">
+            <div className="h-28 bg-slate-100 rounded-2xl" />
+            <div className="h-56 bg-slate-100 rounded-2xl" />
+            <div className="h-44 bg-slate-100 rounded-2xl" />
+          </div>
+        </div>
       </div>
     );
   }
@@ -161,20 +194,48 @@ export const DashboardPage = () => {
     timeAgo: new Date(p.createdAt).toLocaleDateString()
   }));
 
+  // Tailored locked messages depending on KYC state
+  const getLockedMessage = () => {
+    const status = verificationData?.status || 'draft';
+    switch (status) {
+      case 'pending':
+      case 'under_review':
+        return {
+          title: 'Verification Under Review',
+          desc: 'Your uploaded identity documents are currently being audited by a platform administrator. To maintain a high-trust ecosystem, all platform dealflow dashboards are locked until verification is complete.'
+        };
+      case 'rejected':
+      case 'resubmission_requested':
+        return {
+          title: 'Verification Rejected',
+          desc: 'Your verification submission was rejected or requires changes. Please update and re-submit your identity documents to unlock your dashboard.'
+        };
+      default:
+        return {
+          title: 'Identity Verification Required',
+          desc: 'To protect dealflow privacy, platforms, and fundraising integrity, dashboard details are locked until identity credentials are uploaded and approved by a platform administrator.'
+        };
+    }
+  };
+
+  const lockContent = getLockedMessage();
+
   return (
     <div className="space-y-8 max-w-[1440px] mx-auto">
       {/* Role Switcher Navigation Bar */}
       <Card className="p-2 border-slate-200/80 bg-white shadow-soft-sm">
         <div className="flex items-center justify-between gap-2 overflow-x-auto">
-          <div className="flex items-center gap-1.5 min-w-max">
+          <div className="flex items-center gap-1.5 min-w-max" role="tablist" aria-label="Ecosystem Role Selection">
             {roles.map((r) => {
               const Icon = r.icon;
               const isActive = activeRole === r.id;
               return (
                 <button
                   key={r.id}
+                  role="tab"
+                  aria-selected={isActive}
                   onClick={() => setActiveRole(r.id)}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all min-h-[44px] ${
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all min-h-[44px] focus:outline-none focus:ring-2 focus:ring-emerald-500/50 ${
                     isActive
                       ? 'bg-emerald-500 text-white shadow-soft-sm'
                       : 'text-slate-600 hover:bg-slate-50'
@@ -215,9 +276,9 @@ export const DashboardPage = () => {
                 <Lock className="w-7 h-7" />
               </div>
               <div className="space-y-2">
-                <h3 className="text-lg font-bold text-slate-900">Dashboard Locked</h3>
+                <h3 className="text-lg font-bold text-slate-900">{lockContent.title}</h3>
                 <p className="text-xs text-slate-600 leading-relaxed max-w-md mx-auto">
-                  To protect dealflow privacy, platforms, and fundraising integrity, dashboard details are locked until identity credentials are uploaded and approved by a platform administrator.
+                  {lockContent.desc}
                 </p>
               </div>
               <div className="pt-2">
@@ -272,7 +333,7 @@ export const DashboardPage = () => {
               <div className="space-y-4">
                 <h3 className="text-lg font-bold text-slate-900 flex items-center justify-between">
                   <span>Recent Platform Startups</span>
-                  <Button variant="ghost" size="sm" onClick={() => navigate('/app/discover')} className="text-xs">
+                  <Button variant="ghost" size="sm" onClick={() => navigate('/app/discover')} className="text-xs" aria-label="Discover all startups">
                     <span>Discover More</span>
                     <ArrowRight className="w-3 h-3" />
                   </Button>
@@ -294,7 +355,7 @@ export const DashboardPage = () => {
               <div className="space-y-4">
                 <h3 className="text-lg font-bold text-slate-900 flex items-center justify-between">
                   <span>Ecosystem Feed updates</span>
-                  <Button variant="ghost" size="sm" onClick={() => navigate('/app/feed')} className="text-xs">
+                  <Button variant="ghost" size="sm" onClick={() => navigate('/app/feed')} className="text-xs" aria-label="Go to community feed">
                     <span>Go to Feed</span>
                     <ArrowRight className="w-3 h-3" />
                   </Button>
@@ -316,7 +377,7 @@ export const DashboardPage = () => {
               <div className="space-y-4">
                 <h3 className="text-lg font-bold text-slate-900 flex items-center justify-between">
                   <span>Suggested Communities</span>
-                  <Button variant="ghost" size="sm" onClick={() => navigate('/app/communities')} className="text-xs">
+                  <Button variant="ghost" size="sm" onClick={() => navigate('/app/communities')} className="text-xs" aria-label="Explore all communities">
                     <span>Explore All</span>
                     <ArrowRight className="w-3 h-3" />
                   </Button>
@@ -378,6 +439,7 @@ export const DashboardPage = () => {
                 size="sm" 
                 onClick={() => navigate('/app/profile/edit')} 
                 className="w-full text-xs py-2 h-auto text-left justify-start"
+                aria-label="Edit Profile Details"
               >
                 <span>Edit Profile</span>
               </Button>
@@ -386,6 +448,7 @@ export const DashboardPage = () => {
                 size="sm" 
                 onClick={() => navigate('/verification')} 
                 className="w-full text-xs py-2 h-auto text-left justify-start"
+                aria-label="Access Identity KYC Verification"
               >
                 <span>Identity KYC</span>
               </Button>
@@ -394,6 +457,7 @@ export const DashboardPage = () => {
                 size="sm" 
                 onClick={() => navigate('/app/startups/create')} 
                 className="w-full text-xs py-2 h-auto text-left justify-start"
+                aria-label="Create Startup Listing"
               >
                 <span>Create Startup</span>
               </Button>
@@ -402,6 +466,7 @@ export const DashboardPage = () => {
                 size="sm" 
                 onClick={() => navigate('/app/discover')} 
                 className="w-full text-xs py-2 h-auto text-left justify-start"
+                aria-label="Discover Startups and Deals"
               >
                 <span>Find Deals</span>
               </Button>
@@ -410,6 +475,7 @@ export const DashboardPage = () => {
                 size="sm" 
                 onClick={() => navigate('/app/people')} 
                 className="w-full text-xs py-2 h-auto text-left justify-start"
+                aria-label="Access Ecosystem People Directory"
               >
                 <span>Directory</span>
               </Button>
@@ -418,6 +484,7 @@ export const DashboardPage = () => {
                 size="sm" 
                 onClick={() => navigate('/app/messages')} 
                 className="w-full text-xs py-2 h-auto text-left justify-start"
+                aria-label="Open Messages Center"
               >
                 <span>Messages</span>
               </Button>
