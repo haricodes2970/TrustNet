@@ -176,6 +176,7 @@ export function App() {
                   <Route path="messages" element={<MessagingPage />} />
                   <Route path="notifications" element={<NotificationsPage />} />
                   <Route path="workspace" element={<WorkspacePage />} />
+                  <Route path="workspaces/:id" element={<WorkspacePage />} />
 
                   {/* Backend modules with no page in the original design --
                       minimal stubs added during integration. */}
