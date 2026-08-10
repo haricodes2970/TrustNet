@@ -1,17 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  Rocket,
-  Plus,
-  Search,
-  Grid,
-  List,
-  TrendingUp,
-  Users,
-  DollarSign,
-  Share2,
-  ExternalLink,
-  Settings,
+import { 
+  Rocket, 
+  Plus, 
+  Search, 
+  Grid, 
+  List, 
+  TrendingUp, 
+  Users, 
+  DollarSign, 
+  Share2, 
+  ExternalLink, 
+  Settings, 
   Activity,
   CheckCircle2,
   AlertCircle
@@ -20,40 +20,22 @@ import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Input } from '../../components/ui/Input';
-import { EmptyState } from '../../components/common/EmptyState';
 import { useApp } from '../../context/AppContext';
-import * as startupApi from '../../lib/startupApi';
-import { normalizeStartups, STAGE_OPTIONS } from '../../lib/adapters/startupAdapter';
 
 export const MyStartupsPage = () => {
   const navigate = useNavigate();
-  const { showToast } = useApp();
+  const { startups, showToast } = useApp();
 
-  const [myStartups, setMyStartups] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStage, setSelectedStage] = useState('All');
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const data = await startupApi.getMyStartups();
-        if (!cancelled) setMyStartups(normalizeStartups(data));
-      } catch (err) {
-        if (!cancelled) setError(err.message);
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const stages = [{ value: 'All', label: 'All' }, ...STAGE_OPTIONS];
+  // Filter startups (or show user's startups)
+  const myStartups = startups.map((s, i) => ({
+    ...s,
+    healthScore: 88 + (i * 3) % 10,
+    recentActivity: i === 0 ? 'Closed $500k commitment from Horizon VCs' : 'Updated Pitch Deck to v2.4'
+  }));
 
   const filteredStartups = myStartups.filter(s => {
     const matchesSearch = s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -98,9 +80,10 @@ export const MyStartupsPage = () => {
             onChange={(e) => setSelectedStage(e.target.value)}
             className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs rounded-xl px-3 py-2 text-slate-800 dark:text-slate-100"
           >
-            {stages.map((stg) => (
-              <option key={stg.value} value={stg.value}>{stg.value === 'All' ? 'All Stages' : stg.label}</option>
-            ))}
+            <option value="All">All Stages</option>
+            <option value="Pre-Seed">Pre-Seed</option>
+            <option value="Seed">Seed</option>
+            <option value="Series A">Series A</option>
           </select>
         </div>
 
@@ -129,20 +112,8 @@ export const MyStartupsPage = () => {
         </div>
       </Card>
 
-      {isLoading && <p className="text-sm text-slate-500">Loading your startups…</p>}
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      {!isLoading && !error && filteredStartups.length === 0 && (
-        <EmptyState
-          icon={Rocket}
-          title="No Startups Yet"
-          description="You haven't published a startup yet."
-          actionLabel="Publish Startup"
-          onAction={() => navigate('/app/startups/create')}
-        />
-      )}
-
       {/* Startups Grid or List View */}
-      {!isLoading && filteredStartups.length > 0 && (viewMode === 'grid' ? (
+      {viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredStartups.map((startup) => (
             <Card
@@ -150,26 +121,26 @@ export const MyStartupsPage = () => {
               className="overflow-hidden border-slate-200 dark:border-slate-800 hover:-translate-y-1 transition-all duration-300 shadow-soft-sm hover:shadow-soft-md group"
             >
               {/* Banner */}
-              <div className="h-28 w-full bg-gradient-to-br from-emerald-500/20 to-slate-200 dark:bg-slate-800 relative">
-                {startup.banner && <img src={startup.banner} alt={startup.name} className="w-full h-full object-cover" />}
+              <div className="h-28 w-full bg-slate-200 dark:bg-slate-800 relative">
+                <img src={startup.banner} alt={startup.name} className="w-full h-full object-cover" />
                 <div className="absolute top-3 right-3 flex gap-2">
                   <Badge variant="emerald" className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-md shadow-sm">
-                    {startup.stageLabel}
+                    {startup.stage}
                   </Badge>
                 </div>
               </div>
 
               <div className="p-5 relative pt-0">
                 <div className="flex items-end justify-between -mt-8 mb-3">
-                  <div className="w-14 h-14 rounded-2xl overflow-hidden border-2 border-white dark:border-slate-900 shadow-md bg-white flex items-center justify-center">
-                    {startup.logo ? (
-                      <img src={startup.logo} alt={startup.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <span className="text-emerald-600 font-bold">{startup.name?.charAt(0)}</span>
-                    )}
+                  <div className="w-14 h-14 rounded-2xl overflow-hidden border-2 border-white dark:border-slate-900 shadow-md bg-white">
+                    <img src={startup.logo} alt={startup.name} className="w-full h-full object-cover" />
                   </div>
 
-                  <Badge variant="slate">{startup.status}</Badge>
+                  {/* Health Score Circle */}
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 dark:bg-emerald-950/60 rounded-full border border-emerald-200 dark:border-emerald-900 text-emerald-600 dark:text-emerald-400 text-xs font-bold">
+                    <Activity className="w-3.5 h-3.5" />
+                    <span>{startup.healthScore}% Health</span>
+                  </div>
                 </div>
 
                 <div>
@@ -182,16 +153,12 @@ export const MyStartupsPage = () => {
 
                   <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
                     <div>
-                      <span className="text-slate-400 text-[10px] block">FUNDING GOAL</span>
-                      <strong className="font-bold text-slate-900 dark:text-white">
-                        {startup.fundingTarget ? `$${(startup.fundingTarget / 1000000).toFixed(1)}M` : '—'}
-                      </strong>
+                      <span className="text-slate-400 text-[10px] block">REVISED TARGET</span>
+                      <strong className="font-bold text-slate-900 dark:text-white">${(startup.fundingTarget / 1000000).toFixed(1)}M</strong>
                     </div>
                     <div className="text-right">
-                      <span className="text-slate-400 text-[10px] block">RAISED</span>
-                      <strong className="font-bold text-slate-900 dark:text-white">
-                        ${(startup.fundingRaised / 1000).toFixed(0)}k
-                      </strong>
+                      <span className="text-slate-400 text-[10px] block">TEAM</span>
+                      <strong className="font-bold text-slate-900 dark:text-white">{startup.teamSize} Members</strong>
                     </div>
                   </div>
                 </div>
@@ -234,7 +201,8 @@ export const MyStartupsPage = () => {
               </div>
 
               <div className="flex items-center gap-6 text-xs">
-                <Badge variant="emerald">{startup.stageLabel}</Badge>
+                <Badge variant="emerald">{startup.stage}</Badge>
+                <span className="font-bold text-emerald-600">{startup.healthScore}% Health</span>
                 <Button variant="primary" size="sm" onClick={() => navigate(`/app/startups/${startup.id}/manage`)}>
                   <span>Manage</span>
                 </Button>
@@ -242,7 +210,7 @@ export const MyStartupsPage = () => {
             </div>
           ))}
         </Card>
-      ))}
+      )}
     </div>
   );
 };
