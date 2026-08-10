@@ -7,6 +7,14 @@ export default {
   theme: {
     extend: {
       colors: {
+        trust: {
+          paper: '#F7F5EF',
+          ink: '#0E1A2B',
+          verified: '#0F6E5C',
+          signal: '#C8862B',
+          alert: '#B23A32',
+          slate: '#5B6472',
+        },
         brand: {
           50: '#ecfdf5',
           100: '#d1fae5',
@@ -35,13 +43,14 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['Plus Jakarta Sans', 'Inter', 'system-ui', 'sans-serif'],
+        display: ['Fraunces', 'Georgia', 'serif'],
+        sans: ['IBM Plex Sans', 'Inter', 'system-ui', 'sans-serif'],
+        mono: ['IBM Plex Mono', 'ui-monospace', 'monospace'],
       },
       boxShadow: {
-        'soft-sm': '0 2px 8px -2px rgba(16, 185, 129, 0.08), 0 1px 4px -1px rgba(0, 0, 0, 0.04)',
-        'soft-md': '0 8px 24px -4px rgba(16, 185, 129, 0.12), 0 4px 12px -2px rgba(0, 0, 0, 0.04)',
-        'soft-lg': '0 16px 36px -6px rgba(16, 185, 129, 0.16), 0 8px 20px -4px rgba(0, 0, 0, 0.06)',
-        'glass': '0 8px 32px 0 rgba(16, 185, 129, 0.06)',
+        'soft-sm': '0 8px 24px rgba(14, 26, 43, 0.08)',
+        'soft-md': '0 8px 24px rgba(14, 26, 43, 0.08)',
+        'soft-lg': '0 8px 24px rgba(14, 26, 43, 0.08)',
       },
       backdropBlur: {
         xs: '2px',

@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 // Providers
 import { AuthProvider } from './context/AuthContext';
+import { DevAuthProvider } from './dev/DevAuthProvider';
 import { AppProvider } from './context/AppContext';
 import { ThemeProvider } from './context/ThemeContext';
 
@@ -86,9 +87,10 @@ const ReportsPage = lazy(() => import('./pages/reports/ReportsPage').then(m => (
 const AIInsightsPage = lazy(() => import('./pages/ai/AIInsightsPage').then(m => ({ default: m.AIInsightsPage })));
 
 export function App() {
+  const ActiveAuthProvider = import.meta.env.VITE_DEV_AUTH === '1' ? DevAuthProvider : AuthProvider;
   return (
     <ThemeProvider>
-      <AuthProvider>
+      <ActiveAuthProvider>
         <AppProvider>
           <BrowserRouter>
             <Suspense fallback={<SkeletonPage />}>
@@ -231,7 +233,7 @@ export function App() {
             </Suspense>
           </BrowserRouter>
         </AppProvider>
-      </AuthProvider>
+      </ActiveAuthProvider>
     </ThemeProvider>
   );
 }
