@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, FileText, Settings, Trash2, CheckCircle2, Folder, Calendar } from 'lucide-react';
+import { ArrowLeft, FileText, Settings, Trash2, CheckCircle2, Folder, Calendar, User, Plus, Clock, AlertCircle } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -10,6 +10,7 @@ import { useAuth } from '../../context/AuthContext';
 import * as projectApi from '../../lib/projectApi';
 import * as workspaceApi from '../../lib/workspaceApi';
 import * as startupApi from '../../lib/startupApi';
+import * as taskApi from '../../lib/taskApi';
 import { normalizeStartup } from '../../lib/adapters/startupAdapter';
 
 export const ProjectDetailPage = () => {
@@ -21,15 +22,26 @@ export const ProjectDetailPage = () => {
   const [project, setProject] = useState(null);
   const [workspace, setWorkspace] = useState(null);
   const [startup, setStartup] = useState(null);
+  const [members, setMembers] = useState([]);
+  const [tasks, setTasks] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Editing states
+  // Editing Project states
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editStatus, setEditStatus] = useState('planning');
   const [isSaving, setIsSaving] = useState(false);
+
+  // Task Creation states
+  const [taskTitle, setTaskTitle] = useState('');
+  const [taskDescription, setTaskDescription] = useState('');
+  const [taskPriority, setTaskPriority] = useState('medium');
+  const [taskDueDate, setTaskDueDate] = useState('');
+  const [taskAssignee, setTaskAssignee] = useState('');
+  const [isCreatingTask, setIsCreatingTask] = useState(false);
+  const [showTaskForm, setShowTaskForm] = useState(false);
 
   const fetchProjectData = async () => {
     setIsLoading(true);
@@ -47,11 +59,19 @@ export const ProjectDetailPage = () => {
         const ws = await workspaceApi.getWorkspace(proj.workspace);
         setWorkspace(ws);
 
+        // Fetch workspace members list
+        const membersList = await workspaceApi.listWorkspaceMembers(ws._id || ws.id);
+        setMembers(membersList || []);
+
         // 3. Get Startup details
         if (ws.startup) {
           const startupRaw = await startupApi.getStartup(ws.startup);
           setStartup(normalizeStartup(startupRaw));
         }
+
+        // 4. Fetch Tasks list
+        const tasksList = await taskApi.listTasks(proj._id || proj.id);
+        setTasks(tasksList || []);
       }
     } catch (err) {
       setError(err.message || 'Failed to load project details.');
@@ -90,7 +110,6 @@ export const ProjectDetailPage = () => {
     try {
       await projectApi.archiveProject(project._id || project.id);
       showToast('Project Archived', 'Successfully archived project.', 'success');
-      // Navigate back to parent workspace
       if (workspace) {
         navigate(`/app/workspaces/${workspace._id || workspace.id}`);
       } else {
@@ -98,6 +117,74 @@ export const ProjectDetailPage = () => {
       }
     } catch (err) {
       showToast('Action Failed', err.message || 'Failed to archive project.', 'rose');
+    }
+  };
+
+  const handleCreateTask = async (e) => {
+    e.preventDefault();
+    if (!taskTitle.trim() || !project) return;
+
+    setIsCreatingTask(true);
+    try {
+      const payload = {
+        projectId: project._id || project.id,
+        title: taskTitle.trim(),
+        description: taskDescription.trim(),
+        priority: taskPriority,
+        dueDate: taskDueDate || undefined,
+        assignedTo: taskAssignee || undefined
+      };
+
+      await taskApi.createTask(payload);
+      setTaskTitle('');
+      setTaskDescription('');
+      setTaskPriority('medium');
+      setTaskDueDate('');
+      setTaskAssignee('');
+      setShowTaskForm(false);
+      showToast('Task Created', 'Task added successfully.', 'success');
+
+      // Refresh tasks
+      const tasksList = await taskApi.listTasks(project._id || project.id);
+      setTasks(tasksList || []);
+    } catch (err) {
+      showToast('Creation Failed', err.message || 'Failed to create task.', 'rose');
+    } finally {
+      setIsCreatingTask(false);
+    }
+  };
+
+  const handleUpdateTaskStatus = async (taskId, newStatus) => {
+    try {
+      await taskApi.updateTask(taskId, { status: newStatus });
+      showToast('Task Updated', 'Status changed successfully.', 'success');
+      const tasksList = await taskApi.listTasks(project._id || project.id);
+      setTasks(tasksList || []);
+    } catch (err) {
+      showToast('Action Failed', err.message || 'Failed to update status.', 'rose');
+    }
+  };
+
+  const handleUpdateTaskAssignee = async (taskId, newAssigneeId) => {
+    try {
+      await taskApi.updateTask(taskId, { assignedTo: newAssigneeId || null });
+      showToast('Task Updated', 'Assignee updated successfully.', 'success');
+      const tasksList = await taskApi.listTasks(project._id || project.id);
+      setTasks(tasksList || []);
+    } catch (err) {
+      showToast('Action Failed', err.message || 'Failed to reassign task.', 'rose');
+    }
+  };
+
+  const handleArchiveTask = async (taskId) => {
+    if (!window.confirm('Are you sure you want to archive this task?')) return;
+    try {
+      await taskApi.archiveTask(taskId);
+      showToast('Task Archived', 'Task has been archived.', 'success');
+      const tasksList = await taskApi.listTasks(project._id || project.id);
+      setTasks(tasksList || []);
+    } catch (err) {
+      showToast('Action Failed', err.message || 'Failed to archive task.', 'rose');
     }
   };
 
@@ -128,7 +215,15 @@ export const ProjectDetailPage = () => {
 
   const currentUserId = currentUser?.id || currentUser?._id;
   const isWorkspaceOwner = workspace && String(workspace.owner) === String(currentUserId);
-  const isAuthorizedToEdit = isWorkspaceOwner; // Workspace owner/admin only
+  const isWorkspaceAdmin = isWorkspaceOwner || members.some(m => String(m.id || m.user) === String(currentUserId) && (m.role === 'admin' || m.role === 'owner'));
+  const isContributor = members.some(m => String(m.id || m.user) === String(currentUserId) && m.role === 'contributor');
+
+  const checkCanMutateTask = (task) => {
+    if (isWorkspaceAdmin) return true;
+    const taskCreator = task.createdBy?._id || task.createdBy;
+    const taskAssigneeId = task.assignedTo?._id || task.assignedTo;
+    return String(taskCreator) === String(currentUserId) || String(taskAssigneeId) === String(currentUserId);
+  };
 
   return (
     <div className="bg-[#F7F5EF] text-[#0E1A2B] font-sans p-6 sm:p-8 min-h-screen -m-6 sm:-m-8 space-y-6">
@@ -233,7 +328,7 @@ export const ProjectDetailPage = () => {
                   <FileText className="w-5 h-5 text-[#0F6E5C]" />
                   <h2 className="text-lg font-display font-black text-[#0E1A2B] tracking-tight">{project.name}</h2>
                 </div>
-                {isAuthorizedToEdit && (
+                {isWorkspaceAdmin && (
                   <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
@@ -278,19 +373,228 @@ export const ProjectDetailPage = () => {
             </Card>
           )}
 
-          {/* Projection: Tasks (Future Tasks Placeholder) */}
-          <Card className="p-5 bg-white rounded-[8px] border border-[#5B6472]/20 shadow-[0_2px_8px_rgba(14,26,43,0.08)] space-y-3 opacity-75">
+          {/* Real Task Manager Section */}
+          <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-5 h-5 text-[#5B6472]" />
-                <h4 className="text-xs font-semibold text-[#0E1A2B] uppercase">Workspace Sprint Tasks</h4>
-              </div>
-              <span className="text-[9px] font-mono font-bold bg-[#C8862B]/10 text-[#C8862B] px-1.5 py-0.5 rounded-[4px]">FUTURE IDEA</span>
+              <h3 className="text-sm font-semibold text-[#0E1A2B] uppercase tracking-wider flex items-center gap-1">
+                <CheckCircle2 className="w-4 h-4 text-[#0F6E5C]" /> Sprint Tasks ({tasks.length})
+              </h3>
+              {!showTaskForm && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setShowTaskForm(true)}
+                  className="bg-[#0F6E5C] hover:bg-[#0F6E5C]/90 text-white rounded-[4px] border-0"
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  <span>Add Task</span>
+                </Button>
+              )}
             </div>
-            <p className="text-[10px] text-[#5B6472] leading-relaxed">
-              Sprint Tasks will link directly to this project Epic. Team members will be able to mark sub-task checklists and update sprint progress.
-            </p>
-          </Card>
+
+            {/* Task Creation Form */}
+            {showTaskForm && (
+              <Card className="p-5 bg-white rounded-[8px] border border-[#5B6472]/20 shadow-[0_2px_8px_rgba(14,26,43,0.08)] space-y-4">
+                <h4 className="text-xs font-bold text-[#0E1A2B] uppercase">Create Workspace Task</h4>
+                <form onSubmit={handleCreateTask} className="space-y-3">
+                  <Input
+                    label="Task Title"
+                    value={taskTitle}
+                    onChange={(e) => setTaskTitle(e.target.value)}
+                    required
+                    placeholder="e.g. Implement Oauth signup callbacks"
+                    className="rounded-[4px] border-[#5B6472]/30"
+                  />
+
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-semibold text-[#0E1A2B] uppercase tracking-wider">
+                      Description
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={taskDescription}
+                      onChange={(e) => setTaskDescription(e.target.value)}
+                      placeholder="Detailed tasks expectations..."
+                      className="w-full bg-[#F7F5EF]/50 text-[#0E1A2B] placeholder:text-[#5B6472]/50 text-sm rounded-[4px] border border-[#5B6472]/30 p-2.5 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0F6E5C]/30 focus:border-[#0F6E5C] outline-none"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="block text-xs font-semibold text-[#0E1A2B] uppercase tracking-wider">
+                        Priority
+                      </label>
+                      <select
+                        value={taskPriority}
+                        onChange={(e) => setTaskPriority(e.target.value)}
+                        className="w-full bg-[#F7F5EF]/50 border border-[#5B6472]/30 text-sm rounded-[4px] px-2 h-11 text-[#0E1A2B]"
+                      >
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                        <option value="urgent">Urgent</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="block text-xs font-semibold text-[#0E1A2B] uppercase tracking-wider">
+                        Due Date
+                      </label>
+                      <input
+                        type="date"
+                        value={taskDueDate}
+                        onChange={(e) => setTaskDueDate(e.target.value)}
+                        className="w-full bg-[#F7F5EF]/50 border border-[#5B6472]/30 text-sm rounded-[4px] px-3 h-11 text-[#0E1A2B] focus:outline-none"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="block text-xs font-semibold text-[#0E1A2B] uppercase tracking-wider">
+                        Assignee
+                      </label>
+                      <select
+                        value={taskAssignee}
+                        onChange={(e) => setTaskAssignee(e.target.value)}
+                        className="w-full bg-[#F7F5EF]/50 border border-[#5B6472]/30 text-sm rounded-[4px] px-2 h-11 text-[#0E1A2B]"
+                      >
+                        <option value="">Unassigned</option>
+                        {isContributor ? (
+                          // Contributors can only self-assign or leave unassigned
+                          members.filter(m => String(m.id || m.user) === String(currentUserId)).map(m => (
+                            <option key={m.id || m.email} value={m.id || m.user}>
+                              {m.name || m.email} (Self)
+                            </option>
+                          ))
+                        ) : (
+                          // Owner/Admins can assign to any member
+                          members.map((m) => (
+                            <option key={m.id || m.email} value={m.id || m.user}>
+                              {m.name || m.email}
+                            </option>
+                          ))
+                        )}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      isLoading={isCreatingTask}
+                      className="bg-[#0F6E5C] hover:bg-[#0F6E5C]/90 text-white rounded-[4px] border-0"
+                    >
+                      Create Task
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowTaskForm(false)}
+                      className="border border-[#5B6472]/30 text-[#0E1A2B] rounded-[4px]"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              </Card>
+            )}
+
+            {/* Task list layout */}
+            {tasks.length === 0 ? (
+              <Card className="p-6 text-center text-xs text-[#5B6472] bg-white border border-dashed border-[#5B6472]/30 rounded-[8px]">
+                No active tasks created for this project.
+              </Card>
+            ) : (
+              <div className="space-y-3">
+                {tasks.map((task) => {
+                  const canMutate = checkCanMutateTask(task);
+                  
+                  return (
+                    <Card
+                      key={task._id}
+                      className="p-4 bg-white rounded-[8px] border border-[#5B6472]/20 shadow-[0_2px_8px_rgba(14,26,43,0.08)] flex flex-col sm:flex-row justify-between gap-4"
+                    >
+                      <div className="space-y-1.5 max-w-lg">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="text-xs font-bold text-[#0E1A2B]">{task.title}</h4>
+                          <span className={`text-[8px] font-mono font-bold uppercase px-1.5 py-0.5 rounded-[4px] ${
+                            task.priority === 'urgent' ? 'bg-[#B23A32]/10 text-[#B23A32]' :
+                            task.priority === 'high' ? 'bg-[#C8862B]/10 text-[#C8862B]' :
+                            'bg-[#5B6472]/15 text-[#5B6472]'
+                          }`}>
+                            {task.priority}
+                          </span>
+                        </div>
+                        {task.description && (
+                          <p className="text-[10px] text-[#5B6472] leading-relaxed">{task.description}</p>
+                        )}
+                        <div className="flex gap-4 text-[9px] font-mono text-[#5B6472] flex-wrap">
+                          {task.dueDate && (
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-[#5B6472]" /> Due: {new Date(task.dueDate).toLocaleDateString()}
+                            </span>
+                          )}
+                          <span className="flex items-center gap-1">
+                            <User className="w-3 h-3 text-[#5B6472]" /> Mapped: {
+                              members.find(m => String(m.id || m.user) === String(task.assignedTo?._id || task.assignedTo))?.name || 'Unassigned'
+                            }
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Status / Actions */}
+                      <div className="flex items-center gap-3 self-start sm:self-center flex-wrap">
+                        {/* Task Status LedgerStamp */}
+                        <LedgerStamp status={task.status} date={task.updatedAt || task.createdAt} />
+
+                        {canMutate ? (
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={task.status}
+                              onChange={(e) => handleUpdateTaskStatus(task._id, e.target.value)}
+                              className="bg-[#F7F5EF] border border-[#5B6472]/30 text-[10px] rounded-[4px] px-1.5 py-0.5 text-[#0E1A2B]"
+                            >
+                              <option value="todo">To Do</option>
+                              <option value="in_progress">In Progress</option>
+                              <option value="in_review">In Review</option>
+                              <option value="done">Done</option>
+                            </select>
+
+                            {/* Contributor restriction: check mutate reassignment rules */}
+                            {!isContributor && (
+                              <select
+                                value={task.assignedTo?._id || task.assignedTo || ''}
+                                onChange={(e) => handleUpdateTaskAssignee(task._id, e.target.value)}
+                                className="bg-[#F7F5EF] border border-[#5B6472]/30 text-[10px] rounded-[4px] px-1.5 py-0.5 text-[#0E1A2B]"
+                              >
+                                <option value="">Unassigned</option>
+                                {members.map((m) => (
+                                  <option key={m.id || m.email} value={m.id || m.user}>
+                                    {m.name || m.email}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+
+                            <button
+                              onClick={() => handleArchiveTask(task._id)}
+                              className="text-[#B23A32]/70 hover:text-[#B23A32] p-1.5 border border-[#B23A32]/25 rounded-[4px] transition-colors"
+                              title="Archive Task"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 text-[9px] text-[#5B6472] font-mono">
+                            <AlertCircle className="w-3 h-3" /> Read Only
+                          </div>
+                        )}
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Right side info (4 Cols) */}
