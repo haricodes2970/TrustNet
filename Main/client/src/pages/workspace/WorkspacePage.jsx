@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Folder, ArrowLeft, Plus, Settings, User, Users, FileText, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { Folder, ArrowLeft, Plus, Settings, User, Users, FileText, CheckCircle2, Trash2 } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
+import { LedgerStamp } from '../../components/ui/LedgerStamp';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import * as workspaceApi from '../../lib/workspaceApi';
 import * as startupApi from '../../lib/startupApi';
+import * as projectApi from '../../lib/projectApi';
 import { normalizeStartup } from '../../lib/adapters/startupAdapter';
 
 export const WorkspacePage = () => {
@@ -20,15 +22,23 @@ export const WorkspacePage = () => {
   const [workspace, setWorkspace] = useState(null);
   const [workspacesList, setWorkspacesList] = useState([]); // Used when listing all workspaces
   const [members, setMembers] = useState([]);
+  const [projects, setProjects] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Creation/Edit states
+  // Workspace Creation/Edit states
   const [newName, setNewName] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [newVisibility, setNewVisibility] = useState('team');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+
+  // Project Creation states
+  const [projectName, setProjectName] = useState('');
+  const [projectDescription, setProjectDescription] = useState('');
+  const [projectStatus, setProjectStatus] = useState('planning');
+  const [isCreatingProject, setIsCreatingProject] = useState(false);
+  const [showProjectForm, setShowProjectForm] = useState(false);
 
   const fetchWorkspaceData = async () => {
     setIsLoading(true);
@@ -72,6 +82,10 @@ export const WorkspacePage = () => {
           // Fetch project members for this workspace
           const membersList = await workspaceApi.listWorkspaceMembers(currentWorkspace._id || currentWorkspace.id);
           setMembers(membersList || []);
+
+          // Fetch real projects for this workspace
+          const projectsList = await projectApi.listProjects(currentWorkspace._id || currentWorkspace.id);
+          setProjects(projectsList || []);
         }
       }
     } catch (err) {
@@ -134,6 +148,61 @@ export const WorkspacePage = () => {
     }
   };
 
+  const handleCreateProject = async (e) => {
+    e.preventDefault();
+    if (!projectName.trim() || !workspace) return;
+
+    setIsCreatingProject(true);
+    try {
+      const payload = {
+        workspaceId: workspace._id || workspace.id,
+        name: projectName.trim(),
+        description: projectDescription.trim(),
+        status: projectStatus
+      };
+
+      await projectApi.createProject(payload);
+      setProjectName('');
+      setProjectDescription('');
+      setProjectStatus('planning');
+      setShowProjectForm(false);
+      showToast('Project Created', 'Project added successfully.', 'success');
+
+      // Refresh project list
+      const projectsList = await projectApi.listProjects(workspace._id || workspace.id);
+      setProjects(projectsList || []);
+    } catch (err) {
+      showToast('Creation Failed', err.message || 'Failed to create project.', 'rose');
+    } finally {
+      setIsCreatingProject(false);
+    }
+  };
+
+  const handleUpdateProjectStatus = async (projectId, newStatus) => {
+    try {
+      await projectApi.updateProject(projectId, { status: newStatus });
+      showToast('Status Updated', 'Project status updated successfully.', 'success');
+      // Refresh project list
+      const projectsList = await projectApi.listProjects(workspace._id || workspace.id);
+      setProjects(projectsList || []);
+    } catch (err) {
+      showToast('Action Failed', err.message || 'Failed to update project status.', 'rose');
+    }
+  };
+
+  const handleArchiveProject = async (projectId) => {
+    if (!window.confirm('Are you sure you want to archive this project?')) return;
+    try {
+      await projectApi.archiveProject(projectId);
+      showToast('Project Archived', 'Project has been archived.', 'success');
+      // Refresh project list
+      const projectsList = await projectApi.listProjects(workspace._id || workspace.id);
+      setProjects(projectsList || []);
+    } catch (err) {
+      showToast('Action Failed', err.message || 'Failed to archive project.', 'rose');
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="bg-[#F7F5EF] min-h-screen -m-6 sm:-m-8 p-6 sm:p-8 flex items-center justify-center">
@@ -161,6 +230,7 @@ export const WorkspacePage = () => {
   const currentUserId = currentUser?.id || currentUser?._id;
   const isOwner = workspace && String(workspace.owner) === String(currentUserId);
   const isFounder = startup && String(startup.founderId) === String(currentUserId);
+  const isWorkspaceWriteAdmin = isOwner || (members.some(m => String(m.id || m.user) === String(currentUserId) && (m.role === 'admin' || m.role === 'owner')));
 
   // GLOBAL WORKSPACE LISTING VIEW
   if (!id) {
@@ -448,23 +518,154 @@ export const WorkspacePage = () => {
               </Card>
             )}
 
-            {/* Future Ideas: Projects & Tasks */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              <Card className="p-5 bg-white rounded-[8px] border border-[#5B6472]/20 shadow-[0_2px_8px_rgba(14,26,43,0.08)] space-y-2 opacity-75">
-                <div className="flex items-center justify-between">
-                  <FileText className="w-5 h-5 text-[#5B6472]" />
-                  <span className="text-[9px] font-mono font-bold bg-[#C8862B]/10 text-[#C8862B] px-1.5 py-0.5 rounded-[4px]">FUTURE IDEA</span>
-                </div>
-                <h4 className="text-xs font-semibold text-[#0E1A2B]">Sprint Projects</h4>
-                <p className="text-[10px] text-[#5B6472] leading-relaxed">Group tasks into clean epic goals and product milestones.</p>
-              </Card>
+            {/* Project List Section */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-[#0E1A2B] uppercase tracking-wider">
+                  Sprint Projects ({projects.length})
+                </h3>
+                {isWorkspaceWriteAdmin && !showProjectForm && (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => setShowProjectForm(true)}
+                    className="bg-[#0F6E5C] hover:bg-[#0F6E5C]/90 text-white rounded-[4px] border-0"
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    <span>New Project</span>
+                  </Button>
+                )}
+              </div>
 
+              {/* Project Creation Form */}
+              {showProjectForm && (
+                <Card className="p-5 bg-white rounded-[8px] border border-[#5B6472]/20 shadow-[0_2px_8px_rgba(14,26,43,0.08)] space-y-4">
+                  <h4 className="text-xs font-bold text-[#0E1A2B] uppercase">Create New Workspace Project</h4>
+                  <form onSubmit={handleCreateProject} className="space-y-3">
+                    <Input
+                      label="Project Name"
+                      value={projectName}
+                      onChange={(e) => setProjectName(e.target.value)}
+                      required
+                      placeholder="e.g. Q3 Roadmap Deliverable"
+                      className="rounded-[4px] border-[#5B6472]/30"
+                    />
+
+                    <div className="space-y-1.5">
+                      <label className="block text-xs font-semibold text-[#0E1A2B] uppercase tracking-wider">
+                        Description
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={projectDescription}
+                        onChange={(e) => setProjectDescription(e.target.value)}
+                        placeholder="Project overview and targets..."
+                        className="w-full bg-[#F7F5EF]/50 text-[#0E1A2B] placeholder:text-[#5B6472]/50 text-sm rounded-[4px] border border-[#5B6472]/30 p-2.5 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0F6E5C]/30 focus:border-[#0F6E5C] outline-none"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="block text-xs font-semibold text-[#0E1A2B] uppercase tracking-wider">
+                        Initial Lifecycle Status
+                      </label>
+                      <select
+                        value={projectStatus}
+                        onChange={(e) => setProjectStatus(e.target.value)}
+                        className="w-full bg-[#F7F5EF]/50 border border-[#5B6472]/30 text-sm rounded-[4px] px-3.5 h-11 text-[#0E1A2B] focus:bg-white focus:ring-2 focus:ring-[#0F6E5C]/30 focus:border-[#0F6E5C]"
+                      >
+                        <option value="planning">Planning (Draft)</option>
+                        <option value="active">Active (Sprint Run)</option>
+                        <option value="on_hold">On Hold</option>
+                        <option value="completed">Completed</option>
+                      </select>
+                    </div>
+
+                    <div className="flex gap-2 pt-2">
+                      <Button
+                        type="submit"
+                        variant="primary"
+                        isLoading={isCreatingProject}
+                        className="bg-[#0F6E5C] hover:bg-[#0F6E5C]/90 text-white rounded-[4px] border-0"
+                      >
+                        Create Project
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowProjectForm(false)}
+                        className="border border-[#5B6472]/30 text-[#0E1A2B] rounded-[4px]"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </form>
+                </Card>
+              )}
+
+              {/* Projects Grid */}
+              {projects.length === 0 ? (
+                <Card className="p-6 text-center text-xs text-[#5B6472] bg-white border border-dashed border-[#5B6472]/30 rounded-[8px]">
+                  No active projects initialized in this workspace.
+                </Card>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {projects.map((proj) => (
+                    <Card
+                      key={proj._id}
+                      className="p-5 bg-white rounded-[8px] border border-[#5B6472]/20 shadow-[0_2px_8px_rgba(14,26,43,0.08)] flex flex-col justify-between"
+                    >
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <h4 className="text-xs font-bold text-[#0E1A2B] line-clamp-1">{proj.name}</h4>
+                          {isWorkspaceWriteAdmin && (
+                            <button
+                              onClick={() => handleArchiveProject(proj._id)}
+                              className="text-[#B23A32]/70 hover:text-[#B23A32] p-1 transition-colors"
+                              title="Archive Project"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-[#5B6472] leading-relaxed line-clamp-2 min-h-[30px]">
+                          {proj.description || 'No description provided.'}
+                        </p>
+                      </div>
+
+                      <div className="pt-3 border-t border-[#5B6472]/10 mt-3 flex items-center justify-between">
+                        {/* Project status using LedgerStamp */}
+                        <LedgerStamp status={proj.status} date={proj.updatedAt || proj.createdAt} />
+
+                        {isWorkspaceWriteAdmin ? (
+                          <select
+                            value={proj.status}
+                            onChange={(e) => handleUpdateProjectStatus(proj._id, e.target.value)}
+                            className="bg-[#F7F5EF] border border-[#5B6472]/30 text-[10px] rounded-[4px] px-1.5 py-0.5 text-[#0E1A2B] focus:outline-none"
+                          >
+                            <option value="planning">Planning</option>
+                            <option value="active">Active</option>
+                            <option value="on_hold">On Hold</option>
+                            <option value="completed">Completed</option>
+                          </select>
+                        ) : (
+                          <span className="text-[9px] font-mono font-bold uppercase bg-[#F7F5EF] border border-[#5B6472]/20 text-[#5B6472] px-1.5 py-0.5 rounded-[4px]">
+                            {proj.status}
+                          </span>
+                        )}
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Task Board Card Placeholder (Tasks are future-task scope) */}
+            <div className="pt-2">
               <Card className="p-5 bg-white rounded-[8px] border border-[#5B6472]/20 shadow-[0_2px_8px_rgba(14,26,43,0.08)] space-y-2 opacity-75">
                 <div className="flex items-center justify-between">
                   <CheckCircle2 className="w-5 h-5 text-[#5B6472]" />
                   <span className="text-[9px] font-mono font-bold bg-[#C8862B]/10 text-[#C8862B] px-1.5 py-0.5 rounded-[4px]">FUTURE IDEA</span>
                 </div>
-                <h4 className="text-xs font-semibold text-[#0E1A2B]">Task Boards</h4>
+                <h4 className="text-xs font-semibold text-[#0E1A2B]">Sprint Task Boards</h4>
                 <p className="text-[10px] text-[#5B6472] leading-relaxed">Assign execution tasks, check priorities, and update sprint statuses.</p>
               </Card>
             </div>
