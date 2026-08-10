@@ -17,6 +17,7 @@ import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { IdentityUploadCard } from '../../components/ui/IdentityUploadCard';
+import { LedgerStamp } from '../../components/ui/LedgerStamp';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { BASE_URL, getToken } from '../../lib/apiClient';
@@ -34,6 +35,7 @@ export const VerificationPage = () => {
 
   const [verificationStatus, setVerificationStatus] = useState('draft'); // 'draft' | 'pending' | 'approved' | 'rejected' | 'resubmission_requested'
   const [accountStatus, setAccountStatus] = useState('EMAIL_PENDING');
+  const [submittedAt, setSubmittedAt] = useState(null);
   const [isPageLoading, setIsPageLoading] = useState(true);
   const [pageError, setPageError] = useState('');
   const [submitLoading, setSubmitLoading] = useState(false);
@@ -55,6 +57,7 @@ export const VerificationPage = () => {
       const data = res.data;
       setVerificationStatus(data.status);
       setAccountStatus(data.accountStatus);
+      setSubmittedAt(data.submittedAt);
 
       // Map backend documents array back to docsState
       const nextDocs = {
@@ -257,53 +260,11 @@ export const VerificationPage = () => {
       )}
 
       {/* Verification status highlights */}
-      {verificationStatus === 'approved' && (
-        <Card className="p-6 border-slate-200 dark:border-slate-800 bg-emerald-50/50 dark:bg-emerald-950/10">
-          <div className="flex items-start gap-4">
-            <div className="p-3 bg-emerald-500 text-white rounded-2xl">
-              <ShieldCheck className="w-6 h-6" />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white">Credentials Verified</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-xl leading-relaxed">
-                Your TrustNet identity has been approved! Your profile is verified and you have full access to high-trust features.
-              </p>
-            </div>
-          </div>
-        </Card>
-      )}
-
-      {verificationStatus === 'pending' && (
-        <Card className="p-6 border-slate-200 dark:border-slate-800 bg-amber-50/50 dark:bg-amber-950/10">
-          <div className="flex items-start gap-4">
-            <div className="p-3 bg-amber-500 text-white rounded-2xl">
-              <Clock className="w-6 h-6 animate-pulse" />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white">Verification Under Review</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-xl leading-relaxed">
-                Our team is currently auditing your uploaded credentials. We will notify you once approval is complete.
-              </p>
-            </div>
-          </div>
-        </Card>
-      )}
-
-      {(verificationStatus === 'rejected' || verificationStatus === 'resubmission_requested') && (
-        <Card className="p-6 border-slate-200 dark:border-slate-800 bg-red-50/50 dark:bg-red-950/10">
-          <div className="flex items-start gap-4">
-            <div className="p-3 bg-red-500 text-white rounded-2xl">
-              <AlertCircle className="w-6 h-6" />
-            </div>
-            <div className="space-y-1">
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white">Verification Update Required</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xl leading-relaxed">
-                Some details in your application were rejected. Please review the issues, upload fresh documents, and submit again.
-              </p>
-            </div>
-          </div>
-        </Card>
-      )}
+      <LedgerStamp 
+        status={verificationStatus} 
+        timestamp={submittedAt} 
+        className="w-full shadow-soft-sm"
+      />
 
       {/* Grid of upload categories */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -316,7 +277,7 @@ export const VerificationPage = () => {
           file={docsState.government_id.file}
           progress={docsState.government_id.progress}
           status={docsState.government_id.status}
-          errorMessage={docsState.government_id.errorMessage}
+          errorMessage={docsState.government_id.errorMessage || (docsState.government_id.docStatus === 'rejected' ? `Rejected: ${docsState.government_id.rejectionReason || 'Invalid details.'}` : '')}
           onFileSelect={(file, err) => handleUploadFile('government_id', file, err)}
           onRemove={() => handleRemoveFile('government_id')}
         />
@@ -330,7 +291,7 @@ export const VerificationPage = () => {
           file={docsState.company_registration.file}
           progress={docsState.company_registration.progress}
           status={docsState.company_registration.status}
-          errorMessage={docsState.company_registration.errorMessage}
+          errorMessage={docsState.company_registration.errorMessage || (docsState.company_registration.docStatus === 'rejected' ? `Rejected: ${docsState.company_registration.rejectionReason || 'Invalid details.'}` : '')}
           onFileSelect={(file, err) => handleUploadFile('company_registration', file, err)}
           onRemove={() => handleRemoveFile('company_registration')}
         />
@@ -344,7 +305,7 @@ export const VerificationPage = () => {
           file={docsState.business_website.file}
           progress={docsState.business_website.progress}
           status={docsState.business_website.status}
-          errorMessage={docsState.business_website.errorMessage}
+          errorMessage={docsState.business_website.errorMessage || (docsState.business_website.docStatus === 'rejected' ? `Rejected: ${docsState.business_website.rejectionReason || 'Invalid details.'}` : '')}
           onFileSelect={(file, err) => handleUploadFile('business_website', file, err)}
           onRemove={() => handleRemoveFile('business_website')}
         />
@@ -358,7 +319,7 @@ export const VerificationPage = () => {
           file={docsState.linkedin.file}
           progress={docsState.linkedin.progress}
           status={docsState.linkedin.status}
-          errorMessage={docsState.linkedin.errorMessage}
+          errorMessage={docsState.linkedin.errorMessage || (docsState.linkedin.docStatus === 'rejected' ? `Rejected: ${docsState.linkedin.rejectionReason || 'Invalid details.'}` : '')}
           onFileSelect={(file, err) => handleUploadFile('linkedin', file, err)}
           onRemove={() => handleRemoveFile('linkedin')}
         />
