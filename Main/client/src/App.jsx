@@ -47,6 +47,7 @@ const StartupDetailPage = lazy(() => import('./pages/startups/StartupDetailPage'
 const CreateStartupPage = lazy(() => import('./pages/startups/CreateStartupPage').then(m => ({ default: m.CreateStartupPage })));
 const StartupManagementDashboard = lazy(() => import('./pages/startups/StartupManagementDashboard').then(m => ({ default: m.StartupManagementDashboard })));
 const StartupTeamPage = lazy(() => import('./pages/startups/StartupTeamPage').then(m => ({ default: m.StartupTeamPage })));
+const ProjectDetailPage = lazy(() => import('./pages/workspace/ProjectDetailPage').then(m => ({ default: m.ProjectDetailPage })));
 
 // Scheduler & Utilities
 const CalendarPage = lazy(() => import('./pages/calendar/CalendarPage').then(m => ({ default: m.CalendarPage })));
@@ -177,6 +178,7 @@ export function App() {
                   <Route path="notifications" element={<NotificationsPage />} />
                   <Route path="workspace" element={<WorkspacePage />} />
                   <Route path="workspaces/:id" element={<WorkspacePage />} />
+                  <Route path="projects/:id" element={<ProjectDetailPage />} />
 
                   {/* Backend modules with no page in the original design --
                       minimal stubs added during integration. */}

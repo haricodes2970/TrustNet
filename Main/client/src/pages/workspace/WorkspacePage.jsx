@@ -615,7 +615,11 @@ export const WorkspacePage = () => {
                     >
                       <div className="space-y-3">
                         <div className="flex items-center justify-between gap-2">
-                          <h4 className="text-xs font-bold text-[#0E1A2B] line-clamp-1">{proj.name}</h4>
+                          <h4 className="text-xs font-bold text-[#0E1A2B] line-clamp-1">
+                             <Link to={`/app/projects/${proj._id}`} className="hover:text-[#0F6E5C] transition-colors">
+                               {proj.name}
+                             </Link>
+                          </h4>
                           {isWorkspaceWriteAdmin && (
                             <button
                               onClick={() => handleArchiveProject(proj._id)}
