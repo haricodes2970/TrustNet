@@ -1,18 +1,22 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { Lock, Eye, EyeOff, CheckCircle2, ArrowRight, Check, X } from 'lucide-react';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
+import * as authApi from '../../lib/authApi';
 
 export const ResetPasswordPage = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get('token');
+
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(token ? '' : 'Password reset token is missing. Please request a new password reset link.');
 
   // Password Requirements Evaluation
   const hasMinLength = password.length >= 8;
@@ -34,8 +38,12 @@ export const ResetPasswordPage = () => {
   const strength = getStrengthState();
   const isStrong = strength.score >= 3;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!token) {
+      setError('Password reset token is missing. Please request a new password reset link.');
+      return;
+    }
     if (!isStrong) {
       setError('Password is too weak. Please meet security rules.');
       return;
@@ -48,14 +56,17 @@ export const ResetPasswordPage = () => {
     setError('');
     setIsLoading(true);
 
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      await authApi.resetPassword({ token, password, confirmPassword });
       setIsSuccess(true);
-
       setTimeout(() => {
         navigate('/login');
       }, 2500);
-    }, 900);
+    } catch (err) {
+      setError(err.message || 'This password reset link is invalid or has expired.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -85,12 +96,14 @@ export const ResetPasswordPage = () => {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••••••"
                 className="h-12"
+                disabled={isLoading || !token}
                 required
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-3.5 top-9 text-slate-400 hover:text-slate-600 text-xs"
+                disabled={isLoading || !token}
               >
                 {showPassword ? <EyeOff className="w-4 h-4" strokeWidth={1.75} /> : <Eye className="w-4 h-4" strokeWidth={1.75} />}
               </button>
@@ -153,18 +166,20 @@ export const ResetPasswordPage = () => {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="••••••••••••"
                 className="h-12"
+                disabled={isLoading || !token}
                 required
               />
               <button
                 type="button"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                 className="absolute right-3.5 top-9 text-slate-400 hover:text-slate-600 text-xs"
+                disabled={isLoading || !token}
               >
                 {showConfirmPassword ? <EyeOff className="w-4 h-4" strokeWidth={1.75} /> : <Eye className="w-4 h-4" strokeWidth={1.75} />}
               </button>
             </div>
 
-            <Button type="submit" variant="primary" size="lg" className="w-full h-12 mt-4" isLoading={isLoading} disabled={!isStrong}>
+            <Button type="submit" variant="primary" size="lg" className="w-full h-12 mt-4" isLoading={isLoading} disabled={!isStrong || !token}>
               <span>Update Password</span>
               <ArrowRight className="w-4 h-4" strokeWidth={1.75} />
             </Button>
