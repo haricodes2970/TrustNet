@@ -46,6 +46,7 @@ const StartupDiscoveryPage = lazy(() => import('./pages/startups/StartupDiscover
 const StartupDetailPage = lazy(() => import('./pages/startups/StartupDetailPage').then(m => ({ default: m.StartupDetailPage })));
 const CreateStartupPage = lazy(() => import('./pages/startups/CreateStartupPage').then(m => ({ default: m.CreateStartupPage })));
 const StartupManagementDashboard = lazy(() => import('./pages/startups/StartupManagementDashboard').then(m => ({ default: m.StartupManagementDashboard })));
+const StartupTeamPage = lazy(() => import('./pages/startups/StartupTeamPage').then(m => ({ default: m.StartupTeamPage })));
 
 // Scheduler & Utilities
 const CalendarPage = lazy(() => import('./pages/calendar/CalendarPage').then(m => ({ default: m.CalendarPage })));
@@ -150,6 +151,7 @@ export function App() {
                   <Route path="startups/create" element={<CreateStartupPage />} />
                   <Route path="startups/:id" element={<StartupDetailPage />} />
                   <Route path="startups/:id/manage" element={<StartupManagementDashboard />} />
+                  <Route path="startups/:id/team" element={<StartupTeamPage />} />
 
                   {/* Role Specializations */}
                   <Route path="investor" element={<DashboardPage />} />
