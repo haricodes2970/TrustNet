@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, FileText, Settings, Trash2, CheckCircle2, Folder, Calendar, User, Plus, Clock, AlertCircle } from 'lucide-react';
+import { ArrowLeft, FileText, Settings, Trash2, CheckCircle2, Folder, Calendar, User, Plus, Clock, AlertCircle, Bookmark } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -11,6 +11,7 @@ import * as projectApi from '../../lib/projectApi';
 import * as workspaceApi from '../../lib/workspaceApi';
 import * as startupApi from '../../lib/startupApi';
 import * as taskApi from '../../lib/taskApi';
+import * as milestoneApi from '../../lib/milestoneApi';
 import { normalizeStartup } from '../../lib/adapters/startupAdapter';
 
 export const ProjectDetailPage = () => {
@@ -24,6 +25,7 @@ export const ProjectDetailPage = () => {
   const [startup, setStartup] = useState(null);
   const [members, setMembers] = useState([]);
   const [tasks, setTasks] = useState([]);
+  const [milestones, setMilestones] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -42,6 +44,13 @@ export const ProjectDetailPage = () => {
   const [taskAssignee, setTaskAssignee] = useState('');
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const [showTaskForm, setShowTaskForm] = useState(false);
+
+  // Milestone Creation states
+  const [milestoneTitle, setMilestoneTitle] = useState('');
+  const [milestoneDescription, setMilestoneDescription] = useState('');
+  const [milestoneDueDate, setMilestoneDueDate] = useState('');
+  const [isCreatingMilestone, setIsCreatingMilestone] = useState(false);
+  const [showMilestoneForm, setShowMilestoneForm] = useState(false);
 
   const fetchProjectData = async () => {
     setIsLoading(true);
@@ -72,6 +81,10 @@ export const ProjectDetailPage = () => {
         // 4. Fetch Tasks list
         const tasksList = await taskApi.listTasks(proj._id || proj.id);
         setTasks(tasksList || []);
+
+        // 5. Fetch Milestones list
+        const milestonesList = await milestoneApi.listMilestones(proj._id || proj.id);
+        setMilestones(milestonesList || []);
       }
     } catch (err) {
       setError(err.message || 'Failed to load project details.');
@@ -176,6 +189,17 @@ export const ProjectDetailPage = () => {
     }
   };
 
+  const handleUpdateTaskMilestone = async (taskId, milestoneId) => {
+    try {
+      await taskApi.updateTask(taskId, { milestone: milestoneId || null });
+      showToast('Task Updated', 'Milestone group updated.', 'success');
+      const tasksList = await taskApi.listTasks(project._id || project.id);
+      setTasks(tasksList || []);
+    } catch (err) {
+      showToast('Action Failed', err.message || 'Failed to map task to milestone.', 'rose');
+    }
+  };
+
   const handleArchiveTask = async (taskId) => {
     if (!window.confirm('Are you sure you want to archive this task?')) return;
     try {
@@ -185,6 +209,59 @@ export const ProjectDetailPage = () => {
       setTasks(tasksList || []);
     } catch (err) {
       showToast('Action Failed', err.message || 'Failed to archive task.', 'rose');
+    }
+  };
+
+  const handleCreateMilestone = async (e) => {
+    e.preventDefault();
+    if (!milestoneTitle.trim() || !project) return;
+
+    setIsCreatingMilestone(true);
+    try {
+      const payload = {
+        projectId: project._id || project.id,
+        title: milestoneTitle.trim(),
+        description: milestoneDescription.trim(),
+        dueDate: milestoneDueDate || undefined
+      };
+
+      await milestoneApi.createMilestone(payload);
+      setMilestoneTitle('');
+      setMilestoneDescription('');
+      setMilestoneDueDate('');
+      setShowMilestoneForm(false);
+      showToast('Milestone Created', 'Milestone initialized.', 'success');
+
+      // Refresh milestones
+      const milestonesList = await milestoneApi.listMilestones(project._id || project.id);
+      setMilestones(milestonesList || []);
+    } catch (err) {
+      showToast('Creation Failed', err.message || 'Failed to create milestone.', 'rose');
+    } finally {
+      setIsCreatingMilestone(false);
+    }
+  };
+
+  const handleUpdateMilestoneStatus = async (milestoneId, newStatus) => {
+    try {
+      await milestoneApi.updateMilestone(milestoneId, { status: newStatus });
+      showToast('Milestone Updated', 'Status changed successfully.', 'success');
+      const milestonesList = await milestoneApi.listMilestones(project._id || project.id);
+      setMilestones(milestonesList || []);
+    } catch (err) {
+      showToast('Action Failed', err.message || 'Failed to update milestone status.', 'rose');
+    }
+  };
+
+  const handleArchiveMilestone = async (milestoneId) => {
+    if (!window.confirm('Are you sure you want to archive this milestone?')) return;
+    try {
+      await milestoneApi.archiveMilestone(milestoneId);
+      showToast('Milestone Archived', 'Milestone has been archived.', 'success');
+      const milestonesList = await milestoneApi.listMilestones(project._id || project.id);
+      setMilestones(milestonesList || []);
+    } catch (err) {
+      showToast('Action Failed', err.message || 'Failed to archive milestone.', 'rose');
     }
   };
 
@@ -373,6 +450,147 @@ export const ProjectDetailPage = () => {
             </Card>
           )}
 
+          {/* Real Milestones Section */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-[#0E1A2B] uppercase tracking-wider flex items-center gap-1">
+                <Bookmark className="w-4 h-4 text-[#0F6E5C]" /> Milestones ({milestones.length})
+              </h3>
+              {isWorkspaceAdmin && !showMilestoneForm && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setShowMilestoneForm(true)}
+                  className="bg-[#0F6E5C] hover:bg-[#0F6E5C]/90 text-white rounded-[4px] border-0"
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  <span>New Milestone</span>
+                </Button>
+              )}
+            </div>
+
+            {/* Milestone creation form */}
+            {showMilestoneForm && (
+              <Card className="p-5 bg-white rounded-[8px] border border-[#5B6472]/20 shadow-[0_2px_8px_rgba(14,26,43,0.08)] space-y-4">
+                <h4 className="text-xs font-bold text-[#0E1A2B] uppercase">Initialize Milestone</h4>
+                <form onSubmit={handleCreateMilestone} className="space-y-3">
+                  <Input
+                    label="Milestone Title"
+                    value={milestoneTitle}
+                    onChange={(e) => setMilestoneTitle(e.target.value)}
+                    required
+                    placeholder="e.g. Beta v1 Launch Release"
+                    className="rounded-[4px] border-[#5B6472]/30"
+                  />
+
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-semibold text-[#0E1A2B] uppercase tracking-wider">
+                      Description
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={milestoneDescription}
+                      onChange={(e) => setMilestoneDescription(e.target.value)}
+                      placeholder="Objectives and scope..."
+                      className="w-full bg-[#F7F5EF]/50 text-[#0E1A2B] placeholder:text-[#5B6472]/50 text-sm rounded-[4px] border border-[#5B6472]/30 p-2.5 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0F6E5C]/30 focus:border-[#0F6E5C] outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-semibold text-[#0E1A2B] uppercase tracking-wider">
+                      Due Date
+                    </label>
+                    <input
+                      type="date"
+                      value={milestoneDueDate}
+                      onChange={(e) => setMilestoneDueDate(e.target.value)}
+                      className="w-full bg-[#F7F5EF]/50 border border-[#5B6472]/30 text-sm rounded-[4px] px-3 h-11 text-[#0E1A2B] focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      isLoading={isCreatingMilestone}
+                      className="bg-[#0F6E5C] hover:bg-[#0F6E5C]/90 text-white rounded-[4px] border-0"
+                    >
+                      Create Milestone
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowMilestoneForm(false)}
+                      className="border border-[#5B6472]/30 text-[#0E1A2B] rounded-[4px]"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              </Card>
+            )}
+
+            {/* Milestones grid list */}
+            {milestones.length === 0 ? (
+              <Card className="p-6 text-center text-xs text-[#5B6472] bg-white border border-dashed border-[#5B6472]/30 rounded-[8px]">
+                No active milestones defined for this project.
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {milestones.map((ms) => (
+                  <Card
+                    key={ms._id}
+                    className="p-4 bg-white rounded-[8px] border border-[#5B6472]/20 shadow-[0_2px_8px_rgba(14,26,43,0.08)] flex flex-col justify-between"
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <h4 className="text-xs font-bold text-[#0E1A2B] line-clamp-1">{ms.title}</h4>
+                        {isWorkspaceAdmin && (
+                          <button
+                            onClick={() => handleArchiveMilestone(ms._id)}
+                            className="text-[#B23A32]/70 hover:text-[#B23A32] p-1 transition-colors"
+                            title="Archive Milestone"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                      {ms.description && (
+                        <p className="text-[10px] text-[#5B6472] leading-relaxed line-clamp-2">{ms.description}</p>
+                      )}
+                      {ms.dueDate && (
+                        <div className="text-[9px] font-mono text-[#5B6472] flex items-center gap-1">
+                          <Clock className="w-3 h-3" /> Target: {new Date(ms.dueDate).toLocaleDateString()}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="pt-3 border-t border-[#5B6472]/10 mt-3 flex items-center justify-between">
+                      {/* Milestone status using LedgerStamp */}
+                      <LedgerStamp status={ms.status} date={ms.updatedAt || ms.createdAt} />
+
+                      {isWorkspaceAdmin ? (
+                        <select
+                          value={ms.status}
+                          onChange={(e) => handleUpdateMilestoneStatus(ms._id, e.target.value)}
+                          className="bg-[#F7F5EF] border border-[#5B6472]/30 text-[10px] rounded-[4px] px-1.5 py-0.5 text-[#0E1A2B] focus:outline-none"
+                        >
+                          <option value="planned">Planned</option>
+                          <option value="in_progress">In Progress</option>
+                          <option value="completed">Completed</option>
+                          <option value="missed">Missed</option>
+                        </select>
+                      ) : (
+                        <span className="text-[9px] font-mono font-bold uppercase bg-[#F7F5EF] border border-[#5B6472]/20 text-[#5B6472] px-1.5 py-0.5 rounded-[4px]">
+                          {ms.status}
+                        </span>
+                      )}
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Real Task Manager Section */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -459,14 +677,12 @@ export const ProjectDetailPage = () => {
                       >
                         <option value="">Unassigned</option>
                         {isContributor ? (
-                          // Contributors can only self-assign or leave unassigned
                           members.filter(m => String(m.id || m.user) === String(currentUserId)).map(m => (
                             <option key={m.id || m.email} value={m.id || m.user}>
                               {m.name || m.email} (Self)
                             </option>
                           ))
                         ) : (
-                          // Owner/Admins can assign to any member
                           members.map((m) => (
                             <option key={m.id || m.email} value={m.id || m.user}>
                               {m.name || m.email}
@@ -538,6 +754,13 @@ export const ProjectDetailPage = () => {
                               members.find(m => String(m.id || m.user) === String(task.assignedTo?._id || task.assignedTo))?.name || 'Unassigned'
                             }
                           </span>
+                          {task.milestone && (
+                            <span className="flex items-center gap-1 text-[#0F6E5C] font-bold">
+                              <Bookmark className="w-3 h-3" /> Milestone: {
+                                milestones.find(ms => String(ms._id) === String(task.milestone?._id || task.milestone))?.title || 'Linked'
+                              }
+                            </span>
+                          )}
                         </div>
                       </div>
 
@@ -559,7 +782,20 @@ export const ProjectDetailPage = () => {
                               <option value="done">Done</option>
                             </select>
 
-                            {/* Contributor restriction: check mutate reassignment rules */}
+                            {/* Milestone mapping dropdown */}
+                            <select
+                              value={task.milestone?._id || task.milestone || ''}
+                              onChange={(e) => handleUpdateTaskMilestone(task._id, e.target.value)}
+                              className="bg-[#F7F5EF] border border-[#5B6472]/30 text-[10px] rounded-[4px] px-1.5 py-0.5 text-[#0E1A2B]"
+                            >
+                              <option value="">No Milestone</option>
+                              {milestones.map((ms) => (
+                                <option key={ms._id} value={ms._id}>
+                                  {ms.title}
+                                </option>
+                              ))}
+                            </select>
+
                             {!isContributor && (
                               <select
                                 value={task.assignedTo?._id || task.assignedTo || ''}
