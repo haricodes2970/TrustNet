@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, FileText, Settings, Trash2, CheckCircle2, Folder, Calendar, User, Plus, Clock, AlertCircle, Bookmark } from 'lucide-react';
+import { ArrowLeft, FileText, Settings, Trash2, CheckCircle2, Folder, Calendar, User, Plus, Clock, AlertCircle, Bookmark, Upload, ExternalLink } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -12,6 +12,7 @@ import * as workspaceApi from '../../lib/workspaceApi';
 import * as startupApi from '../../lib/startupApi';
 import * as taskApi from '../../lib/taskApi';
 import * as milestoneApi from '../../lib/milestoneApi';
+import * as documentApi from '../../lib/documentApi';
 import { normalizeStartup } from '../../lib/adapters/startupAdapter';
 
 export const ProjectDetailPage = () => {
@@ -26,6 +27,7 @@ export const ProjectDetailPage = () => {
   const [members, setMembers] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [milestones, setMilestones] = useState([]);
+  const [documents, setDocuments] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -51,6 +53,19 @@ export const ProjectDetailPage = () => {
   const [milestoneDueDate, setMilestoneDueDate] = useState('');
   const [isCreatingMilestone, setIsCreatingMilestone] = useState(false);
   const [showMilestoneForm, setShowMilestoneForm] = useState(false);
+
+  // Document Upload states
+  const [docTitle, setDocTitle] = useState('');
+  const [docDescription, setDocDescription] = useState('');
+  const [docFile, setDocFile] = useState(null);
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+  const [showDocForm, setShowDocForm] = useState(false);
+
+  // Document Metadata Edit states
+  const [editingDoc, setEditingDoc] = useState(null);
+  const [editDocTitle, setEditDocTitle] = useState('');
+  const [editDocDescription, setEditDocDescription] = useState('');
+  const [isSavingDocMetadata, setIsSavingDocMetadata] = useState(false);
 
   const fetchProjectData = async () => {
     setIsLoading(true);
@@ -85,6 +100,10 @@ export const ProjectDetailPage = () => {
         // 5. Fetch Milestones list
         const milestonesList = await milestoneApi.listMilestones(proj._id || proj.id);
         setMilestones(milestonesList || []);
+
+        // 6. Fetch Documents list
+        const docsList = await documentApi.listDocuments(proj._id || proj.id);
+        setDocuments(docsList || []);
       }
     } catch (err) {
       setError(err.message || 'Failed to load project details.');
@@ -265,6 +284,86 @@ export const ProjectDetailPage = () => {
     }
   };
 
+  // Document actions
+  const handleUploadDocument = async (e) => {
+    e.preventDefault();
+    if (!docTitle.trim() || !docFile || !project) return;
+
+    // Check size limit: 20MB Joi/Multer cap
+    if (docFile.size > 20 * 1024 * 1024) {
+      showToast('File Too Large', 'Maximum file size allowed is 20MB.', 'rose');
+      return;
+    }
+
+    setIsUploadingDoc(true);
+    try {
+      const formData = new FormData();
+      formData.append('document', docFile);
+      formData.append('projectId', project._id || project.id);
+      formData.append('title', docTitle.trim());
+      formData.append('description', docDescription.trim());
+
+      await documentApi.uploadDocument(formData);
+      setDocTitle('');
+      setDocDescription('');
+      setDocFile(null);
+      setShowDocForm(false);
+      showToast('Document Uploaded', 'Successfully uploaded file.', 'success');
+
+      // Refresh documents
+      const docsList = await documentApi.listDocuments(project._id || project.id);
+      setDocuments(docsList || []);
+    } catch (err) {
+      showToast('Upload Failed', err.message || 'Failed to upload file.', 'rose');
+    } finally {
+      setIsUploadingDoc(false);
+    }
+  };
+
+  const handleUpdateDocMetadata = async (e) => {
+    e.preventDefault();
+    if (!editDocTitle.trim() || !editingDoc) return;
+
+    setIsSavingDocMetadata(true);
+    try {
+      const updated = await documentApi.updateDocumentMetadata(editingDoc._id || editingDoc.id, {
+        title: editDocTitle.trim(),
+        description: editDocDescription.trim()
+      });
+      setEditingDoc(null);
+      showToast('Metadata Updated', 'Saved changes successfully.', 'success');
+      // Refresh documents
+      const docsList = await documentApi.listDocuments(project._id || project.id);
+      setDocuments(docsList || []);
+    } catch (err) {
+      showToast('Action Failed', err.message || 'Failed to update metadata.', 'rose');
+    } finally {
+      setIsSavingDocMetadata(false);
+    }
+  };
+
+  const handleArchiveDocument = async (docId) => {
+    if (!window.confirm('Are you sure you want to archive this document?')) return;
+    try {
+      await documentApi.archiveDocument(docId);
+      showToast('Document Archived', 'Successfully archived document.', 'success');
+      // Refresh documents
+      const docsList = await documentApi.listDocuments(project._id || project.id);
+      setDocuments(docsList || []);
+    } catch (err) {
+      showToast('Action Failed', err.message || 'Failed to archive document.', 'rose');
+    }
+  };
+
+  const formatBytes = (bytes) => {
+    if (!bytes) return '0 Bytes';
+    const k = 1024;
+    const dm = 2;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+  };
+
   if (isLoading) {
     return (
       <div className="bg-[#F7F5EF] min-h-screen -m-6 sm:-m-8 p-6 sm:p-8 flex items-center justify-center">
@@ -300,6 +399,12 @@ export const ProjectDetailPage = () => {
     const taskCreator = task.createdBy?._id || task.createdBy;
     const taskAssigneeId = task.assignedTo?._id || task.assignedTo;
     return String(taskCreator) === String(currentUserId) || String(taskAssigneeId) === String(currentUserId);
+  };
+
+  const checkCanMutateDoc = (doc) => {
+    if (isWorkspaceAdmin) return true;
+    const docCreator = doc.createdBy?._id || doc.createdBy;
+    return String(docCreator) === String(currentUserId);
   };
 
   return (
@@ -824,6 +929,195 @@ export const ProjectDetailPage = () => {
                             <AlertCircle className="w-3 h-3" /> Read Only
                           </div>
                         )}
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Real Documents Section */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-[#0E1A2B] uppercase tracking-wider flex items-center gap-1">
+                <FileText className="w-4 h-4 text-[#0F6E5C]" /> Project Documents ({documents.length})
+              </h3>
+              {!showDocForm && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setShowDocForm(true)}
+                  className="bg-[#0F6E5C] hover:bg-[#0F6E5C]/90 text-white rounded-[4px] border-0"
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  <span>Upload File</span>
+                </Button>
+              )}
+            </div>
+
+            {/* Document upload form */}
+            {showDocForm && (
+              <Card className="p-5 bg-white rounded-[8px] border border-[#5B6472]/20 shadow-[0_2px_8px_rgba(14,26,43,0.08)] space-y-4">
+                <h4 className="text-xs font-bold text-[#0E1A2B] uppercase flex items-center gap-1">
+                  <Upload className="w-4 h-4 text-[#0F6E5C]" /> Upload Document
+                </h4>
+                <form onSubmit={handleUploadDocument} className="space-y-3">
+                  <Input
+                    label="Document Title"
+                    value={docTitle}
+                    onChange={(e) => setDocTitle(e.target.value)}
+                    required
+                    placeholder="e.g. Carbon Credits Audit Report"
+                    className="rounded-[4px] border-[#5B6472]/30"
+                  />
+
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-semibold text-[#0E1A2B] uppercase tracking-wider">
+                      Description
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={docDescription}
+                      onChange={(e) => setDocDescription(e.target.value)}
+                      placeholder="Brief description of the document..."
+                      className="w-full bg-[#F7F5EF]/50 text-[#0E1A2B] placeholder:text-[#5B6472]/50 text-sm rounded-[4px] border border-[#5B6472]/30 p-2.5 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0F6E5C]/30 focus:border-[#0F6E5C] outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-semibold text-[#0E1A2B] uppercase tracking-wider">
+                      File Attachment (Max 20MB)
+                    </label>
+                    <input
+                      type="file"
+                      onChange={(e) => setDocFile(e.target.files[0])}
+                      required
+                      className="w-full text-xs text-[#5B6472] file:mr-4 file:py-2 file:px-4 file:rounded-[4px] file:border-0 file:text-xs file:font-semibold file:bg-[#F7F5EF] file:text-[#0E1A2B] hover:file:bg-[#F7F5EF]/80 cursor-pointer"
+                    />
+                  </div>
+
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      isLoading={isUploadingDoc}
+                      className="bg-[#0F6E5C] hover:bg-[#0F6E5C]/90 text-white rounded-[4px] border-0"
+                    >
+                      Upload File
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowDocForm(false)}
+                      className="border border-[#5B6472]/30 text-[#0E1A2B] rounded-[4px]"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              </Card>
+            )}
+
+            {/* Document metadata editing panel */}
+            {editingDoc && (
+              <Card className="p-5 bg-white rounded-[8px] border border-[#5B6472]/20 shadow-[0_2px_8px_rgba(14,26,43,0.08)] space-y-4">
+                <h4 className="text-xs font-bold text-[#0E1A2B] uppercase">Edit Document Metadata</h4>
+                <form onSubmit={handleUpdateDocMetadata} className="space-y-3">
+                  <Input
+                    label="Document Title"
+                    value={editDocTitle}
+                    onChange={(e) => setEditDocTitle(e.target.value)}
+                    required
+                    className="rounded-[4px] border-[#5B6472]/30"
+                  />
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-semibold text-[#0E1A2B] uppercase tracking-wider">
+                      Description
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={editDocDescription}
+                      onChange={(e) => setEditDocDescription(e.target.value)}
+                      className="w-full bg-[#F7F5EF]/50 text-[#0E1A2B] text-sm rounded-[4px] border border-[#5B6472]/30 p-2.5 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0F6E5C]/30 focus:border-[#0F6E5C] outline-none"
+                    />
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      isLoading={isSavingDocMetadata}
+                      className="bg-[#0F6E5C] hover:bg-[#0F6E5C]/90 text-white rounded-[4px] border-0"
+                    >
+                      Save
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => setEditingDoc(null)}
+                      className="border border-[#5B6472]/30 text-[#0E1A2B] rounded-[4px]"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              </Card>
+            )}
+
+            {/* Documents List */}
+            {documents.length === 0 ? (
+              <Card className="p-6 text-center text-xs text-[#5B6472] bg-white border border-dashed border-[#5B6472]/30 rounded-[8px]">
+                No active documents uploaded for this project.
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {documents.map((doc) => {
+                  const canMutate = checkCanMutateDoc(doc);
+                  
+                  return (
+                    <Card
+                      key={doc._id}
+                      className="p-4 bg-white rounded-[8px] border border-[#5B6472]/20 shadow-[0_2px_8px_rgba(14,26,43,0.08)] flex flex-col justify-between"
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <h4 className="text-xs font-bold text-[#0E1A2B] line-clamp-1">{doc.title}</h4>
+                            <span className="text-[9px] font-mono text-[#5B6472] block line-clamp-1">{doc.fileName}</span>
+                          </div>
+                          {canMutate && (
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => {
+                                  setEditingDoc(doc);
+                                  setEditDocTitle(doc.title);
+                                  setEditDocDescription(doc.description || '');
+                                }}
+                                className="text-[#5B6472] hover:text-[#0E1A2B] p-1 transition-colors"
+                                title="Edit Metadata"
+                              >
+                                <Settings className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleArchiveDocument(doc._id)}
+                                className="text-[#B23A32]/70 hover:text-[#B23A32] p-1 transition-colors"
+                                title="Archive Document"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {doc.description && (
+                          <p className="text-[10px] text-[#5B6472] leading-relaxed line-clamp-2">{doc.description}</p>
+                        )}
+                      </div>
+
+                      <div className="pt-3 border-t border-[#5B6472]/10 mt-3 flex items-center justify-between text-[9px] font-mono text-[#5B6472]">
+                        <span>Size: {formatBytes(doc.fileSize)}</span>
+                        {/* downloadUrl is local filesystem and not HTTP serveable in this phase */}
+                        <span className="flex items-center gap-1 opacity-60 cursor-not-allowed" title="Download path not routed in this phase (local-disk default)">
+                          <ExternalLink className="w-3 h-3" /> Download
+                        </span>
                       </div>
                     </Card>
                   );
