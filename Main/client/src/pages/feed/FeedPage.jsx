@@ -31,7 +31,7 @@ export const FeedPage = () => {
     setError('');
     try {
       // Fetch public posts sorted by creation date (newest first)
-      const data = await postApi.listPosts({}, { sort: { createdAt: -1 } });
+      const data = await postApi.listPosts({}, { sort: '-createdAt' });
       setPosts(data || []);
     } catch (err) {
       setError(err.message || 'Failed to load posts from TrustNet.');
