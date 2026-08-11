@@ -20,44 +20,43 @@ import { Badge } from '../../components/ui/Badge';
 import { ProgressRing } from '../../components/ui/ProgressRing';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
-import * as startupApi from '../../lib/startupApi';
-import { toCreatePayload, STAGE_OPTIONS, normalizeStartup } from '../../lib/adapters/startupAdapter';
 
 export const CreateStartupPage = () => {
   const navigate = useNavigate();
-  const { setStartups, showToast } = useApp();
+  const { createStartup, showToast } = useApp();
   const { currentUser } = useAuth();
 
   const [currentStep, setCurrentStep] = useState(1);
-  const [isPublishing, setIsPublishing] = useState(false);
-  const [publishError, setPublishError] = useState('');
 
-  // Blank by default -- this used to prefill a full fake example, which
-  // meant "Publish" could succeed without the founder typing anything.
   const [formData, setFormData] = useState({
-    name: '',
-    tagline: '',
-    logo: '',
-    banner: '',
-    industry: '',
-    stage: 'idea',
-    location: '',
-    website: '',
-    description: '',
-    problem: '',
-    solution: '',
-    targetAudience: '',
-    fundingTarget: 0,
-    fundingRaised: 0,
-    // Below: collected in the wizard for UX continuity, but the backend
-    // Startup model has no columns for any of these -- not sent on
-    // publish. Team invites belong to the Team module (not wired this
-    // pass); story/mission/vision/businessModel/useOfFunds/milestones have
-    // no backend equivalent at all.
+    name: 'AuraScale AI',
+    tagline: 'Autonomous enterprise customer operations powered by fine-tuned LLM agents',
+    logo: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&q=80&w=200',
+    banner: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&q=80&w=1200',
+    industry: 'AI & SaaS',
+    stage: 'Seed',
+    location: 'San Francisco, CA',
+    website: 'https://aurascale.example.com',
+    description: 'AuraScale AI provides enterprise platforms with autonomous support, workflows, and instant API integrations.',
+    story: 'Founded in 2024 by ex-Google AI engineers after recognizing that 80% of customer tickets can be resolved autonomously.',
+    mission: 'To automate complex enterprise workflows with human-level accuracy and empathy.',
+    vision: 'Becoming the operating system for next-generation AI enterprise work.',
+    problem: 'Enterprise support teams spend $450B annually on repetitive manual customer resolution.',
+    solution: 'Fine-tuned domain-specific agent orchestrators that connect directly to internal SQL databases and Slack.',
+    businessModel: 'B2B SaaS Subscription ($2k - $15k / month based on resolved agent workflows)',
+    targetAudience: 'Mid-market to Enterprise SaaS and Fintech companies with >50 support agents.',
+    fundingTarget: 2500000,
+    fundingRaised: 750000,
+    useOfFunds: '60% Engineering & AI Research, 25% Go-to-market & Enterprise Sales, 15% Operations & Legal.',
+    visibility: 'Public',
     team: [
-      { name: currentUser?.name || currentUser?.fullName || 'You', role: 'Founder & CEO', email: currentUser?.email || '', dept: 'Executive', access: 'Admin' }
+      { name: currentUser?.name || 'Alex Morgan', role: 'Founder & CEO', email: 'alex@aurascale.io', dept: 'Executive', access: 'Admin' },
+      { name: 'Dr. Marcus Vance', role: 'CTO & Co-Founder', email: 'marcus@aurascale.io', dept: 'Engineering', access: 'Admin' }
     ],
-    milestones: []
+    milestones: [
+      { date: 'Q1 2026', title: 'Y Combinator W26 Acceptance', status: 'completed' },
+      { date: 'Q2 2026', title: 'Crossed $30k MRR across 12 Beta Enterprise clients', status: 'in-progress' }
+    ]
   });
 
   const [newMemberEmail, setNewMemberEmail] = useState('');
@@ -92,40 +91,43 @@ export const CreateStartupPage = () => {
     setNewMemberEmail('');
   };
 
-  const handlePublish = async () => {
-    setPublishError('');
+  const handlePublish = () => {
+    const newStartup = {
+      id: `stp_${Date.now()}`,
+      name: formData.name,
+      tagline: formData.tagline,
+      description: formData.description || formData.tagline,
+      logo: formData.logo,
+      banner: formData.banner,
+      stage: formData.stage,
+      industry: formData.industry,
+      location: formData.location,
+      fundingRaised: Number(formData.fundingRaised),
+      fundingTarget: Number(formData.fundingTarget),
+      valuation: `$${(Number(formData.fundingTarget) * 4 / 1000000).toFixed(1)}M`,
+      founder: currentUser,
+      teamSize: formData.team.length,
+      foundedYear: 2026,
+      website: formData.website,
+      techStack: ['React', 'Python', 'FastAPI', 'PyTorch', 'TailwindCSS'],
+      milestones: formData.milestones,
+      gallery: [],
+      isBookmarked: false
+    };
 
-    if (!formData.name || !formData.tagline) {
-      setPublishError('Name and tagline are required.');
-      setCurrentStep(1);
-      return;
-    }
-    if (!formData.description || formData.description.trim().length < 50) {
-      setPublishError('Description must be at least 50 characters (backend requirement).');
-      setCurrentStep(2);
-      return;
-    }
-    if (!formData.industry) {
-      setPublishError('Industry/category is required.');
-      setCurrentStep(1);
-      return;
-    }
+    createStartup(newStartup).then((saved) => {
+      confetti({
+        particleCount: 120,
+        spread: 70,
+        origin: { y: 0.6 }
+      });
 
-    setIsPublishing(true);
-    try {
-      const payload = toCreatePayload(formData);
-      const created = await startupApi.createStartup(payload);
-      const normalized = normalizeStartup(created);
-      setStartups(prev => [normalized, ...prev]);
-
-      confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
-      showToast('🚀 Startup Published Live!', `${normalized.name} is now live on the TrustNet directory.`, 'success');
-      navigate(`/app/startups/${normalized.id}`);
-    } catch (err) {
-      setPublishError(err.message || 'Failed to publish startup.');
-    } finally {
-      setIsPublishing(false);
-    }
+      showToast('🚀 Startup Published Live!', `${formData.name} is now live on the TrustNet directory.`, 'success');
+      navigate(`/app/startups/${saved.id || newStartup.id}/manage`);
+    }).catch(err => {
+      console.error(err);
+      showToast('Error publishing startup', 'Please try again.', 'error');
+    });
   };
 
   const steps = [
@@ -217,13 +219,19 @@ export const CreateStartupPage = () => {
                 />
 
                 <div className="grid grid-cols-2 gap-4">
-                  <Input
-                    label="Industry / Category"
-                    value={formData.industry}
-                    onChange={(e) => updateField('industry', e.target.value)}
-                    placeholder="e.g. AI & SaaS, Fintech, HealthTech"
-                    required
-                  />
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Industry</label>
+                    <select
+                      value={formData.industry}
+                      onChange={(e) => updateField('industry', e.target.value)}
+                      className="w-full bg-slate-50/80 border border-slate-200 text-sm rounded-xl px-3.5 h-11 text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
+                    >
+                      <option value="AI & SaaS">AI & SaaS</option>
+                      <option value="Fintech">Fintech</option>
+                      <option value="ClimateTech">ClimateTech</option>
+                      <option value="HealthTech">HealthTech</option>
+                    </select>
+                  </div>
 
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Stage</label>
@@ -232,9 +240,9 @@ export const CreateStartupPage = () => {
                       onChange={(e) => updateField('stage', e.target.value)}
                       className="w-full bg-slate-50/80 border border-slate-200 text-sm rounded-xl px-3.5 h-11 text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
                     >
-                      {STAGE_OPTIONS.map((s) => (
-                        <option key={s.value} value={s.value}>{s.label}</option>
-                      ))}
+                      <option value="Pre-Seed">Pre-Seed</option>
+                      <option value="Seed">Seed</option>
+                      <option value="Series A">Series A</option>
                     </select>
                   </div>
                 </div>
@@ -275,19 +283,6 @@ export const CreateStartupPage = () => {
               </div>
 
               <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                    Description <span className="text-slate-400 normal-case">(min. 50 characters)</span>
-                  </label>
-                  <textarea
-                    rows={4}
-                    value={formData.description}
-                    onChange={(e) => updateField('description', e.target.value)}
-                    className="w-full bg-slate-50/80 border border-slate-200 rounded-xl p-3 text-sm text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none"
-                  />
-                  <p className="text-[11px] text-slate-400 mt-1">{formData.description.length}/50 minimum</p>
-                </div>
-
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Problem Statement</label>
                   <textarea
@@ -402,13 +397,7 @@ export const CreateStartupPage = () => {
                 </p>
               </div>
 
-              {publishError && (
-                <div className="p-3 text-xs bg-red-50 text-red-600 rounded-xl border border-red-200 font-medium">
-                  {publishError}
-                </div>
-              )}
-
-              <Button variant="primary" size="lg" className="w-full" onClick={handlePublish} isLoading={isPublishing}>
+              <Button variant="primary" size="lg" className="w-full" onClick={handlePublish}>
                 <Rocket className="w-5 h-5" strokeWidth={1.75} />
                 <span>Publish Startup Now</span>
               </Button>
