@@ -3,25 +3,26 @@ import { useNavigate, useLocation, useSearchParams, Link } from 'react-router-do
 import { ShieldCheck, ArrowRight, ArrowLeft, RefreshCw } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { useAuth } from '../../context/AuthContext';
+import * as authApi from '../../lib/authApi';
+import { useApp } from '../../context/AppContext';
 
 export const VerifyOtpPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const { completeTwoFactorLogin } = useAuth();
+  const { showToast } = useApp();
   const userEmail = location.state?.email || 'alex@nexusai.io';
 
   // Real 2FA-login case: arrives here from LoginPage (state.twoFactorToken,
   // after POST /auth/login returned requiresTwoFactor) or from an OAuth
   // redirect (backend sends 2FA-enabled users to
-  // /login?twoFactorToken=... -- LoginPage forwards them here). Every
-  // other case (signup email verification, password-reset code) has no
-  // real backend equivalent -- this backend's register/forgot-password
-  // flows don't use a 6-digit code at all -- so those keep the original
-  // mock behavior below, unchanged.
+  // /login?twoFactorToken=... -- LoginPage forwards them here).
+
+
   const twoFactorToken = location.state?.twoFactorToken || searchParams.get('twoFactorToken');
 
-  const [otp, setOtp] = useState(twoFactorToken ? ['', '', '', '', '', ''] : ['4', '8', '2', '9', '1', '6']);
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [resendTimer, setResendTimer] = useState(60);
   const [canResend, setCanResend] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -76,12 +77,20 @@ export const VerifyOtpPage = () => {
     }
   };
 
-  const handleResend = () => {
+  const handleResend = async () => {
     if (!canResend) return;
     setResendTimer(60);
     setCanResend(false);
     setError('');
-    // Mock resend code
+    setIsLoading(true);
+    try {
+      await authApi.resendVerification({ email: userEmail });
+      showToast('Verification Code Resent', 'A new 6-digit OTP code has been sent.', 'success');
+    } catch (err) {
+      setError(err.message || 'Failed to resend verification code.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -107,16 +116,16 @@ export const VerifyOtpPage = () => {
       return;
     }
 
-    // Mock path (no real backend endpoint for this) -- signup email
-    // verification and password-reset code entry.
-    setTimeout(() => {
+    // Email verification path (real API call)
+    try {
+      await authApi.verifyEmail({ email: userEmail, otp: code });
+      showToast('Email Verified Successfully', 'Your TrustNet account is now active. Please sign in.', 'success');
+      navigate('/login', { state: { justVerified: true, email: userEmail } });
+    } catch (err) {
+      setError(err.message || 'Invalid or expired verification code.');
+    } finally {
       setIsLoading(false);
-      if (location.state?.isSignup) {
-        navigate('/onboarding');
-      } else {
-        navigate('/reset-password', { state: { email: userEmail, code } });
-      }
-    }, 1000);
+    }
   };
 
   return (
@@ -162,7 +171,9 @@ export const VerifyOtpPage = () => {
               value={digit}
               onChange={(e) => handleChange(idx, e.target.value)}
               onKeyDown={(e) => handleKeyDown(idx, e)}
-              className="w-11 h-12 text-center text-lg font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 transition-all"
+              disabled={isLoading}
+              aria-label={`Digit ${idx + 1}`}
+              className="w-11 h-12 text-center text-lg font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             />
           ))}
         </div>

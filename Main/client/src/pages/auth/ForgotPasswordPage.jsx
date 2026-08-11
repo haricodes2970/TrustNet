@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Mail, ArrowRight, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
+import * as authApi from '../../lib/authApi';
 
 export const ForgotPasswordPage = () => {
   const navigate = useNavigate();
@@ -11,7 +12,7 @@ export const ForgotPasswordPage = () => {
   const [isSent, setIsSent] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!email || !email.includes('@')) {
       setError('Please enter a valid work email address.');
@@ -21,11 +22,14 @@ export const ForgotPasswordPage = () => {
     setError('');
     setIsLoading(true);
 
-    // Mock API Delay
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      await authApi.forgotPassword({ email });
       setIsSent(true);
-    }, 1200);
+    } catch (err) {
+      setError(err.message || 'Could not send the password reset email.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -43,7 +47,7 @@ export const ForgotPasswordPage = () => {
           <div>
             <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Reset your password</h1>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Enter your work email address and we'll send you a 6-digit OTP verification code.
+              Enter your work email address and we'll send you a password reset link.
             </p>
           </div>
 
@@ -61,6 +65,7 @@ export const ForgotPasswordPage = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="alex@nexusai.io"
+              disabled={isLoading}
               required
             />
 
@@ -68,10 +73,10 @@ export const ForgotPasswordPage = () => {
               type="submit"
               variant="primary"
               size="lg"
-              className="w-full"
+              className="w-full h-12"
               isLoading={isLoading}
             >
-              <span>Send Reset OTP</span>
+              <span>Send Reset Link</span>
               <ArrowRight className="w-4 h-4" />
             </Button>
           </form>
@@ -85,17 +90,17 @@ export const ForgotPasswordPage = () => {
           <div>
             <h2 className="text-xl font-bold text-slate-900 dark:text-white">Email Sent Successfully</h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 max-w-sm mx-auto leading-relaxed">
-              We sent a 6-digit verification code to <span className="font-bold text-slate-800 dark:text-slate-200">{email}</span>. Please check your inbox.
+              We sent a password reset link to <span className="font-bold text-slate-800 dark:text-slate-200">{email}</span>. Please check your inbox and click the link to reset your password.
             </p>
           </div>
 
           <Button
             variant="primary"
             size="lg"
-            className="w-full"
-            onClick={() => navigate('/verify-otp', { state: { email } })}
+            className="w-full h-12"
+            onClick={() => navigate('/login')}
           >
-            <span>Enter OTP Verification Code</span>
+            <span>Back to Login</span>
             <ArrowRight className="w-4 h-4" />
           </Button>
         </div>

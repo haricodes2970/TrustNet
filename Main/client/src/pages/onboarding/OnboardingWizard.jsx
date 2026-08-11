@@ -25,6 +25,7 @@ import { Avatar } from '../../components/ui/Avatar';
 import { IdentityUploadCard } from '../../components/ui/IdentityUploadCard';
 import { useAuth } from '../../context/AuthContext';
 import confetti from 'canvas-confetti';
+import { apiClient } from '../../lib/apiClient';
 
 export const OnboardingWizard = () => {
   const navigate = useNavigate();
@@ -32,6 +33,8 @@ export const OnboardingWizard = () => {
 
   const [step, setStep] = useState(1);
   const [selectedRole, setSelectedRole] = useState('Founder');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   
   // Credibility Profile State
   const [headline, setHeadline] = useState(currentUser?.headline || '');
@@ -88,7 +91,30 @@ export const OnboardingWizard = () => {
     'Marketing', 'Agriculture', 'SaaS', 'Climate', 'Developer Tools', 'Robotics'
   ];
 
-  const handleNext = () => {
+  const handleNext = async () => {
+    setError('');
+    if (step === 2) {
+      if (!headline.trim()) {
+        setError('Professional headline is required.');
+        return;
+      }
+      if (portfolioLink && !/^https?:\/\/\S+$/i.test(portfolioLink)) {
+        setError('Portfolio URL must be a valid website link (starting with http:// or https://).');
+        return;
+      }
+    }
+
+    if (step === 3) {
+      if (linkedinUrl && !/^https?:\/\/\S+$/i.test(linkedinUrl)) {
+        setError('LinkedIn URL must be a valid link (starting with http:// or https://).');
+        return;
+      }
+      if (websiteUrl && !/^https?:\/\/\S+$/i.test(websiteUrl)) {
+        setError('Website URL must be a valid link (starting with http:// or https://).');
+        return;
+      }
+    }
+
     if (step < 4) {
       if (step === 3) {
         // Trigger celebratory confetti on final step selection
@@ -96,25 +122,42 @@ export const OnboardingWizard = () => {
       }
       setStep(step + 1);
     } else {
-      // Save all credibility fields matching user profile requirements
-      updateUserProfile({
-        role: selectedRole,
-        headline: headline || `${selectedRole} @ Ecosystem`,
-        skills: skills.split(',').map(s => s.trim()).filter(Boolean),
-        startupStage,
-        industry,
-        fundingRequirement,
-        revenue,
-        country,
-        experience,
-        portfolioLink,
-        partnershipAvailability,
-        interests,
-        linkedinUrl,
-        websiteUrl,
-        isVerified: false
-      });
-      navigate(`/app/dashboard?role=${selectedRole.toLowerCase()}`);
+      setIsLoading(true);
+      setError('');
+      try {
+        await apiClient.put('/profile', {
+          designation: headline || `${selectedRole} @ Ecosystem`,
+          location: country,
+          bio: experience,
+          linkedin: linkedinUrl,
+          website: websiteUrl,
+          onboardingCompleted: true
+        });
+
+        // Save all credibility fields matching user profile requirements
+        updateUserProfile({
+          role: selectedRole.toLowerCase(),
+          headline: headline || `${selectedRole} @ Ecosystem`,
+          skills: skills.split(',').map(s => s.trim()).filter(Boolean),
+          startupStage,
+          industry,
+          fundingRequirement,
+          revenue,
+          country,
+          experience,
+          portfolioLink,
+          partnershipAvailability,
+          interests,
+          linkedinUrl,
+          websiteUrl,
+          onboardingCompleted: true
+        });
+        navigate(`/app/dashboard?role=${selectedRole.toLowerCase()}`);
+      } catch (err) {
+        setError(err.message || 'Failed to complete onboarding profile update.');
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -137,6 +180,12 @@ export const OnboardingWizard = () => {
             />
           </div>
         </div>
+
+        {error && (
+          <div className="mb-6 p-3 text-xs bg-red-50 text-red-600 rounded-xl border border-red-200 font-medium max-w-2xl mx-auto text-center">
+            {error}
+          </div>
+        )}
 
         {/* Wizard Steps */}
         <AnimatePresence mode="wait">
@@ -202,6 +251,7 @@ export const OnboardingWizard = () => {
                     value={headline}
                     onChange={(e) => setHeadline(e.target.value)}
                     placeholder="Founder & CEO @ NexusAI | Building Workflow AI"
+                    disabled={isLoading}
                     required
                   />
 
@@ -209,10 +259,11 @@ export const OnboardingWizard = () => {
                     <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Core Skills (Comma Separated)</label>
                     <input
                       type="text"
-                      className="w-full bg-slate-50 border border-slate-200 text-sm rounded-xl px-3.5 h-11 text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
+                      className="w-full bg-slate-50 border border-slate-200 text-sm rounded-xl px-3.5 h-11 text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
                       value={skills}
                       onChange={(e) => setSkills(e.target.value)}
                       placeholder="React, Python, Machine Learning, Product Strategy"
+                      disabled={isLoading}
                     />
                   </div>
 
@@ -222,7 +273,8 @@ export const OnboardingWizard = () => {
                       <select
                         value={industry}
                         onChange={(e) => setIndustry(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 text-sm rounded-xl px-3.5 h-11 text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
+                        className="w-full bg-slate-50 border border-slate-200 text-sm rounded-xl px-3.5 h-11 text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={isLoading}
                       >
                         {interestTags.map(tag => (
                           <option key={tag} value={tag}>{tag}</option>
@@ -234,10 +286,11 @@ export const OnboardingWizard = () => {
                       <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Country</label>
                       <input
                         type="text"
-                        className="w-full bg-slate-50 border border-slate-200 text-sm rounded-xl px-3.5 h-11 text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
+                        className="w-full bg-slate-50 border border-slate-200 text-sm rounded-xl px-3.5 h-11 text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
                         value={country}
                         onChange={(e) => setCountry(e.target.value)}
                         placeholder="United States"
+                        disabled={isLoading}
                       />
                     </div>
                   </div>
@@ -249,7 +302,8 @@ export const OnboardingWizard = () => {
                         <select
                           value={startupStage}
                           onChange={(e) => setStartupStage(e.target.value)}
-                          className="w-full bg-slate-50 border border-slate-200 text-sm rounded-xl px-3.5 h-11 text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
+                          className="w-full bg-slate-50 border border-slate-200 text-sm rounded-xl px-3.5 h-11 text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                          disabled={isLoading}
                         >
                           {startupStages.map(st => (
                             <option key={st} value={st}>{st}</option>
@@ -262,7 +316,8 @@ export const OnboardingWizard = () => {
                         <select
                           value={partnershipAvailability}
                           onChange={(e) => setPartnershipAvailability(e.target.value)}
-                          className="w-full bg-slate-50 border border-slate-200 text-sm rounded-xl px-3.5 h-11 text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
+                          className="w-full bg-slate-50 border border-slate-200 text-sm rounded-xl px-3.5 h-11 text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                          disabled={isLoading}
                         >
                           {partnershipOptions.map(po => (
                             <option key={po} value={po}>{po}</option>
@@ -281,7 +336,8 @@ export const OnboardingWizard = () => {
                         <select
                           value={fundingRequirement}
                           onChange={(e) => setFundingRequirement(e.target.value)}
-                          className="w-full bg-slate-50 border border-slate-200 text-sm rounded-xl px-3.5 h-11 text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
+                          className="w-full bg-slate-50 border border-slate-200 text-sm rounded-xl px-3.5 h-11 text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                          disabled={isLoading}
                         >
                           {fundingLevels.map(fl => (
                             <option key={fl} value={fl}>{fl}</option>
@@ -294,7 +350,8 @@ export const OnboardingWizard = () => {
                         <select
                           value={revenue}
                           onChange={(e) => setRevenue(e.target.value)}
-                          className="w-full bg-slate-50 border border-slate-200 text-sm rounded-xl px-3.5 h-11 text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
+                          className="w-full bg-slate-50 border border-slate-200 text-sm rounded-xl px-3.5 h-11 text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                          disabled={isLoading}
                         >
                           {revenueLevels.map(rl => (
                             <option key={rl} value={rl}>{rl}</option>
@@ -309,16 +366,18 @@ export const OnboardingWizard = () => {
                     value={portfolioLink}
                     onChange={(e) => setPortfolioLink(e.target.value)}
                     placeholder="https://pitch.com/yourdeck"
+                    disabled={isLoading}
                   />
 
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Professional Experience Summary</label>
                     <textarea
                       rows={4}
-                      className="w-full bg-slate-50 border border-slate-200 text-xs rounded-xl p-3 text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
+                      className="w-full bg-slate-50 border border-slate-200 text-xs rounded-xl p-3 text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
                       value={experience}
                       onChange={(e) => setExperience(e.target.value)}
                       placeholder="Briefly describe your startup experience, previous companies, or academic achievements..."
+                      disabled={isLoading}
                     />
                   </div>
                 </div>
@@ -425,13 +484,13 @@ export const OnboardingWizard = () => {
         {/* Navigation Footer */}
         <div className="flex items-center justify-between pt-6 border-t border-slate-100 mt-8">
           {step > 1 && step < 4 ? (
-            <Button variant="ghost" size="sm" onClick={() => setStep(step - 1)}>
+            <Button variant="ghost" size="sm" onClick={() => setStep(step - 1)} disabled={isLoading}>
               <ArrowLeft className="w-4 h-4" />
               <span>Back</span>
             </Button>
           ) : <div />}
 
-          <Button variant="primary" size="md" onClick={handleNext}>
+          <Button variant="primary" size="md" onClick={handleNext} isLoading={isLoading}>
             <span>{step === 4 ? 'Enter Dashboard' : 'Continue'}</span>
             <ArrowRight className="w-4 h-4" />
           </Button>
