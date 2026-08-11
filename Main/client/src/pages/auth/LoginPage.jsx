@@ -21,7 +21,22 @@ import { BASE_URL } from '../../lib/apiClient';
 export const LoginPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { login } = useAuth();
+  const { login, currentUser, isAuthenticated } = useAuth();
+
+  // Redirect already logged-in users to their appropriate stage
+  useEffect(() => {
+    if (isAuthenticated && currentUser) {
+      if (!currentUser.emailVerified) {
+        navigate('/verify-otp', { replace: true, state: { email: currentUser.email } });
+      } else if (!currentUser.onboardingCompleted) {
+        navigate('/onboarding', { replace: true });
+      } else if (!currentUser.isVerified && currentUser.role !== 'admin' && currentUser.role !== 'administrator') {
+        navigate('/verification', { replace: true });
+      } else {
+        navigate('/app/dashboard', { replace: true });
+      }
+    }
+  }, [isAuthenticated, currentUser, navigate]);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

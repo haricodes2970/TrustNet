@@ -42,7 +42,7 @@ export const FeedPage = () => {
         <Card className="p-5 border-slate-200 shadow-soft-sm">
           <form onSubmit={handleCreatePost} className="space-y-3">
             <div className="flex items-start gap-3">
-              <Avatar src={currentUser.avatar} alt={currentUser.name} size="md" isVerified />
+              <Avatar src={currentUser.avatar} alt={currentUser.name} size="md" isVerified={currentUser?.isVerified || false} />
               <textarea
                 rows={3}
                 placeholder="Share a startup milestone, pitch deck, or advice with the TrustNet ecosystem..."

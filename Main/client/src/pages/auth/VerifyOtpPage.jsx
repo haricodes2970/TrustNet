@@ -10,9 +10,29 @@ export const VerifyOtpPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const { completeTwoFactorLogin } = useAuth();
+  const { completeTwoFactorLogin, refreshUser, currentUser, isAuthenticated } = useAuth();
   const { showToast } = useApp();
-  const userEmail = location.state?.email || 'alex@nexusai.io';
+  const userEmail = currentUser?.email || location.state?.email || '';
+
+  // Redirect if already verified
+  useEffect(() => {
+    if (isAuthenticated && currentUser?.emailVerified) {
+      if (!currentUser?.onboardingCompleted) {
+        navigate('/onboarding', { replace: true });
+      } else if (!currentUser?.isVerified && currentUser?.role !== 'admin' && currentUser?.role !== 'administrator') {
+        navigate('/verification', { replace: true });
+      } else {
+        navigate('/app/dashboard', { replace: true });
+      }
+    }
+  }, [isAuthenticated, currentUser, navigate]);
+
+  // Redirect to login if no email is available
+  useEffect(() => {
+    if (!userEmail) {
+      navigate('/login', { replace: true });
+    }
+  }, [userEmail, navigate]);
 
   // Real 2FA-login case: arrives here from LoginPage (state.twoFactorToken,
   // after POST /auth/login returned requiresTwoFactor) or from an OAuth
@@ -119,8 +139,13 @@ export const VerifyOtpPage = () => {
     // Email verification path (real API call)
     try {
       await authApi.verifyEmail({ email: userEmail, otp: code });
-      showToast('Email Verified Successfully', 'Your TrustNet account is now active. Please sign in.', 'success');
-      navigate('/login', { state: { justVerified: true, email: userEmail } });
+      showToast('Email Verified Successfully', 'Your TrustNet account is now active.', 'success');
+      if (isAuthenticated) {
+        await refreshUser();
+        navigate('/onboarding', { replace: true });
+      } else {
+        navigate('/login', { state: { justVerified: true, email: userEmail } });
+      }
     } catch (err) {
       setError(err.message || 'Invalid or expired verification code.');
     } finally {
