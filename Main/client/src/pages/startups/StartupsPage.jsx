@@ -6,21 +6,18 @@ import { Button } from '../../components/ui/Button';
 import { StartupCard } from '../../components/cards/StartupCard';
 import { EmptyState } from '../../components/common/EmptyState';
 import { useApp } from '../../context/AppContext';
-import { STAGE_OPTIONS } from '../../lib/adapters/startupAdapter';
 
 export const StartupsPage = () => {
-  const { startups, startupsLoading, startupsError } = useApp();
+  const { startups } = useApp();
   const navigate = useNavigate();
 
   const [search, setSearch] = useState('');
   const [selectedStage, setSelectedStage] = useState('All');
 
-  const stages = [{ value: 'All', label: 'All' }, ...STAGE_OPTIONS];
+  const stages = ['All', 'Pre-Seed', 'Seed', 'Series A'];
 
   const filteredStartups = startups.filter(s => {
-    const matchesSearch =
-      s.name.toLowerCase().includes(search.toLowerCase()) ||
-      (s.industry || '').toLowerCase().includes(search.toLowerCase());
+    const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase()) || s.industry.toLowerCase().includes(search.toLowerCase());
     const matchesStage = selectedStage === 'All' || s.stage === selectedStage;
     return matchesSearch && matchesStage;
   });
@@ -52,31 +49,28 @@ export const StartupsPage = () => {
         <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto">
           {stages.map((stg) => (
             <button
-              key={stg.value}
-              onClick={() => setSelectedStage(stg.value)}
+              key={stg}
+              onClick={() => setSelectedStage(stg)}
               className={`px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap border transition-all ${
-                selectedStage === stg.value
+                selectedStage === stg
                   ? 'bg-emerald-500 text-white border-emerald-500'
                   : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
               }`}
             >
-              {stg.label}
+              {stg}
             </button>
           ))}
         </div>
       </div>
 
-      {startupsLoading && <p className="text-sm text-slate-500">Loading startups…</p>}
-      {startupsError && <p className="text-sm text-red-600">{startupsError}</p>}
-
       {/* Startup Grid */}
-      {!startupsLoading && filteredStartups.length > 0 ? (
+      {filteredStartups.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredStartups.map((s) => (
             <StartupCard key={s.id} startup={s} />
           ))}
         </div>
-      ) : !startupsLoading && (
+      ) : (
         <EmptyState
           icon={Rocket}
           title="No Startups Found"

@@ -31,7 +31,7 @@ export const CommandPalette = () => {
 
   const baseNavItems = [
     { label: 'Create New Startup Wizard', path: '/app/startups/create', icon: Plus, category: 'Quick Action' },
-    { label: 'My Startups Dashboard', path: '/app/startups/my', icon: Rocket, category: 'Startups' },
+    { label: 'My Startups Dashboard', path: '/app/startups', icon: Rocket, category: 'Startups' },
     { label: 'Startup Discovery Hub', path: '/app/discover', icon: Compass, category: 'Discovery' },
     { label: 'Calendar & Meeting Scheduler', path: '/app/calendar', icon: Calendar, category: 'Productivity' },
     { label: 'Explore People & Network', path: '/app/people', icon: User, category: 'Network' },

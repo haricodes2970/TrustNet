@@ -35,6 +35,7 @@ const OnboardingWizard = lazy(() => import('./pages/onboarding/OnboardingWizard'
 // Core SaaS Modules
 const DashboardPage = lazy(() => import('./pages/dashboard/DashboardPage').then(m => ({ default: m.DashboardPage })));
 const FeedPage = lazy(() => import('./pages/feed/FeedPage').then(m => ({ default: m.FeedPage })));
+const SearchPage = lazy(() => import('./pages/search/SearchPage').then(m => ({ default: m.SearchPage })));
 const ProfilePage = lazy(() => import('./pages/profile/ProfilePage').then(m => ({ default: m.ProfilePage })));
 const EditProfilePage = lazy(() => import('./pages/profile/EditProfilePage').then(m => ({ default: m.EditProfilePage })));
 const PeoplePage = lazy(() => import('./pages/people/PeoplePage').then(m => ({ default: m.PeoplePage })));
@@ -46,6 +47,8 @@ const StartupDiscoveryPage = lazy(() => import('./pages/startups/StartupDiscover
 const StartupDetailPage = lazy(() => import('./pages/startups/StartupDetailPage').then(m => ({ default: m.StartupDetailPage })));
 const CreateStartupPage = lazy(() => import('./pages/startups/CreateStartupPage').then(m => ({ default: m.CreateStartupPage })));
 const StartupManagementDashboard = lazy(() => import('./pages/startups/StartupManagementDashboard').then(m => ({ default: m.StartupManagementDashboard })));
+const StartupTeamPage = lazy(() => import('./pages/startups/StartupTeamPage').then(m => ({ default: m.StartupTeamPage })));
+const ProjectDetailPage = lazy(() => import('./pages/workspace/ProjectDetailPage').then(m => ({ default: m.ProjectDetailPage })));
 
 // Scheduler & Utilities
 const CalendarPage = lazy(() => import('./pages/calendar/CalendarPage').then(m => ({ default: m.CalendarPage })));
@@ -82,6 +85,9 @@ const NotFoundPage = lazy(() => import('./pages/errors/NotFoundPage').then(m => 
 // Backend modules with no page in the original design -- minimal stubs
 // added during integration (see integration report).
 const MarketplacePage = lazy(() => import('./pages/marketplace/MarketplacePage').then(m => ({ default: m.MarketplacePage })));
+const ServiceDetailPage = lazy(() => import('./pages/marketplace/ServiceDetailPage').then(m => ({ default: m.ServiceDetailPage })));
+const MyServicesPage = lazy(() => import('./pages/provider/MyServicesPage').then(m => ({ default: m.MyServicesPage })));
+const EngagementRequestsPage = lazy(() => import('./pages/engagementRequests/EngagementRequestsPage').then(m => ({ default: m.EngagementRequestsPage })));
 const ReportsPage = lazy(() => import('./pages/reports/ReportsPage').then(m => ({ default: m.ReportsPage })));
 const AIInsightsPage = lazy(() => import('./pages/ai/AIInsightsPage').then(m => ({ default: m.AIInsightsPage })));
 
@@ -138,6 +144,7 @@ export function App() {
                   <Route index element={<Navigate to="/app/dashboard" replace />} />
                   <Route path="dashboard" element={<DashboardPage />} />
                   <Route path="feed" element={<FeedPage />} />
+                  <Route path="search" element={<SearchPage />} />
 
                   {/* Profile */}
                   <Route path="profile" element={<ProfilePage />} />
@@ -151,12 +158,13 @@ export function App() {
 
                   {/* Startup Operating System */}
                   <Route path="discover" element={<StartupDiscoveryPage />} />
-                  <Route path="startups" element={<StartupsPage />} />
+                  <Route path="startups" element={<MyStartupsPage />} />
                   <Route path="startups/discover" element={<StartupDiscoveryPage />} />
-                  <Route path="startups/my" element={<MyStartupsPage />} />
+                  <Route path="startups/my" element={<Navigate to="/app/startups" replace />} />
                   <Route path="startups/create" element={<CreateStartupPage />} />
                   <Route path="startups/:id" element={<StartupDetailPage />} />
                   <Route path="startups/:id/manage" element={<StartupManagementDashboard />} />
+                  <Route path="startups/:id/team" element={<StartupTeamPage />} />
 
                   {/* Role Specializations */}
                   <Route path="investor" element={<DashboardPage />} />
@@ -181,10 +189,16 @@ export function App() {
                   <Route path="messages" element={<MessagingPage />} />
                   <Route path="notifications" element={<NotificationsPage />} />
                   <Route path="workspace" element={<WorkspacePage />} />
+                  <Route path="workspaces/:id" element={<WorkspacePage />} />
+                  <Route path="projects/:id" element={<ProjectDetailPage />} />
 
                   {/* Backend modules with no page in the original design --
                       minimal stubs added during integration. */}
                   <Route path="marketplace" element={<MarketplacePage />} />
+                  <Route path="discover/marketplace" element={<MarketplacePage />} />
+                  <Route path="service-listings/:id" element={<ServiceDetailPage />} />
+                  <Route path="provider/services" element={<MyServicesPage />} />
+                  <Route path="engagement-requests" element={<EngagementRequestsPage />} />
                   <Route path="reports" element={<ReportsPage />} />
                   <Route path="ai" element={<AIInsightsPage />} />
 
@@ -236,6 +250,13 @@ export function App() {
                   <Route index element={<VerificationPage />} />
                 </Route>
 
+                <Route path="/feed" element={<Navigate to="/app/feed" replace />} />
+                <Route path="/search" element={<Navigate to="/app/search" replace />} />
+                <Route path="/notifications" element={<Navigate to="/app/notifications" replace />} />
+                <Route path="/discover/marketplace" element={<Navigate to="/app/discover/marketplace" replace />} />
+                <Route path="/service-listings/:id" element={<Navigate to="/app/service-listings/:id" replace />} />
+                <Route path="/provider/services" element={<Navigate to="/app/provider/services" replace />} />
+                <Route path="/engagement-requests" element={<Navigate to="/app/engagement-requests" replace />} />
                 <Route path="/maintenance" element={<MaintenancePage />} />
                 <Route path="/coming-soon" element={<ComingSoonPage />} />
 
