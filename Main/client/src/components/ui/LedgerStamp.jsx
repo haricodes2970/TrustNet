@@ -1,101 +1,131 @@
 import React from 'react';
 import { ShieldCheck, Clock, AlertCircle, HelpCircle } from 'lucide-react';
 
-export const LedgerStamp = ({ status, timestamp, className = '' }) => {
-  // Map conceptual UI status or raw backend status to readable info
-  const configMap = {
+export const LedgerStamp = ({
+  status,
+  date,
+  timestamp,
+  size = 'md',
+  className = ''
+}) => {
+  if (!status) return null;
+
+  const statusKey = String(status).toLowerCase();
+
+  const statusConfig = {
     not_started: {
-      label: 'Not Started',
+      label: 'NOT STARTED',
       machine: 'STATUS_NOT_STARTED',
       icon: HelpCircle,
-      textColor: 'text-slate-600 dark:text-slate-400',
-      bgColor: 'bg-slate-100 dark:bg-slate-800',
-      borderColor: 'border-slate-200 dark:border-slate-700',
-      semantics: 'Identity verification has not been initiated yet.'
+      color: 'border-[#5B6472] text-[#5B6472] bg-[#5B6472]/5',
+      semantics: 'Verification has not been initiated yet.'
     },
     draft: {
-      label: 'Draft Saved',
+      label: 'DRAFT',
       machine: 'STATUS_DRAFT',
       icon: HelpCircle,
-      textColor: 'text-slate-600 dark:text-slate-400',
-      bgColor: 'bg-slate-100 dark:bg-slate-800',
-      borderColor: 'border-slate-200 dark:border-slate-700',
-      semantics: 'Identity verification documents have been uploaded, but not yet submitted for review.'
+      color: 'border-[#C8862B] text-[#C8862B] bg-[#C8862B]/5',
+      semantics: 'Draft has been saved.'
     },
     pending: {
-      label: 'Pending Review',
+      label: 'PENDING',
       machine: 'STATUS_PENDING',
       icon: Clock,
-      textColor: 'text-amber-700 dark:text-amber-400',
-      bgColor: 'bg-amber-50 dark:bg-amber-950/20',
-      borderColor: 'border-amber-200 dark:border-amber-900/30',
-      semantics: 'Verification documents submitted and awaiting administrator audit.'
+      color: 'border-[#C8862B] text-[#C8862B] bg-[#C8862B]/5',
+      semantics: 'Awaiting review.'
+    },
+    active: {
+      label: 'ACTIVE',
+      machine: 'STATUS_ACTIVE',
+      icon: ShieldCheck,
+      color: 'border-[#0F6E5C] text-[#0F6E5C] bg-[#0F6E5C]/5',
+      semantics: 'Currently active.'
     },
     approved: {
-      label: 'Approved & Verified',
+      label: 'APPROVED',
       machine: 'STATUS_APPROVED',
       icon: ShieldCheck,
-      textColor: 'text-emerald-700 dark:text-emerald-400',
-      bgColor: 'bg-emerald-50 dark:bg-emerald-950/20',
-      borderColor: 'border-emerald-200 dark:border-emerald-900/30',
-      semantics: 'Identity verification approved by platform administrators.'
+      color: 'border-[#0F6E5C] text-[#0F6E5C] bg-[#0F6E5C]/5',
+      semantics: 'Approved and verified.'
+    },
+    hidden: {
+      label: 'HIDDEN',
+      machine: 'STATUS_HIDDEN',
+      icon: HelpCircle,
+      color: 'border-[#5B6472] text-[#5B6472] bg-[#5B6472]/5',
+      semantics: 'Currently hidden.'
+    },
+    closed: {
+      label: 'CLOSED',
+      machine: 'STATUS_CLOSED',
+      icon: AlertCircle,
+      color: 'border-[#B23A32] text-[#B23A32] bg-[#B23A32]/5',
+      semantics: 'Currently closed.'
     },
     rejected: {
-      label: 'Rejected',
+      label: 'REJECTED',
       machine: 'STATUS_REJECTED',
       icon: AlertCircle,
-      textColor: 'text-red-700 dark:text-red-400',
-      bgColor: 'bg-red-50 dark:bg-red-950/20',
-      borderColor: 'border-red-200 dark:border-red-900/30',
-      semantics: 'Identity verification rejected. Document re-upload or modification required.'
+      color: 'border-[#B23A32] text-[#B23A32] bg-[#B23A32]/5',
+      semantics: 'Verification was rejected.'
     },
     resubmission_requested: {
-      label: 'Resubmission Requested',
+      label: 'RESUBMISSION REQUESTED',
       machine: 'STATUS_RESUBMISSION_REQUESTED',
       icon: AlertCircle,
-      textColor: 'text-red-700 dark:text-red-400',
-      bgColor: 'bg-red-50 dark:bg-red-950/20',
-      borderColor: 'border-red-200 dark:border-red-900/30',
-      semantics: 'Platform administrator has requested resubmission of corrected verification files.'
+      color: 'border-[#B23A32] text-[#B23A32] bg-[#B23A32]/5',
+      semantics: 'Resubmission has been requested.'
     }
   };
 
-  const key = (status || 'draft').toLowerCase();
-  const config = configMap[key] || configMap.draft;
+  const config = statusConfig[statusKey] || {
+    label: statusKey.toUpperCase(),
+    machine: `STATUS_${statusKey.toUpperCase()}`,
+    icon: HelpCircle,
+    color: 'border-[#5B6472] text-[#5B6472] bg-[#5B6472]/5',
+    semantics: 'Current status.'
+  };
+
   const Icon = config.icon;
 
-  const formattedTime = timestamp 
-    ? new Date(timestamp).toLocaleString(undefined, { 
-        dateStyle: 'medium', 
-        timeStyle: 'short' 
+  const displayDate = date || timestamp;
+
+  const formattedDate = displayDate
+    ? new Date(displayDate).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
       })
-    : null;
+    : '';
+
+  const isLg = size === 'lg';
 
   return (
-    <div 
-      className={`flex items-start gap-3 p-4 rounded-2xl border ${config.bgColor} ${config.borderColor} ${className}`}
+    <div
+      className={`inline-flex items-start gap-2 border-2 px-3 py-1.5 rounded-none uppercase select-none ${config.color} ${className}`}
       role="status"
-      aria-label={`Verification status: ${config.label}`}
+      aria-label={`${config.label}${formattedDate ? `, ${formattedDate}` : ''}`}
     >
-      <div className={`p-2 rounded-xl bg-white dark:bg-slate-900 ${config.textColor} shadow-soft-sm`}>
-        <Icon className="w-5 h-5" aria-hidden="true" />
-      </div>
-      <div className="space-y-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className={`text-sm font-black ${config.textColor}`}>
-            {config.label}
+      <Icon
+        className={`${isLg ? 'w-5 h-5' : 'w-3.5 h-3.5'} mt-0.5 shrink-0`}
+        aria-hidden="true"
+      />
+
+      <div className="flex flex-col">
+        <span
+          className={
+            isLg
+              ? 'text-2xl font-display font-black tracking-wider'
+              : 'text-xs font-mono font-bold tracking-widest'
+          }
+        >
+          {config.label}
+        </span>
+
+        {formattedDate && (
+          <span className="text-[10px] font-mono opacity-80 mt-0.5 normal-case">
+            {formattedDate}
           </span>
-          <span className="text-[10px] font-mono bg-slate-200/50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded-md font-semibold">
-            {config.machine}
-          </span>
-        </div>
-        <p className="text-xs text-slate-500 dark:text-slate-400">
-          {config.semantics}
-        </p>
-        {formattedTime && (
-          <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
-            Timestamp: {formattedTime}
-          </p>
         )}
       </div>
     </div>

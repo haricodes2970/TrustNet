@@ -39,7 +39,7 @@ export const Sidebar = () => {
   const mainNavItems = [
     { label: 'Dashboard', path: '/app/dashboard', icon: LayoutDashboard },
     { label: 'Startup Discovery', path: '/app/discover', icon: Compass },
-    { label: 'My Startups', path: '/app/startups/my', icon: Rocket },
+    { label: 'My Startups', path: '/app/startups', icon: Rocket },
     { label: 'Calendar', path: '/app/calendar', icon: Calendar },
     { label: 'Social Feed', path: '/app/feed', icon: Rss },
     { label: 'Explore People', path: '/app/people', icon: Users },
