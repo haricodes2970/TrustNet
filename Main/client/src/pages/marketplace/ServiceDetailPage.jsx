@@ -15,6 +15,7 @@ export const ServiceDetailPage = () => {
   const { startups, showToast } = useApp();
 
   const [listing, setListing] = useState(null);
+  const [providerProfile, setProviderProfile] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -35,6 +36,14 @@ export const ServiceDetailPage = () => {
     try {
       const data = await marketplaceApi.getServiceListing(id);
       setListing(data);
+      if (data && data.provider) {
+        try {
+          const profile = await marketplaceApi.getProviderProfile(data.provider);
+          setProviderProfile(profile);
+        } catch (e) {
+          console.warn('Failed to fetch provider profile details:', e);
+        }
+      }
     } catch (err) {
       setError(err.message || 'Failed to load service listing details.');
     } finally {
@@ -214,8 +223,23 @@ export const ServiceDetailPage = () => {
 
               {/* Provider Info */}
               <div className="pt-4 border-t border-[#5B6472]/10 space-y-1.5 text-xs text-[#5B6472]">
-                <div className="font-mono text-[9px] uppercase font-bold tracking-wider">Audit Metadata</div>
-                <div className="font-mono">Provider ID: {listing.provider}</div>
+                <div className="font-mono text-[9px] uppercase font-bold tracking-wider">Provider Information</div>
+                <div className="font-mono">
+                  Provider: {providerProfile ? (providerProfile.companyName || providerProfile.name || 'Professional Provider') : `ID ...${String(listing.provider || '').slice(-6)}`}
+                </div>
+                {providerProfile?.companyWebsite && (
+                  <div className="font-mono">
+                    Website:{' '}
+                    <a 
+                      href={providerProfile.companyWebsite} 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="text-[#0F6E5C] hover:underline"
+                    >
+                      {providerProfile.companyWebsite.replace(/^https?:\/\//, '')}
+                    </a>
+                  </div>
+                )}
                 <div className="font-mono">Listing ID: {listing._id || listing.id}</div>
                 <div className="font-mono">Created: {listing.createdAt ? new Date(listing.createdAt).toLocaleString() : 'N/A'}</div>
               </div>

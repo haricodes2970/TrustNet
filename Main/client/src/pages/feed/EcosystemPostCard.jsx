@@ -3,22 +3,22 @@ import { Card } from '../../components/ui/Card';
 import { UserCheck, MessageSquare, ThumbsUp } from 'lucide-react';
 
 export const EcosystemPostCard = ({ post, currentUser }) => {
-  const authorId = post.author?._id || post.author;
+  const authorId = post.author?._id || post.author || '';
   const authorName = (post.author && typeof post.author === 'object') 
-    ? (post.author.fullName || post.author.name) 
-    : (currentUser && String(authorId) === String(currentUser._id || currentUser.id)
+    ? (post.author.fullName || post.author.name || 'Ecosystem Member') 
+    : (currentUser && authorId && String(authorId) === String(currentUser._id || currentUser.id)
       ? currentUser.fullName
-      : `User ...${String(authorId || '').slice(-6)}`);
+      : (authorId ? `User ...${String(authorId).slice(-6)}` : 'Unknown Author'));
 
   const authorDesignation = (post.author && typeof post.author === 'object')
     ? (post.author.designation || 'Ecosystem Member')
-    : (currentUser && String(authorId) === String(currentUser._id || currentUser.id)
+    : (currentUser && authorId && String(authorId) === String(currentUser._id || currentUser.id)
       ? currentUser.designation || 'Founder'
       : 'Ecosystem Member');
 
   const isVerified = (post.author && typeof post.author === 'object')
     ? post.author.isVerified
-    : (currentUser && String(authorId) === String(currentUser._id || currentUser.id)
+    : (currentUser && authorId && String(authorId) === String(currentUser._id || currentUser.id)
       ? currentUser.isVerified
       : false);
 
