@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { Lock, Eye, EyeOff, CheckCircle2, ArrowRight, Check, X } from 'lucide-react';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
+import { resetPassword } from '../../lib/authApi';
 
 export const ResetPasswordPage = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get('token') || '';
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -27,14 +30,14 @@ export const ResetPasswordPage = () => {
     if (password.length === 0) return { label: 'Enter Password', score: 0, color: 'bg-slate-200', text: 'text-slate-400', message: '' };
     if (!hasMinLength) return { label: 'Weak', score: 1, color: 'bg-red-500', text: 'text-red-500', message: '❌ Too short (minimum 8 characters)' };
     if (!hasNumber) return { label: 'Fair', score: 2, color: 'bg-amber-500', text: 'text-amber-600', message: '✔ Length  ❌ Missing number' };
-    if (passedRulesCount < 5) return { label: 'Strong', score: 3, color: 'bg-emerald-500', text: 'text-emerald-600', message: '✔ All requirements met' };
-    return { label: 'Very Strong', score: 4, color: 'bg-emerald-500', text: 'text-emerald-600', message: '✓ Strong password · Ready to continue' };
+    if (passedRulesCount < 5) return { label: 'Strong', score: 3, color: 'bg-trust-verified', text: 'text-trust-verified', message: '✔ All requirements met' };
+    return { label: 'Very Strong', score: 4, color: 'bg-trust-verified', text: 'text-trust-verified', message: '✓ Strong password · Ready to continue' };
   };
 
   const strength = getStrengthState();
   const isStrong = strength.score >= 3;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!isStrong) {
       setError('Password is too weak. Please meet security rules.');
@@ -44,18 +47,25 @@ export const ResetPasswordPage = () => {
       setError('Passwords do not match.');
       return;
     }
+    if (!token) {
+      setError('This password reset link is invalid or missing its token.');
+      return;
+    }
 
     setError('');
     setIsLoading(true);
 
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      await resetPassword({ token, password, confirmPassword });
       setIsSuccess(true);
-
       setTimeout(() => {
         navigate('/login');
       }, 2500);
-    }, 900);
+    } catch (err) {
+      setError(err.message || 'Unable to reset your password. The link may have expired.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -118,19 +128,19 @@ export const ResetPasswordPage = () => {
             {/* Checklist: Auto-Collapses when Strong */}
             {!isStrong && password.length > 0 && (
               <div className="p-3 bg-slate-50 rounded-xl space-y-1.5 text-[11px] border border-slate-200/80 transition-all duration-300">
-                <div className={`flex items-center gap-2 ${hasMinLength ? 'text-emerald-600 font-semibold' : 'text-slate-400'}`}>
+                <div className={`flex items-center gap-2 ${hasMinLength ? 'text-trust-verified font-semibold' : 'text-slate-400'}`}>
                   {hasMinLength ? <Check className="w-3.5 h-3.5" strokeWidth={2.5} /> : <X className="w-3.5 h-3.5" />}
                   <span>Minimum 8 characters</span>
                 </div>
-                <div className={`flex items-center gap-2 ${hasNumber ? 'text-emerald-600 font-semibold' : 'text-slate-400'}`}>
+                <div className={`flex items-center gap-2 ${hasNumber ? 'text-trust-verified font-semibold' : 'text-slate-400'}`}>
                   {hasNumber ? <Check className="w-3.5 h-3.5" strokeWidth={2.5} /> : <X className="w-3.5 h-3.5" />}
                   <span>At least 1 number (0-9)</span>
                 </div>
-                <div className={`flex items-center gap-2 ${hasUppercase ? 'text-emerald-600 font-semibold' : 'text-slate-400'}`}>
+                <div className={`flex items-center gap-2 ${hasUppercase ? 'text-trust-verified font-semibold' : 'text-slate-400'}`}>
                   {hasUppercase ? <Check className="w-3.5 h-3.5" strokeWidth={2.5} /> : <X className="w-3.5 h-3.5" />}
                   <span>At least 1 uppercase letter (A-Z)</span>
                 </div>
-                <div className={`flex items-center gap-2 ${hasSpecialChar ? 'text-emerald-600 font-semibold' : 'text-slate-400'}`}>
+                <div className={`flex items-center gap-2 ${hasSpecialChar ? 'text-trust-verified font-semibold' : 'text-slate-400'}`}>
                   {hasSpecialChar ? <Check className="w-3.5 h-3.5" strokeWidth={2.5} /> : <X className="w-3.5 h-3.5" />}
                   <span>At least 1 special character (!@#$)</span>
                 </div>
@@ -138,8 +148,8 @@ export const ResetPasswordPage = () => {
             )}
 
             {isStrong && (
-              <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-xs font-bold text-emerald-700 flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" strokeWidth={1.75} />
+              <div className="p-3 bg-trust-verified/10 rounded-xl border border-trust-verified/30 text-xs font-bold text-trust-verified flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-trust-verified" strokeWidth={1.75} />
                 <span>✓ Strong password · Ready to continue</span>
               </div>
             )}
@@ -172,7 +182,7 @@ export const ResetPasswordPage = () => {
         </>
       ) : (
         <div className="text-center space-y-6 py-6">
-          <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-inner animate-bounce">
+          <div className="w-16 h-16 bg-trust-verified/10 text-trust-verified rounded-full flex items-center justify-center mx-auto shadow-inner animate-bounce">
             <CheckCircle2 className="w-9 h-9" strokeWidth={1.75} />
           </div>
 

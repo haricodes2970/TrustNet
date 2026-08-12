@@ -1,8 +1,4 @@
-// Calls the real backend Auth module (src/routes/auth.routes.js). Only
-// wraps endpoints that actually exist and do something — this backend's
-// /auth/verify-email and /auth/resend-verification are unauthenticated
-// stubs that return a canned success without checking anything, so no
-// real OTP/email-verification flow is wired here (see integration report).
+// Calls the real backend Auth module (src/routes/auth.routes.js).
 import { apiClient, setToken } from './apiClient';
 
 export async function register({ email, password, fullName, username }) {
@@ -34,6 +30,14 @@ export async function logout() {
   } finally {
     setToken(null);
   }
+}
+
+export async function verifyEmail({ email, otp }) {
+  return apiClient.post('/auth/verify-email', { email, otp });
+}
+
+export async function resendVerification({ email }) {
+  return apiClient.post('/auth/resend-verification', { email });
 }
 
 export async function forgotPassword({ email }) {

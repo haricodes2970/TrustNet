@@ -14,18 +14,13 @@ export const SignupPage = () => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // This backend has no real OTP/email-verification flow -- GET
-  // /auth/verify-email and POST /auth/resend-verification are
-  // unauthenticated stubs that return a canned success without checking
-  // anything (see integration report). Registering goes straight to
-  // /login instead of the fictional /verify-otp step.
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
     try {
       await register({ email, password, fullName: name });
-      navigate('/login', { state: { justRegistered: true } });
+      navigate('/verify-otp', { state: { email, justRegistered: true } });
     } catch (err) {
       setError(err.message || 'Could not create your account.');
     } finally {

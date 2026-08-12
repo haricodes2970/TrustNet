@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
@@ -21,11 +21,23 @@ import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Logo } from '../../components/common/Logo';
-import { MOCK_STARTUPS } from '../../data/mockData';
+import { listStartups } from '../../lib/startupApi';
 
 export const LandingPage = () => {
   const navigate = useNavigate();
   const [activeFaq, setActiveFaq] = useState(null);
+  const [startups, setStartups] = useState([]);
+  const [startupsError, setStartupsError] = useState('');
+
+  useEffect(() => {
+    (async () => {
+      try {
+        setStartups(await listStartups({}, { limit: 3 }));
+      } catch (error) {
+        setStartupsError(error.message || 'Featured startups are unavailable right now.');
+      }
+    })();
+  }, []);
 
   const stats = [
     { label: 'Capital Raised', value: '$50M+' },
@@ -131,10 +143,10 @@ export const LandingPage = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {MOCK_STARTUPS.map((startup) => (
-            <Card key={startup.id} hoverEffect className="p-5 border-slate-200">
+          {startups.map((startup) => (
+            <Card key={startup._id || startup.id} hoverEffect className="p-5 border-slate-200">
               <div className="flex items-center gap-3 mb-3">
-                <img src={startup.logo} alt={startup.name} className="w-10 h-10 rounded-xl object-cover" />
+                {startup.logoUrl ? <img src={startup.logoUrl} alt={startup.name} className="w-10 h-10 rounded-xl object-cover" /> : <div className="w-10 h-10 rounded-xl bg-trust-verified/10 text-trust-verified flex items-center justify-center font-bold">{startup.name?.charAt(0)}</div>}
                 <div>
                   <h4 className="text-sm font-bold text-slate-900">{startup.name}</h4>
                   <p className="text-xs text-slate-500">{startup.stage} • {startup.industry}</p>
@@ -142,12 +154,13 @@ export const LandingPage = () => {
               </div>
               <p className="text-xs text-slate-600 line-clamp-2 mb-4">{startup.tagline}</p>
               <div className="flex items-center justify-between text-xs pt-3 border-t border-slate-100 font-semibold text-emerald-700">
-                <span>Raised: ${(startup.fundingRaised / 1000).toFixed(0)}k</span>
-                <span className="text-slate-900">{startup.valuation} Valuation</span>
+                <span>{startup.category || 'Startup'}</span>
+                <span className="text-slate-900">{startup.status || 'Active'}</span>
               </div>
             </Card>
           ))}
         </div>
+        {!startups.length && <p className="mt-4 text-sm text-slate-500">{startupsError || 'No featured startups are available yet.'}</p>}
       </section>
 
 

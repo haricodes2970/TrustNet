@@ -73,6 +73,13 @@ export const AuthProvider = ({ children }) => {
     setCurrentUser((prev) => ({ ...prev, ...updatedFields }));
   };
 
+  const refreshCurrentUser = async () => {
+    const user = await authApi.fetchCurrentUser();
+    setCurrentUser(user);
+    setIsAuthenticated(true);
+    return user;
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -85,6 +92,7 @@ export const AuthProvider = ({ children }) => {
         register,
         logout,
         updateUserProfile,
+        refreshCurrentUser,
       }}
     >
       {children}

@@ -3,7 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { SkeletonPage } from '../ui/SkeletonLoaders';
 
-export const ProtectedRoute = ({ children, allowedRoles = [] }) => {
+export const ProtectedRoute = ({ children, allowedRoles = [], requireVerifiedEmail = false, requireApprovedVerification = false }) => {
   const { currentUser, isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
 
@@ -29,6 +29,17 @@ export const ProtectedRoute = ({ children, allowedRoles = [] }) => {
 
   if (!hasPermission) {
     return <Navigate to="/app/403" replace />;
+  }
+
+  // `verificationStatus` from GET /auth/me is the KYC source of truth.
+  // Admins are deliberately exempt: their backend-authorized admin routes
+  // must remain available even if their own normal-user KYC state differs.
+  const isAdmin = userRole === 'admin' || userRole === 'administrator';
+  if (requireVerifiedEmail && !isAdmin && !currentUser?.emailVerified) {
+    return <Navigate to="/verify-otp" state={{ email: currentUser?.email, from: location }} replace />;
+  }
+  if (requireApprovedVerification && !isAdmin && currentUser?.verificationStatus !== 'approved') {
+    return <Navigate to="/verification" state={{ from: location }} replace />;
   }
 
   return children;

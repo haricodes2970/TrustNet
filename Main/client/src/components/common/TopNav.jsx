@@ -13,16 +13,16 @@ export const TopNav = () => {
   const navigate = useNavigate();
 
   return (
-    <header className="sticky top-0 z-20 w-full bg-white/90 backdrop-blur-md border-b border-slate-200/80 px-4 sm:px-6 py-3 transition-colors">
+    <header className="sticky top-0 z-20 w-full bg-trust-paper border-b border-trust-ink/10 px-4 sm:px-6 py-3 transition-colors">
       <div className="max-w-[1440px] w-full mx-auto flex items-center justify-between">
         {/* Quick Search Button (Ctrl + K trigger) */}
         <button
           onClick={() => setIsCommandPaletteOpen(true)}
-          className="flex items-center gap-3 bg-slate-50/80 hover:bg-slate-100 text-slate-400 hover:text-slate-600 px-3.5 py-2.5 rounded-xl text-xs font-medium w-full max-w-sm transition-all border border-slate-200/80 min-h-[44px]"
+          className="flex items-center gap-3 bg-white hover:bg-trust-verified/5 text-trust-slate hover:text-trust-ink px-3.5 py-2.5 rounded text-xs font-medium w-full max-w-sm transition-colors border border-trust-ink/15 min-h-[44px] focus-ring"
         >
-          <Search className="w-4 h-4 text-slate-400" strokeWidth={1.75} />
+          <Search className="w-4 h-4 text-trust-slate" strokeWidth={1.75} />
           <span className="flex-1 text-left">Search startups, founders, investors...</span>
-          <kbd className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-mono font-bold bg-white text-slate-500 rounded border border-slate-200 shadow-xs">
+          <kbd className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-mono font-bold bg-trust-paper text-trust-slate rounded border border-trust-ink/15">
             Ctrl K
           </kbd>
         </button>
@@ -45,7 +45,7 @@ export const TopNav = () => {
           {/* User Profile Avatar */}
           <div
             onClick={() => navigate('/app/profile')}
-            className="flex items-center gap-2 cursor-pointer p-1 rounded-xl hover:bg-slate-100 transition-colors"
+            className="flex items-center gap-2 cursor-pointer p-1 rounded hover:bg-trust-verified/5 transition-colors focus-ring"
           >
             <Avatar src={currentUser?.avatar} alt={currentUser?.name} size="sm" isVerified />
           </div>

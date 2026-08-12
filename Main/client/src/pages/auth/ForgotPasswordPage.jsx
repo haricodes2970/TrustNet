@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Mail, ArrowRight, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
+import { forgotPassword } from '../../lib/authApi';
 
 export const ForgotPasswordPage = () => {
   const navigate = useNavigate();
@@ -11,7 +12,7 @@ export const ForgotPasswordPage = () => {
   const [isSent, setIsSent] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!email || !email.includes('@')) {
       setError('Please enter a valid work email address.');
@@ -21,11 +22,14 @@ export const ForgotPasswordPage = () => {
     setError('');
     setIsLoading(true);
 
-    // Mock API Delay
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      await forgotPassword({ email });
       setIsSent(true);
-    }, 1200);
+    } catch (err) {
+      setError(err.message || 'Unable to send a reset link. Please try again later.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -85,7 +89,7 @@ export const ForgotPasswordPage = () => {
           <div>
             <h2 className="text-xl font-bold text-slate-900 dark:text-white">Email Sent Successfully</h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 max-w-sm mx-auto leading-relaxed">
-              We sent a 6-digit verification code to <span className="font-bold text-slate-800 dark:text-slate-200">{email}</span>. Please check your inbox.
+              If an account exists for <span className="font-bold text-slate-800 dark:text-slate-200">{email}</span>, we've sent a password reset link. Please check your inbox.
             </p>
           </div>
 
@@ -93,9 +97,9 @@ export const ForgotPasswordPage = () => {
             variant="primary"
             size="lg"
             className="w-full"
-            onClick={() => navigate('/verify-otp', { state: { email } })}
+            onClick={() => navigate('/login')}
           >
-            <span>Enter OTP Verification Code</span>
+            <span>Back to Login</span>
             <ArrowRight className="w-4 h-4" />
           </Button>
         </div>

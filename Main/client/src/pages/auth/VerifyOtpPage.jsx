@@ -3,25 +3,20 @@ import { useNavigate, useLocation, useSearchParams, Link } from 'react-router-do
 import { ShieldCheck, ArrowRight, ArrowLeft, RefreshCw } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { useAuth } from '../../context/AuthContext';
+import { resendVerification, verifyEmail } from '../../lib/authApi';
 
 export const VerifyOtpPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const { completeTwoFactorLogin } = useAuth();
-  const userEmail = location.state?.email || 'alex@nexusai.io';
+  const { completeTwoFactorLogin, currentUser, refreshCurrentUser } = useAuth();
+  const userEmail = location.state?.email || currentUser?.email || '';
 
-  // Real 2FA-login case: arrives here from LoginPage (state.twoFactorToken,
-  // after POST /auth/login returned requiresTwoFactor) or from an OAuth
-  // redirect (backend sends 2FA-enabled users to
-  // /login?twoFactorToken=... -- LoginPage forwards them here). Every
-  // other case (signup email verification, password-reset code) has no
-  // real backend equivalent -- this backend's register/forgot-password
-  // flows don't use a 6-digit code at all -- so those keep the original
-  // mock behavior below, unchanged.
+  // Login 2FA uses a short-lived token; signup and unverified-login use
+  // the email OTP issued by the backend during registration.
   const twoFactorToken = location.state?.twoFactorToken || searchParams.get('twoFactorToken');
 
-  const [otp, setOtp] = useState(twoFactorToken ? ['', '', '', '', '', ''] : ['4', '8', '2', '9', '1', '6']);
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [resendTimer, setResendTimer] = useState(60);
   const [canResend, setCanResend] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -81,7 +76,7 @@ export const VerifyOtpPage = () => {
     setResendTimer(60);
     setCanResend(false);
     setError('');
-    // Mock resend code
+    resendVerification({ email: userEmail }).catch((err) => setError(err.message || 'Unable to resend a code.'));
   };
 
   const handleSubmit = async (e) => {
@@ -97,8 +92,11 @@ export const VerifyOtpPage = () => {
 
     if (twoFactorToken) {
       try {
-        await completeTwoFactorLogin(twoFactorToken, code);
-        navigate('/app/dashboard', { replace: true });
+        const result = await completeTwoFactorLogin(twoFactorToken, code);
+        navigate(result.user?.emailVerified && result.user?.verificationStatus === 'approved' ? '/app/dashboard' : result.user?.emailVerified ? '/verification' : '/verify-otp', {
+          replace: true,
+          state: result.user?.emailVerified ? undefined : { email: userEmail },
+        });
       } catch (err) {
         setError(err.message || 'Invalid or expired authentication code.');
       } finally {
@@ -107,22 +105,22 @@ export const VerifyOtpPage = () => {
       return;
     }
 
-    // Mock path (no real backend endpoint for this) -- signup email
-    // verification and password-reset code entry.
-    setTimeout(() => {
+    try {
+      if (!userEmail) throw new Error('Sign in again to verify your email address.');
+      await verifyEmail({ email: userEmail, otp: code });
+      await refreshCurrentUser();
+      navigate('/verification', { replace: true });
+    } catch (err) {
+      setError(err.message || 'Invalid or expired verification code.');
+    } finally {
       setIsLoading(false);
-      if (location.state?.isSignup) {
-        navigate('/onboarding');
-      } else {
-        navigate('/reset-password', { state: { email: userEmail, code } });
-      }
-    }, 1000);
+    }
   };
 
   return (
     <div className="space-y-6 max-w-sm mx-auto">
       <Link
-        to="/forgot-password"
+        to="/login"
         className="inline-flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-emerald-600 transition-colors"
       >
         <ArrowLeft className="w-4 h-4" />
@@ -140,7 +138,7 @@ export const VerifyOtpPage = () => {
         <p className="text-xs text-slate-500 dark:text-slate-400">
           {twoFactorToken
             ? 'Enter the 6-digit code from your authenticator app.'
-            : <>We sent a 6-digit OTP code to <span className="font-semibold text-slate-700 dark:text-slate-300">{userEmail}</span>.</>}
+            : <>We sent a 6-digit OTP code to <span className="font-semibold text-trust-ink">{userEmail || 'your email address'}</span>.</>}
         </p>
       </div>
 

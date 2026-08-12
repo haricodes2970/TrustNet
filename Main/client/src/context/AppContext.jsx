@@ -1,14 +1,4 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import {
-  MOCK_POSTS,
-  MOCK_COMMUNITIES,
-  MOCK_OPPORTUNITIES,
-  MOCK_EVENTS,
-  MOCK_MESSAGES,
-  MOCK_NOTIFICATIONS,
-  MOCK_USERS,
-  MOCK_FILES
-} from '../data/mockData';
 import { useAuth } from './AuthContext';
 import * as startupApi from '../lib/startupApi';
 import { normalizeStartups } from '../lib/adapters/startupAdapter';
@@ -16,10 +6,9 @@ import { normalizeStartups } from '../lib/adapters/startupAdapter';
 const AppContext = createContext();
 
 export const AppProvider = ({ children }) => {
-  // Startups is the one vertical wired to the real backend this pass --
-  // everything else below still reads from mockData.js (see integration
-  // report). Fetched once the user is authenticated (public read, but
-  // there's no value fetching it before login redirects away anyway).
+  // Startups is fetched from the real backend once the user is
+  // authenticated; the remaining collections begin empty until their
+  // respective backend integrations are available.
   const { isAuthenticated } = useAuth();
   const [startups, setStartups] = useState([]);
   const [startupsLoading, setStartupsLoading] = useState(false);
@@ -44,14 +33,17 @@ export const AppProvider = ({ children }) => {
       cancelled = true;
     };
   }, [isAuthenticated]);
-  const [posts, setPosts] = useState(MOCK_POSTS);
-  const [communities, setCommunities] = useState(MOCK_COMMUNITIES);
-  const [opportunities, setOpportunities] = useState(MOCK_OPPORTUNITIES);
-  const [events, setEvents] = useState(MOCK_EVENTS);
-  const [conversations, setConversations] = useState(MOCK_MESSAGES);
-  const [notifications, setNotifications] = useState(MOCK_NOTIFICATIONS);
-  const [users, setUsers] = useState(MOCK_USERS);
-  const [files, setFiles] = useState(MOCK_FILES);
+  // No fake production data. These start empty (proper empty state) until a
+  // real API for each vertical is wired by its owner. Shapes are unchanged
+  // (arrays), so consumers render empty states instead of breaking.
+  const [posts, setPosts] = useState([]);
+  const [communities, setCommunities] = useState([]);
+  const [opportunities, setOpportunities] = useState([]);
+  const [events, setEvents] = useState([]);
+  const [conversations, setConversations] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [files, setFiles] = useState([]);
   
   // UI States
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);

@@ -1,14 +1,16 @@
 import React from 'react';
 
+// TrustNet card: 8px radius, thin ink border, paper-white surface,
+// single soft elevation. No glassmorphism / backdrop blur.
 export const Card = ({
   children,
   className = '',
   hoverEffect = false,
   onClick
 }) => {
-  const base = 'rounded-2xl border border-slate-200/80 bg-white transition-all duration-250 ease-out overflow-hidden shadow-soft-sm';
+  const base = 'rounded-lg border border-trust-ink/10 bg-white transition-colors duration-200 overflow-hidden shadow-soft-sm';
   const hover = hoverEffect
-    ? 'hover:shadow-soft-md hover:border-emerald-200 hover:scale-[1.01] cursor-pointer'
+    ? 'hover:border-trust-verified/40 cursor-pointer'
     : '';
 
   return (
