@@ -14,21 +14,57 @@ export const ProtectedRoute = ({ children, allowedRoles = [] }) => {
     return <SkeletonPage />;
   }
 
+  // 1. Check if authenticated
   if (!isAuthenticated || authState === 'unauthenticated' || authState === 'expired') {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Normalize role matching (e.g. 'admin' or 'Administrator')
+  // 2. Check if email/OTP verified
+  if (!currentUser?.emailVerified) {
+    if (location.pathname !== '/verify-otp') {
+      return <Navigate to="/verify-otp" state={{ email: currentUser?.email }} replace />;
+    }
+    return children;
+  }
+
+  // 3. Check if onboarding is completed
+  if (!currentUser?.onboardingCompleted) {
+    if (location.pathname !== '/onboarding') {
+      return <Navigate to="/onboarding" replace />;
+    }
+    return children;
+  }
+
+  // 4. Check if identity verification is complete
   const userRole = (currentUser?.role || '').toLowerCase();
-  const normalizedAllowedRoles = allowedRoles.map(r => r.toLowerCase());
+  const isAdmin = userRole === 'admin' || userRole === 'administrator';
+  const isKycVerified = currentUser?.isVerified || false;
 
-  const hasPermission = normalizedAllowedRoles.length === 0 || 
-    normalizedAllowedRoles.includes(userRole) ||
-    (userRole === 'administrator' && normalizedAllowedRoles.includes('admin')) ||
-    (userRole === 'admin' && normalizedAllowedRoles.includes('administrator'));
+  // Identity verification is required for all non-admins
+  const requiresVerification = !isKycVerified && !isAdmin;
 
-  if (!hasPermission) {
-    return <Navigate to="/app/403" replace />;
+  if (requiresVerification) {
+    if (location.pathname !== '/verification') {
+      return <Navigate to="/verification" replace />;
+    }
+    return children;
+  }
+
+  // 5. If they are already fully verified, they shouldn't access onboarding
+  if (location.pathname === '/onboarding') {
+    return <Navigate to="/app/dashboard" replace />;
+  }
+
+  // 6. Check role permissions if applicable
+  if (allowedRoles.length > 0) {
+    const normalizedAllowedRoles = allowedRoles.map(r => r.toLowerCase());
+    const hasPermission = normalizedAllowedRoles.includes(userRole) ||
+      (userRole === 'administrator' && normalizedAllowedRoles.includes('admin')) ||
+      (userRole === 'admin' && normalizedAllowedRoles.includes('administrator'));
+
+    if (!hasPermission) {
+      return <Navigate to="/app/403" replace />;
+    }
   }
 
   return children;

@@ -122,7 +122,14 @@ export function App() {
                 <Route path="/oauth/callback" element={<OAuthCallbackPage />} />
 
                 {/* Onboarding Wizard */}
-                <Route path="/onboarding" element={<OnboardingWizard />} />
+                <Route
+                  path="/onboarding"
+                  element={
+                    <ProtectedRoute>
+                      <OnboardingWizard />
+                    </ProtectedRoute>
+                  }
+                />
 
                 {/* Logged-In SaaS Application -- requires a real, backend-
                     verified session (GET /auth/me). Previously unprotected. */}
@@ -232,7 +239,14 @@ export function App() {
                   />
                 </Route>
 
-                <Route path="/verification" element={<AppLayout />}>
+                <Route
+                  path="/verification"
+                  element={
+                    <ProtectedRoute>
+                      <AppLayout />
+                    </ProtectedRoute>
+                  }
+                >
                   <Route index element={<VerificationPage />} />
                 </Route>
 

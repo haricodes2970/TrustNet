@@ -1,5 +1,5 @@
 import React from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from '../components/common/Sidebar';
 import { TopNav } from '../components/common/TopNav';
 import { BottomNav } from '../components/common/BottomNav';
@@ -50,19 +50,6 @@ const PendingVerificationScreen = () => {
             <span>Log Out</span>
           </Button>
         </div>
-
-        {/* Demo Mode Bypass */}
-        <div className="pt-4 border-t border-slate-100 mt-4 text-center">
-          <button 
-            onClick={() => {
-              updateUserProfile({ isVerified: true });
-              window.location.reload();
-            }}
-            className="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 hover:underline"
-          >
-            [Demo Bypass] Simulate Admin Approval
-          </button>
-        </div>
       </Card>
     </div>
   );
@@ -70,11 +57,14 @@ const PendingVerificationScreen = () => {
 
 export const AppLayout = () => {
   const { currentUser } = useAuth();
+  const location = useLocation();
   const userRole = (currentUser?.role || '').toLowerCase();
   const isAdmin = userRole === 'admin' || userRole === 'administrator';
 
+  const isVerificationPage = location.pathname === '/verification';
+
   // Lock dashboard access until admin verification is complete
-  if (currentUser && !currentUser.isVerified && !isAdmin) {
+  if (currentUser && !currentUser.isVerified && !isAdmin && !isVerificationPage) {
     return <PendingVerificationScreen />;
   }
 
