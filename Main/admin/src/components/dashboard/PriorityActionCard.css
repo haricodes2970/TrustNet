@@ -1,0 +1,128 @@
+.priority-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  background-color: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-normal);
+  gap: 1rem;
+}
+
+.priority-card:hover {
+  transform: translateX(4px);
+  box-shadow: var(--shadow-md);
+}
+
+.priority-card-left {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  flex-grow: 1;
+}
+
+.priority-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  flex-shrink: 0;
+  transition: all var(--transition-fast);
+}
+
+/* Severe state styling overrides */
+.priority-card-critical {
+  border-left: 4px solid var(--color-status-danger);
+}
+.priority-card-critical .priority-icon-wrapper {
+  background-color: var(--color-status-danger-bg);
+  color: var(--color-status-danger);
+}
+
+.priority-card-high {
+  border-left: 4px solid var(--color-status-warning);
+}
+.priority-card-high .priority-icon-wrapper {
+  background-color: var(--color-status-warning-bg);
+  color: var(--color-status-warning);
+}
+
+.priority-card-medium {
+  border-left: 4px solid var(--color-status-pending);
+}
+.priority-card-medium .priority-icon-wrapper {
+  background-color: var(--color-status-pending-bg);
+  color: var(--color-status-pending);
+}
+
+.priority-card-info {
+  display: flex;
+  flex-col: column;
+  gap: 0.25rem;
+}
+
+.priority-card-top-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.priority-count {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--color-text-dark);
+  line-height: 1;
+}
+
+.severity-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.severity-badge-critical {
+  background-color: var(--color-status-danger-bg);
+  color: var(--color-status-danger);
+}
+
+.severity-badge-high {
+  background-color: var(--color-status-warning-bg);
+  color: var(--color-status-warning);
+}
+
+.severity-badge-medium {
+  background-color: var(--color-status-pending-bg);
+  color: var(--color-status-pending);
+}
+
+.priority-title {
+  font-size: 0.95rem;
+  color: var(--color-text-muted);
+  font-weight: 500;
+  margin: 0;
+}
+
+.priority-btn {
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+@media (max-width: 576px) {
+  .priority-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+  .priority-btn {
+    width: 100%;
+  }
+}
