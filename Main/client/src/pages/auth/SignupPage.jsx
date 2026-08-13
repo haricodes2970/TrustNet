@@ -1,36 +1,102 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Mail, Lock, User, ArrowRight } from 'lucide-react';
+import { Mail, Lock, User, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { useAuth } from '../../context/AuthContext';
 
 export const SignupPage = () => {
   const navigate = useNavigate();
-  const { register } = useAuth();
+  const { register, currentUser, isAuthenticated } = useAuth();
+
+  // Redirect already logged-in users to their appropriate stage
+  useEffect(() => {
+    if (isAuthenticated && currentUser) {
+      if (!currentUser.emailVerified) {
+        navigate('/verify-otp', { replace: true, state: { email: currentUser.email } });
+      } else if (!currentUser.onboardingCompleted) {
+        navigate('/onboarding', { replace: true });
+      } else if (!currentUser.isVerified && currentUser.role !== 'admin' && currentUser.role !== 'administrator') {
+        navigate('/verification', { replace: true });
+      } else {
+        navigate('/app/dashboard', { replace: true });
+      }
+    }
+  }, [isAuthenticated, currentUser, navigate]);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [strengthScore, setStrengthScore] = useState(0);
+  const [strengthLabel, setStrengthLabel] = useState('');
 
-  // This backend has no real OTP/email-verification flow -- GET
-  // /auth/verify-email and POST /auth/resend-verification are
-  // unauthenticated stubs that return a canned success without checking
-  // anything (see integration report). Registering goes straight to
-  // /login instead of the fictional /verify-otp step.
+  // Password strength checker logic
+  useEffect(() => {
+    if (!password) {
+      setStrengthScore(0);
+      setStrengthLabel('');
+      return;
+    }
+
+    let score = 0;
+    if (password.length >= 8) score++;
+    if (/[a-z]/.test(password)) score++;
+    if (/[A-Z]/.test(password)) score++;
+    if (/\d/.test(password)) score++;
+    if (/[^A-Za-z0-9]/.test(password)) score++;
+
+    setStrengthScore(score);
+    if (score <= 2) {
+      setStrengthLabel('Weak');
+    } else if (score === 3) {
+      setStrengthLabel('Medium');
+    } else {
+      setStrengthLabel('Strong');
+    }
+  }, [password]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    // Client-side validations
+    if (!name || name.trim().length < 2) {
+      setError('Name must be at least 2 characters.');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError('Enter a valid work email address.');
+      return;
+    }
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters long.');
+      return;
+    }
+
     setIsLoading(true);
     try {
       await register({ email, password, fullName: name });
-      navigate('/login', { state: { justRegistered: true } });
+      // Transition directly to the OTP verification page with the user email
+      navigate('/verify-otp', { state: { email, isSignup: true } });
     } catch (err) {
       setError(err.message || 'Could not create your account.');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const getStrengthColor = () => {
+    if (strengthScore <= 2) return 'bg-red-500 text-red-600 dark:text-red-400';
+    if (strengthScore === 3) return 'bg-amber-500 text-amber-600 dark:text-amber-400';
+    return 'bg-emerald-500 text-emerald-600 dark:text-emerald-400';
+  };
+
+  const getStrengthTextColor = () => {
+    if (strengthScore <= 2) return 'text-red-500';
+    if (strengthScore === 3) return 'text-amber-500';
+    return 'text-emerald-500';
   };
 
   return (
@@ -48,6 +114,7 @@ export const SignupPage = () => {
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Alex Morgan"
+          disabled={isLoading}
           required
         />
 
@@ -58,19 +125,48 @@ export const SignupPage = () => {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="alex@company.com"
+          disabled={isLoading}
           required
         />
 
-        <Input
-          label="Password"
-          type="password"
-          icon={Lock}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="••••••••••••"
-          helperText="Must be at least 8 characters with digits and symbols."
-          required
-        />
+        <div className="relative">
+          <Input
+            label="Password"
+            type={showPassword ? 'text' : 'password'}
+            icon={Lock}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••••••"
+            disabled={isLoading}
+            required
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            className="absolute right-3.5 top-9 text-slate-400 hover:text-slate-600 text-xs"
+            disabled={isLoading}
+          >
+            {showPassword ? <EyeOff className="w-4 h-4" strokeWidth={1.75} /> : <Eye className="w-4 h-4" strokeWidth={1.75} />}
+          </button>
+        </div>
+
+        {password && (
+          <div className="space-y-1">
+            <div className="flex justify-between items-center text-[11px] font-semibold">
+              <span className="text-slate-500">Password Strength</span>
+              <span className={getStrengthTextColor()}>{strengthLabel}</span>
+            </div>
+            <div className="flex gap-1 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+              <div 
+                className={`h-full transition-all duration-300 rounded-full ${getStrengthColor().split(' ')[0]}`} 
+                style={{ width: `${(strengthScore / 5) * 100}%` }} 
+              />
+            </div>
+            <p className="text-[10px] text-slate-400">
+              Must be at least 8 characters with digits and symbols.
+            </p>
+          </div>
+        )}
 
         {error && (
           <div className="p-3 text-xs bg-red-50 text-red-600 rounded-xl border border-red-200 font-medium">
@@ -78,7 +174,7 @@ export const SignupPage = () => {
           </div>
         )}
 
-        <Button type="submit" variant="primary" size="lg" className="w-full" isLoading={isLoading}>
+        <Button type="submit" variant="primary" size="lg" className="w-full h-12" isLoading={isLoading}>
           <span>Create Account</span>
           <ArrowRight className="w-4 h-4" />
         </Button>
@@ -93,3 +189,4 @@ export const SignupPage = () => {
     </div>
   );
 };
+

@@ -1,0 +1,68 @@
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  border: 1px solid transparent;
+  line-height: 1.2;
+}
+
+.status-badge svg {
+  flex-shrink: 0;
+}
+
+.status-badge .status-text {
+  white-space: nowrap;
+}
+
+/* Green States: Approved, Verified, Resolved */
+.status-approved {
+  background-color: var(--color-status-success-bg);
+  color: var(--color-status-success);
+  border-color: var(--color-status-success-border);
+}
+
+/* Amber States: Pending, Under Review */
+.status-pending {
+  background-color: var(--color-status-pending-bg);
+  color: var(--color-status-pending);
+  border-color: var(--color-status-pending-border);
+}
+
+/* Orange/Soft Amber States */
+.status-warning {
+  background-color: var(--color-status-warning-bg);
+  color: var(--color-status-warning);
+  border-color: var(--color-status-warning-border);
+}
+
+/* Red States: Rejected, Suspended, Critical */
+.status-rejected {
+  background-color: var(--color-status-danger-bg);
+  color: var(--color-status-danger);
+  border-color: var(--color-status-danger-border);
+}
+
+.status-critical {
+  background-color: var(--color-status-danger-bg);
+  color: var(--color-status-danger);
+  border-color: var(--color-status-danger-border);
+  box-shadow: 0 0 4px rgba(220, 38, 38, 0.1);
+  animation: pulse-danger 2s infinite;
+}
+
+@keyframes pulse-danger {
+  0% { opacity: 1; }
+  50% { opacity: 0.85; }
+  100% { opacity: 1; }
+}
+
+.status-default {
+  background-color: var(--color-border-light);
+  color: var(--color-text-muted);
+  border-color: var(--color-border);
+}

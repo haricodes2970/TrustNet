@@ -1,38 +1,61 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { 
   MapPin, 
   FileText, 
-  DollarSign, 
-  CheckCircle2, 
   Share2, 
   ArrowLeft,
-  ChevronRight,
-  ChevronLeft
+  Globe,
+  DollarSign,
+  User,
+  Tags,
+  Building
 } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
-import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
-import { Avatar } from '../../components/ui/Avatar';
 import { Modal } from '../../components/ui/Modal';
+import { LedgerStamp } from '../../components/ui/LedgerStamp';
 import { useApp } from '../../context/AppContext';
 import { listFundingRounds } from '../../lib/fundingRoundApi';
 import { createInvestmentInterest } from '../../lib/investmentInterestApi';
+import * as startupApi from '../../lib/startupApi';
+import { normalizeStartup } from '../../lib/adapters/startupAdapter';
 
 export const StartupDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { startups, showToast } = useApp();
-  
-  const startup = startups.find(s => s.id === id) || startups[0];
-  const [isPitchDeckOpen, setIsPitchDeckOpen] = useState(false);
-  const [isInvestModalOpen, setIsInvestModalOpen] = useState(false);
-  const [currentSlide, setCurrentSlide] = useState(1);
-  const [interestMessage, setInterestMessage] = useState('');
-  const [submittingInterest, setSubmittingInterest] = useState(false);
+  const { showToast } = useApp();
+
+  const [startup, setStartup] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
   const [fundingRound, setFundingRound] = useState(null);
 
+  const [isInvestModalOpen, setIsInvestModalOpen] = useState(false);
+  const [interestMessage, setInterestMessage] = useState('');
+  const [submittingInterest, setSubmittingInterest] = useState(false);
+
   useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setIsLoading(true);
+      setError('');
+      try {
+        const raw = await startupApi.getStartup(id);
+        if (!cancelled) setStartup(normalizeStartup(raw));
+      } catch (err) {
+        if (!cancelled) setError(err.message);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  useEffect(() => {
+    if (!startup?.id) return;
     const fetchRound = async () => {
       try {
         const rounds = await listFundingRounds({ startupId: startup.id });
@@ -44,11 +67,12 @@ export const StartupDetailPage = () => {
       }
     };
     fetchRound();
-  }, [startup.id]);
+  }, [startup?.id]);
 
-  const raised = fundingRound?.raisedAmount ?? startup.fundingRaised;
-  const target = fundingRound?.targetAmount ?? startup.fundingTarget;
-  const progressPercent = Math.min(100, Math.round((raised / target) * 100));
+  const handleShare = () => {
+    navigator.clipboard.writeText(window.location.href);
+    showToast('Link Copied', 'Startup page URL copied to clipboard.', 'success');
+  };
 
   const handleSendInterest = async (e) => {
     e.preventDefault();
@@ -70,132 +94,296 @@ export const StartupDetailPage = () => {
     }
   };
 
-  return (
-    <div className="space-y-8">
-      {/* Back Button */}
-      <button
-        onClick={() => navigate('/app/startups')}
-        className="inline-flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-emerald-600 transition-colors cursor-pointer"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        <span>Back to Startups</span>
-      </button>
+  if (isLoading) {
+    return (
+      <div className="bg-[#F7F5EF] min-h-screen -m-6 sm:-m-8 p-6 sm:p-8 flex items-center justify-center">
+        <p className="text-sm font-mono text-[#5B6472] animate-pulse">Loading startup details...</p>
+      </div>
+    );
+  }
 
-      {/* Banner & Header */}
-      <Card className="overflow-hidden border-slate-200">
-        <div className="h-56 sm:h-72 w-full bg-slate-200 relative">
-          <img src={startup.banner} alt={startup.name} className="w-full h-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent" />
-          <div className="absolute top-4 right-4 flex items-center gap-2">
-            <Button variant="outline" size="sm" className="bg-white/90 text-slate-800 backdrop-blur-md" onClick={() => showToast('Link Copied', 'Copied pitch deal room link.', 'info')}>
-              <Share2 className="w-4 h-4" />
+  if (error || !startup) {
+    return (
+      <div className="bg-[#F7F5EF] min-h-screen -m-6 sm:-m-8 p-6 sm:p-8 flex flex-col items-center justify-center space-y-4">
+        <p className="text-sm font-mono text-[#B23A32]">Error: {error || 'Startup profile not found.'}</p>
+        <Button
+          variant="outline"
+          size="sm"
+          className="border border-[#5B6472]/30 text-[#0E1A2B] rounded-[4px]"
+          onClick={() => navigate('/app/startups')}
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          <span>Back to Startups</span>
+        </Button>
+      </div>
+    );
+  }
+
+  const raised = fundingRound?.raisedAmount ?? startup.fundingRaised ?? 0;
+  const target = fundingRound?.targetAmount ?? startup.fundingTarget ?? 0;
+  const progressPercent = target > 0 ? Math.min(100, Math.round((raised / target) * 100)) : 0;
+
+  return (
+    <div className="bg-[#F7F5EF] text-[#0E1A2B] font-sans p-6 sm:p-8 min-h-screen -m-6 sm:-m-8 space-y-6">
+      {/* Breadcrumbs & Back Button */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#5B6472]/10 pb-4">
+        <div className="flex items-center gap-2 text-xs font-mono text-[#5B6472]">
+          <Link to="/app/startups" className="hover:text-[#0E1A2B] transition-colors">Startups</Link>
+          <span>/</span>
+          <span className="text-[#0E1A2B] font-bold">{startup.name}</span>
+          <span>/</span>
+          <span className="text-[#0F6E5C] font-bold">Overview</span>
+        </div>
+
+        <button
+          onClick={() => navigate('/app/startups')}
+          className="inline-flex items-center gap-2 text-xs font-semibold text-[#5B6472] hover:text-[#0E1A2B] transition-colors self-start"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Back to Startups</span>
+        </button>
+      </div>
+
+      {/* Contextual Navigation (Startup Context) */}
+      <div className="flex border-b border-[#5B6472]/20">
+        <Link
+          to={`/app/startups/${startup.id}`}
+          className="px-4 py-2 text-xs font-bold border-b-2 border-[#0F6E5C] text-[#0F6E5C] font-sans tracking-wide uppercase"
+        >
+          Overview
+        </Link>
+        <Link
+          to={`/app/startups/${startup.id}/team`}
+          className="px-4 py-2 text-xs font-semibold border-b-2 border-transparent text-[#5B6472] hover:text-[#0E1A2B] font-sans tracking-wide uppercase transition-colors"
+        >
+          Team
+        </Link>
+        <Link
+          to={`/app/workspaces/${startup.id}`}
+          className="px-4 py-2 text-xs font-semibold border-b-2 border-transparent text-[#5B6472] hover:text-[#0E1A2B] font-sans tracking-wide uppercase transition-colors"
+        >
+          Workspace
+        </Link>
+      </div>
+
+      {/* Header Showcase Info */}
+      <Card className="bg-white rounded-[8px] border border-[#5B6472]/20 shadow-[0_2px_8px_rgba(14,26,43,0.08)] overflow-hidden">
+        {/* Banner with neutral fallback background, no gradients */}
+        <div className="h-44 sm:h-56 w-full bg-[#5B6472]/10 relative">
+          <div className="absolute top-4 right-4">
+            <Button
+              variant="outline"
+              size="sm"
+              className="bg-white border border-[#5B6472]/30 hover:bg-[#F7F5EF] text-[#0E1A2B] rounded-[4px]"
+              onClick={handleShare}
+            >
+              <Share2 className="w-4 h-4 mr-2" />
               <span>Share</span>
             </Button>
           </div>
         </div>
 
         <div className="p-6 sm:p-8 relative pt-0">
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 -mt-12 mb-6">
-            <div className="flex items-end gap-4">
-              <img src={startup.logo} alt={startup.name} className="w-20 h-20 rounded-2xl object-cover ring-4 ring-white shadow-soft-md bg-white" />
-              <div>
-                <h1 className="text-2xl sm:text-3xl font-black text-slate-900">{startup.name}</h1>
-                <p className="text-xs text-slate-500 flex items-center gap-2 mt-0.5 font-medium">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6 -mt-12 mb-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4">
+              {startup.logo ? (
+                <img src={startup.logo} alt={startup.name} className="w-20 h-20 rounded-[4px] object-contain border border-[#5B6472]/20 bg-white shadow-[0_2px_8px_rgba(14,26,43,0.08)]" />
+              ) : (
+                <div className="w-20 h-20 rounded-[4px] border border-[#5B6472]/20 bg-white flex items-center justify-center text-3xl font-display font-black text-[#0F6E5C] shadow-[0_2px_8px_rgba(14,26,43,0.08)]">
+                  {startup.name?.charAt(0)}
+                </div>
+              )}
+              <div className="space-y-1">
+                <h1 className="text-2xl sm:text-3xl font-display font-black text-[#0E1A2B] tracking-tight">{startup.name}</h1>
+                <p className="text-xs text-[#5B6472] flex items-center gap-2 font-sans">
                   <MapPin className="w-3.5 h-3.5" />
-                  {startup.location} • Founded {startup.foundedYear}
+                  {startup.location || 'Location not specified'}
+                  {startup.foundedYear && ` • Founded ${startup.foundedYear}`}
                 </p>
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              <Button variant="outline" size="md" onClick={() => setIsPitchDeckOpen(true)}>
-                <FileText className="w-4 h-4 mr-1.5" />
-                <span>View Pitch Deck</span>
-              </Button>
-              <Button variant="primary" size="md" onClick={() => setIsInvestModalOpen(true)}>
+              {startup.pitchDeckUrl && (
+                <Button
+                  variant="primary"
+                  size="md"
+                  className="bg-[#0F6E5C] hover:bg-[#0F6E5C]/90 text-white rounded-[4px] border-0 shadow-[0_2px_8px_rgba(14,26,43,0.08)]"
+                  onClick={() => window.open(startup.pitchDeckUrl, '_blank', 'noopener')}
+                >
+                  <FileText className="w-4 h-4 mr-2" />
+                  <span>View Pitch Deck</span>
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="md"
+                className="border border-[#5B6472]/30 text-[#0E1A2B] hover:bg-[#F7F5EF] rounded-[4px]"
+                onClick={() => setIsInvestModalOpen(true)}
+              >
                 <DollarSign className="w-4 h-4 mr-1.5" />
-                <span>Express Investment Interest</span>
+                <span>Express Interest</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="md"
+                className="border border-[#5B6472]/30 text-[#0E1A2B] hover:bg-[#F7F5EF] rounded-[4px]"
+                onClick={() => navigate(`/app/startups/${startup.id}/manage`)}
+              >
+                <span>Manage Workspace</span>
               </Button>
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-2 mb-4">
-            <Badge variant="emerald">{startup.stage}</Badge>
-            <Badge variant="slate">{startup.industry}</Badge>
-            <Badge variant="blue">Valuation {startup.valuation}</Badge>
+          <div className="flex flex-wrap items-center gap-3 mb-6">
+            <span className="text-[10px] font-mono font-bold bg-[#F7F5EF] border border-[#5B6472]/20 px-2.5 py-1 rounded-[4px] text-[#0E1A2B] uppercase">
+              {startup.stageLabel}
+            </span>
+            {startup.industry && (
+              <span className="text-[10px] font-mono font-bold bg-[#F7F5EF] border border-[#5B6472]/20 px-2.5 py-1 rounded-[4px] text-[#5B6472] uppercase">
+                {startup.industry}
+              </span>
+            )}
+            <LedgerStamp status={startup.status} date={startup.createdAt} />
           </div>
 
-          <p className="text-sm text-slate-700 leading-relaxed max-w-4xl font-normal">
-            {startup.description}
-          </p>
+          <div className="space-y-2">
+            <h3 className="text-xs font-semibold text-[#5B6472] uppercase tracking-wider">Company Description</h3>
+            <p className="text-sm text-[#0E1A2B] leading-relaxed max-w-4xl font-sans">
+              {startup.description}
+            </p>
+          </div>
         </div>
       </Card>
 
-      {/* Funding Progress & Cap Table Info */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <div className="lg:col-span-8 space-y-8">
-          {/* Funding Card */}
-          <Card className="p-6 border-slate-200">
-            <h3 className="text-base font-bold text-slate-900 mb-2">Seed Funding Progress</h3>
-            <div className="flex items-center justify-between text-sm font-semibold mb-2">
-              <span className="text-slate-600">Raised ${(raised / 1000).toFixed(0)}k</span>
-              <span className="text-emerald-600 font-bold">{progressPercent}% of ${(target / 1000).toFixed(0)}k Target</span>
-            </div>
-            <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden mb-4">
-              <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full" style={{ width: `${progressPercent}%` }} />
+      {/* Main Split Screen */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Left Column (8 Cols) */}
+        <div className="lg:col-span-8 space-y-6">
+          {/* Funding Progress (if set) */}
+          <Card className="p-6 bg-white rounded-[8px] border border-[#5B6472]/20 shadow-[0_2px_8px_rgba(14,26,43,0.08)]">
+            <h3 className="text-sm font-semibold text-[#0E1A2B] uppercase tracking-wider mb-4">Funding Status</h3>
+            <div className="space-y-4">
+              <div className="flex justify-between items-end text-xs font-mono">
+                <div>
+                  <span className="text-[#5B6472] uppercase block text-[10px]">Total Raised</span>
+                  <strong className="text-lg text-[#0F6E5C] font-bold">${raised.toLocaleString()}</strong>
+                </div>
+                <div className="text-right">
+                  <span className="text-[#5B6472] uppercase block text-[10px]">Funding Goal</span>
+                  <strong className="text-lg text-[#0E1A2B] font-bold">
+                    {target ? `$${target.toLocaleString()}` : '—'}
+                  </strong>
+                </div>
+              </div>
+
+              {target > 0 && (
+                <div className="space-y-1">
+                  <div className="h-3 w-full bg-[#F7F5EF] border border-[#5B6472]/20 rounded-[4px] overflow-hidden">
+                    <div
+                      className="h-full bg-[#0F6E5C] transition-all duration-300"
+                      style={{ width: `${progressPercent}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] font-mono text-[#5B6472] block text-right">
+                    {progressPercent}% of Goal Achieved
+                  </span>
+                </div>
+              )}
             </div>
           </Card>
 
-          {/* Roadmap & Milestones Timeline */}
-          <Card className="p-6 border-slate-200">
-            <h3 className="text-base font-bold text-slate-900 mb-6">Milestones & Roadmap</h3>
-            <div className="space-y-6">
-              {startup.milestones.map((m, idx) => (
-                <div key={idx} className="flex items-start gap-4">
-                  <div className={`p-2 rounded-xl flex-shrink-0 ${m.status === 'completed' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
-                    <CheckCircle2 className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-emerald-600">{m.date}</span>
-                      <Badge variant={m.status === 'completed' ? 'emerald' : 'slate'} size="sm">
-                        {m.status}
-                      </Badge>
-                    </div>
-                    <h4 className="text-sm font-bold text-slate-900 mt-0.5">{m.title}</h4>
-                  </div>
+          {/* Problem & Solution */}
+          {(startup.problemStatement || startup.solution || startup.targetMarket) && (
+            <Card className="p-6 bg-white rounded-[8px] border border-[#5B6472]/20 shadow-[0_2px_8px_rgba(14,26,43,0.08)] space-y-6">
+              <h3 className="text-sm font-semibold text-[#0E1A2B] uppercase tracking-wider">Strategic Overview</h3>
+              
+              {startup.problemStatement && (
+                <div className="space-y-1.5">
+                  <span className="text-xs font-semibold text-[#5B6472] uppercase tracking-wider block">The Problem</span>
+                  <p className="text-sm text-[#0E1A2B] leading-relaxed font-sans">{startup.problemStatement}</p>
                 </div>
-              ))}
-            </div>
-          </Card>
+              )}
+
+              {startup.solution && (
+                <div className="space-y-1.5 border-t border-[#5B6472]/10 pt-4">
+                  <span className="text-xs font-semibold text-[#5B6472] uppercase tracking-wider block">The Solution</span>
+                  <p className="text-sm text-[#0E1A2B] leading-relaxed font-sans">{startup.solution}</p>
+                </div>
+              )}
+
+              {startup.targetMarket && (
+                <div className="space-y-1.5 border-t border-[#5B6472]/10 pt-4">
+                  <span className="text-xs font-semibold text-[#5B6472] uppercase tracking-wider block">Target Market</span>
+                  <p className="text-sm text-[#0E1A2B] leading-relaxed font-sans">{startup.targetMarket}</p>
+                </div>
+              )}
+            </Card>
+          )}
         </div>
 
-        {/* Founder & Tech Stack Sidebar */}
+        {/* Right Sidebar Column (4 Cols) */}
         <div className="lg:col-span-4 space-y-6">
-          <Card className="p-6 border-slate-200">
-            <h3 className="text-base font-bold text-slate-900 mb-4">Founder & Leadership</h3>
-            <div className="flex items-center gap-3 mb-4">
-              <Avatar src={startup.founder.avatar} alt={startup.founder.name} size="md" isVerified />
-              <div>
-                <h4 className="text-sm font-bold text-slate-900">{startup.founder.name}</h4>
-                <p className="text-xs text-slate-500">{startup.founder.headline}</p>
+          {/* Metadata/Founder Card */}
+          <Card className="p-6 bg-white rounded-[8px] border border-[#5B6472]/20 shadow-[0_2px_8px_rgba(14,26,43,0.08)] space-y-4">
+            <h3 className="text-sm font-semibold text-[#0E1A2B] uppercase tracking-wider border-b border-[#5B6472]/10 pb-2">
+              Metadata
+            </h3>
+            
+            <div className="space-y-3 font-mono text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[#5B6472] flex items-center gap-1.5"><User className="w-3.5 h-3.5" /> Founder ID</span>
+                <span className="text-[#0E1A2B] font-bold break-all select-all">{startup.founderId || 'Unknown'}</span>
               </div>
+
+              {startup.createdAt && (
+                <div className="flex items-center justify-between">
+                  <span className="text-[#5B6472] flex items-center gap-1.5"><Building className="w-3.5 h-3.5" /> Registered</span>
+                  <span className="text-[#0E1A2B]">
+                    {new Date(startup.createdAt).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric'
+                    })}
+                  </span>
+                </div>
+              )}
             </div>
-            <Button variant="outline" size="sm" className="w-full" onClick={() => navigate(`/app/people/${startup.founder.id}`)}>
-              View Founder Profile
-            </Button>
           </Card>
 
-          <Card className="p-6 border-slate-200">
-            <h3 className="text-base font-bold text-slate-900 mb-3">Technology Stack</h3>
-            <div className="flex flex-wrap gap-1.5">
-              {startup.techStack.map((t, idx) => (
-                <span key={idx} className="px-2.5 py-1 text-xs font-semibold bg-slate-100 text-slate-700 rounded-lg">
-                  {t}
-                </span>
-              ))}
-            </div>
-          </Card>
+          {/* Tags */}
+          {startup.tags?.length > 0 && (
+            <Card className="p-6 bg-white rounded-[8px] border border-[#5B6472]/20 shadow-[0_2px_8px_rgba(14,26,43,0.08)] space-y-3">
+              <h3 className="text-sm font-semibold text-[#0E1A2B] uppercase tracking-wider flex items-center gap-1.5">
+                <Tags className="w-4 h-4 text-[#5B6472]" /> Tags
+              </h3>
+              <div className="flex flex-wrap gap-1.5">
+                {startup.tags.map((t, idx) => (
+                  <span key={idx} className="px-2.5 py-1 text-[11px] font-mono bg-[#F7F5EF] border border-[#5B6472]/20 text-[#5B6472] rounded-[4px]">
+                    {t}
+                  </span>
+                ))}
+              </div>
+            </Card>
+          )}
+
+          {/* Website Link */}
+          {startup.website && (
+            <Card className="p-6 bg-white rounded-[8px] border border-[#5B6472]/20 shadow-[0_2px_8px_rgba(14,26,43,0.08)] space-y-3">
+              <h3 className="text-sm font-semibold text-[#0E1A2B] uppercase tracking-wider">
+                Venture Website
+              </h3>
+              <a
+                href={startup.website}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-xs text-[#0F6E5C] font-semibold hover:underline break-all"
+              >
+                <Globe className="w-3.5 h-3.5 shrink-0" />
+                <span>{startup.website}</span>
+              </a>
+            </Card>
+          )}
         </div>
       </div>
 
@@ -225,57 +413,6 @@ export const StartupDetailPage = () => {
             </Button>
           </div>
         </form>
-      </Modal>
-
-      {/* Pitch Deck PDF Viewer Modal */}
-      <Modal
-        isOpen={isPitchDeckOpen}
-        onClose={() => setIsPitchDeckOpen(false)}
-        title={`${startup.name} - Pitch Deck (PDF)`}
-        subtitle="Confidential Investor Pitch Slides"
-        maxWidth="max-w-4xl"
-      >
-        <div className="space-y-4">
-          <div className="aspect-[16/9] bg-slate-900 rounded-2xl flex flex-col items-center justify-center text-white p-8 relative overflow-hidden">
-            <div className="text-center space-y-3">
-              <Badge variant="emerald">SLIDE {currentSlide} OF 10</Badge>
-              <h2 className="text-3xl font-black text-white">{startup.name} Confidential Pitch</h2>
-              <p className="text-sm text-slate-300 max-w-lg mx-auto">
-                {currentSlide === 1 && "Problem: Enterprise workflows are fragmented across legacy tools."}
-                {currentSlide === 2 && "Solution: TrustNet Autonomous AI Agents & Verification."}
-                {currentSlide === 3 && "Market Traction: High growth across enterprise accounts."}
-                {currentSlide > 3 && `Slide ${currentSlide}: Financial Projections & Unit Economics.`}
-              </p>
-            </div>
-
-            {/* Slide Navigation Buttons */}
-            <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between">
-              <Button
-                variant="outline"
-                size="sm"
-                className="bg-white/10 text-white border-white/20 hover:bg-white/20"
-                disabled={currentSlide === 1}
-                onClick={() => setCurrentSlide(c => c - 1)}
-              >
-                <ChevronLeft className="w-4 h-4" />
-                <span>Prev Slide</span>
-              </Button>
-
-              <span className="text-xs text-slate-400 font-mono">PDF Viewer Mode</span>
-
-              <Button
-                variant="outline"
-                size="sm"
-                className="bg-white/10 text-white border-white/20 hover:bg-white/20"
-                disabled={currentSlide === 10}
-                onClick={() => setCurrentSlide(c => c + 1)}
-              >
-                <span>Next Slide</span>
-                <ChevronRight className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-        </div>
       </Modal>
     </div>
   );

@@ -1,477 +1,318 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import confetti from 'canvas-confetti';
-import { 
-  Rocket, 
-  ArrowRight, 
-  ArrowLeft, 
-  CheckCircle2, 
-  Users, 
-  DollarSign, 
-  Target, 
-  Plus, 
-  ShieldCheck, 
-  Sparkles
-} from 'lucide-react';
-import { Input } from '../../components/ui/Input';
+import { ArrowLeft, Rocket, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
-import { Badge } from '../../components/ui/Badge';
-import { ProgressRing } from '../../components/ui/ProgressRing';
 import { useApp } from '../../context/AppContext';
-import { useAuth } from '../../context/AuthContext';
+import * as startupApi from '../../lib/startupApi';
+import { normalizeStartup } from '../../lib/adapters/startupAdapter';
 
 export const CreateStartupPage = () => {
   const navigate = useNavigate();
-  const { createStartup, showToast } = useApp();
-  const { currentUser } = useAuth();
-
-  const [currentStep, setCurrentStep] = useState(1);
+  const { setStartups, showToast } = useApp();
 
   const [formData, setFormData] = useState({
-    name: 'AuraScale AI',
-    tagline: 'Autonomous enterprise customer operations powered by fine-tuned LLM agents',
-    logo: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&q=80&w=200',
-    banner: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&q=80&w=1200',
-    industry: 'AI & SaaS',
-    stage: 'Seed',
-    location: 'San Francisco, CA',
-    website: 'https://aurascale.example.com',
-    description: 'AuraScale AI provides enterprise platforms with autonomous support, workflows, and instant API integrations.',
-    story: 'Founded in 2024 by ex-Google AI engineers after recognizing that 80% of customer tickets can be resolved autonomously.',
-    mission: 'To automate complex enterprise workflows with human-level accuracy and empathy.',
-    vision: 'Becoming the operating system for next-generation AI enterprise work.',
-    problem: 'Enterprise support teams spend $450B annually on repetitive manual customer resolution.',
-    solution: 'Fine-tuned domain-specific agent orchestrators that connect directly to internal SQL databases and Slack.',
-    businessModel: 'B2B SaaS Subscription ($2k - $15k / month based on resolved agent workflows)',
-    targetAudience: 'Mid-market to Enterprise SaaS and Fintech companies with >50 support agents.',
-    fundingTarget: 2500000,
-    fundingRaised: 750000,
-    useOfFunds: '60% Engineering & AI Research, 25% Go-to-market & Enterprise Sales, 15% Operations & Legal.',
-    visibility: 'Public',
-    team: [
-      { name: currentUser?.name || 'Alex Morgan', role: 'Founder & CEO', email: 'alex@aurascale.io', dept: 'Executive', access: 'Admin' },
-      { name: 'Dr. Marcus Vance', role: 'CTO & Co-Founder', email: 'marcus@aurascale.io', dept: 'Engineering', access: 'Admin' }
-    ],
-    milestones: [
-      { date: 'Q1 2026', title: 'Y Combinator W26 Acceptance', status: 'completed' },
-      { date: 'Q2 2026', title: 'Crossed $30k MRR across 12 Beta Enterprise clients', status: 'in-progress' }
-    ]
+    name: '',
+    slug: '',
+    description: '',
+    category: ''
   });
 
-  const [newMemberEmail, setNewMemberEmail] = useState('');
-  const [newMemberRole, setNewMemberRole] = useState('Senior Engineer');
+  const [errors, setErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [apiError, setApiError] = useState('');
+  const [successData, setSuccessData] = useState(null);
 
-  const updateField = (field, val) => {
-    setFormData(prev => ({ ...prev, [field]: val }));
-  };
+  // Auto-generate slug from name
+  useEffect(() => {
+    if (formData.name && !formData.slugEdited) {
+      const generatedSlug = formData.name
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 80);
+      setFormData(prev => ({ ...prev, slug: generatedSlug }));
+    }
+  }, [formData.name]);
 
-  const calculateCompletion = () => {
-    let score = 0;
-    if (formData.name && formData.tagline) score += 20;
-    if (formData.story && formData.problem && formData.solution) score += 20;
-    if (formData.team.length > 0) score += 20;
-    if (formData.fundingTarget > 0) score += 20;
-    if (formData.visibility) score += 20;
-    return score;
-  };
-
-  const completionPercent = calculateCompletion();
-
-  const handleAddTeamMember = (e) => {
-    e.preventDefault();
-    if (!newMemberEmail) return;
-    setFormData(prev => ({
-      ...prev,
-      team: [
-        ...prev.team,
-        { name: newMemberEmail.split('@')[0], role: newMemberRole, email: newMemberEmail, dept: 'Engineering', access: 'Editor' }
-      ]
-    }));
-    setNewMemberEmail('');
-  };
-
-  const handlePublish = () => {
-    const newStartup = {
-      id: `stp_${Date.now()}`,
-      name: formData.name,
-      tagline: formData.tagline,
-      description: formData.description || formData.tagline,
-      logo: formData.logo,
-      banner: formData.banner,
-      stage: formData.stage,
-      industry: formData.industry,
-      location: formData.location,
-      fundingRaised: Number(formData.fundingRaised),
-      fundingTarget: Number(formData.fundingTarget),
-      valuation: `$${(Number(formData.fundingTarget) * 4 / 1000000).toFixed(1)}M`,
-      founder: currentUser,
-      teamSize: formData.team.length,
-      foundedYear: 2026,
-      website: formData.website,
-      techStack: ['React', 'Python', 'FastAPI', 'PyTorch', 'TailwindCSS'],
-      milestones: formData.milestones,
-      gallery: [],
-      isBookmarked: false
-    };
-
-    createStartup(newStartup).then((saved) => {
-      confetti({
-        particleCount: 120,
-        spread: 70,
-        origin: { y: 0.6 }
-      });
-
-      showToast('🚀 Startup Published Live!', `${formData.name} is now live on the TrustNet directory.`, 'success');
-      navigate(`/app/startups/${saved.id || newStartup.id}/manage`);
-    }).catch(err => {
-      console.error(err);
-      showToast('Error publishing startup', 'Please try again.', 'error');
+  const handleInputChange = (field, value) => {
+    setFormData(prev => {
+      const updated = { ...prev, [field]: value };
+      if (field === 'slug') {
+        updated.slugEdited = true;
+        // Clean slug input to match allowed pattern
+        updated.slug = value
+          .toLowerCase()
+          .replace(/\s+/g, '-')
+          .replace(/[^a-z0-9-]/g, '');
+      }
+      return updated;
     });
+
+    // Clear field-specific error
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: '' }));
+    }
   };
 
-  const steps = [
-    { num: 1, title: 'Basic Info' },
-    { num: 2, title: 'Details' },
-    { num: 3, title: 'Team' },
-    { num: 4, title: 'Funding' },
-    { num: 5, title: 'Publish' }
-  ];
+  const validateForm = () => {
+    const newErrors = {};
+    if (!formData.name || formData.name.trim().length < 2) {
+      newErrors.name = 'Startup name must be at least 2 characters.';
+    } else if (formData.name.length > 150) {
+      newErrors.name = 'Startup name cannot exceed 150 characters.';
+    }
+
+    const slugRegex = /^[a-z0-9-]+$/;
+    if (!formData.slug) {
+      newErrors.slug = 'Slug is required.';
+    } else if (!slugRegex.test(formData.slug)) {
+      newErrors.slug = 'Slug can only contain lowercase letters, numbers, and hyphens.';
+    } else if (formData.slug.length < 3 || formData.slug.length > 80) {
+      newErrors.slug = 'Slug must be between 3 and 80 characters.';
+    }
+
+    if (!formData.category || formData.category.trim().length === 0) {
+      newErrors.category = 'Category/industry is required.';
+    } else if (formData.category.length > 50) {
+      newErrors.category = 'Category cannot exceed 50 characters.';
+    }
+
+    if (!formData.description || formData.description.trim().length < 50) {
+      newErrors.description = 'Description must be at least 50 characters.';
+    } else if (formData.description.length > 5000) {
+      newErrors.description = 'Description cannot exceed 5000 characters.';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setApiError('');
+
+    if (!validateForm()) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const payload = {
+        name: formData.name.trim(),
+        slug: formData.slug.trim(),
+        description: formData.description.trim(),
+        category: formData.category.trim()
+      };
+
+      const created = await startupApi.createStartup(payload);
+      const normalized = normalizeStartup(created);
+      
+      // Update global AppContext startups list
+      setStartups(prev => [normalized, ...prev]);
+
+      setSuccessData(normalized);
+      showToast('🚀 Startup Created!', `${normalized.name} has been successfully registered.`, 'success');
+    } catch (err) {
+      if (err.status === 409) {
+        setApiError('A startup with this slug already exists. Please choose a unique slug.');
+        setErrors(prev => ({ ...prev, slug: 'Slug already taken.' }));
+      } else {
+        setApiError(err.message || 'Failed to create startup. Please try again.');
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (successData) {
+    return (
+      <div className="bg-[#F7F5EF] text-[#0E1A2B] font-sans p-6 sm:p-8 min-h-screen -m-6 sm:-m-8 flex items-center justify-center">
+        <Card className="w-full max-w-md bg-white p-8 rounded-[8px] border border-[#5B6472]/20 shadow-[0_2px_8px_rgba(14,26,43,0.08)] text-center space-y-6">
+          <div className="w-16 h-16 bg-[#0F6E5C]/10 text-[#0F6E5C] rounded-full flex items-center justify-center mx-auto">
+            <CheckCircle2 className="w-8 h-8" />
+          </div>
+
+          <div className="space-y-2">
+            <h2 className="text-2xl font-display font-black text-[#0E1A2B] tracking-tight">
+              Startup Created Successfully!
+            </h2>
+            <p className="text-xs text-[#5B6472]">
+              <strong>{successData.name}</strong> is now registered.
+            </p>
+          </div>
+
+          <div className="p-4 bg-[#F7F5EF] rounded-[4px] text-left border border-[#5B6472]/10 space-y-2 font-mono text-xs text-[#0E1A2B]">
+            <div>
+              <span className="text-[#5B6472] uppercase block text-[10px]">Slug ID</span>
+              <span>{successData.slug}</span>
+            </div>
+            <div>
+              <span className="text-[#5B6472] uppercase block text-[10px]">Category</span>
+              <span>{successData.industry}</span>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 pt-2">
+            <Button
+              variant="primary"
+              className="w-full bg-[#0F6E5C] hover:bg-[#0F6E5C]/90 text-white rounded-[4px] border-0"
+              onClick={() => navigate(`/app/startups/${successData.id}/manage`)}
+            >
+              Go to Dashboard
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full border border-[#5B6472]/30 text-[#0E1A2B] hover:bg-[#F7F5EF] rounded-[4px]"
+              onClick={() => navigate('/app/startups')}
+            >
+              Back to Startups
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-8 max-w-[1440px] mx-auto">
-      {/* Navigation Header */}
+    <div className="bg-[#F7F5EF] text-[#0E1A2B] font-sans p-6 sm:p-8 min-h-screen -m-6 sm:-m-8 space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <button
           onClick={() => navigate('/app/startups')}
-          className="inline-flex items-center gap-2 text-xs font-semibold text-slate-500 hover:text-emerald-600 transition-colors"
+          className="inline-flex items-center gap-2 text-xs font-semibold text-[#5B6472] hover:text-[#0E1A2B] transition-colors"
         >
-          <ArrowLeft className="w-4 h-4" strokeWidth={1.75} />
+          <ArrowLeft className="w-4 h-4" />
           <span>Back to Startups</span>
         </button>
-
-        <div className="flex items-center gap-3">
-          <Badge variant="emerald">5-Step Wizard</Badge>
-          <span className="text-xs font-semibold text-slate-500">{completionPercent}% Completed</span>
-        </div>
       </div>
 
-      {/* Stepper Header */}
-      <Card className="p-4 border-slate-200/80 bg-white">
-        <div className="grid grid-cols-5 gap-2 text-center">
-          {steps.map((step) => {
-            const isActive = currentStep === step.num;
-            const isDone = currentStep > step.num;
-            return (
-              <button
-                key={step.num}
-                onClick={() => setCurrentStep(step.num)}
-                className={`p-3 rounded-xl border text-xs font-semibold transition-all flex flex-col items-center gap-1 ${
-                  isActive
-                    ? 'bg-emerald-50 border-emerald-500 text-emerald-700 ring-2 ring-emerald-500/20'
-                    : isDone
-                    ? 'bg-slate-50 border-slate-200 text-emerald-600'
-                    : 'bg-white border-slate-200 text-slate-400'
-                }`}
-              >
-                <div className="flex items-center justify-center w-6 h-6 rounded-full text-xs font-black">
-                  {isDone ? <CheckCircle2 className="w-4 h-4 text-emerald-600" strokeWidth={1.75} /> : step.num}
-                </div>
-                <span className="hidden sm:inline truncate">{step.title}</span>
-              </button>
-            );
-          })}
+      <div className="max-w-2xl mx-auto space-y-6">
+        <div className="space-y-1">
+          <h1 className="text-2xl sm:text-3xl font-display font-black text-[#0E1A2B] tracking-tight">
+            Create Startup Profile
+          </h1>
+          <p className="text-xs text-[#5B6472]">
+            Register your venture by filling out the official details below. All fields are required.
+          </p>
         </div>
-      </Card>
 
-      {/* Main Split Screen */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Left Form Wizard Column (7 Cols) */}
-        <div className="lg:col-span-7 space-y-6">
-          {/* STEP 1 */}
-          {currentStep === 1 && (
-            <Card className="p-6 border-slate-200/80 space-y-5">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl">
-                  <Rocket className="w-5 h-5" strokeWidth={1.75} />
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-slate-900">Step 1: Basic Information</h2>
-                  <p className="text-xs text-slate-500">Company identity and main presence details</p>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <Input
-                  label="Startup Name"
-                  value={formData.name}
-                  onChange={(e) => updateField('name', e.target.value)}
-                  placeholder="e.g. NexusAI"
-                  required
-                />
-
-                <Input
-                  label="One-line Tagline"
-                  value={formData.tagline}
-                  onChange={(e) => updateField('tagline', e.target.value)}
-                  placeholder="Autonomous AI workflow agents for enterprise operations"
-                  required
-                />
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Industry</label>
-                    <select
-                      value={formData.industry}
-                      onChange={(e) => updateField('industry', e.target.value)}
-                      className="w-full bg-slate-50/80 border border-slate-200 text-sm rounded-xl px-3.5 h-11 text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
-                    >
-                      <option value="AI & SaaS">AI & SaaS</option>
-                      <option value="Fintech">Fintech</option>
-                      <option value="ClimateTech">ClimateTech</option>
-                      <option value="HealthTech">HealthTech</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Stage</label>
-                    <select
-                      value={formData.stage}
-                      onChange={(e) => updateField('stage', e.target.value)}
-                      className="w-full bg-slate-50/80 border border-slate-200 text-sm rounded-xl px-3.5 h-11 text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
-                    >
-                      <option value="Pre-Seed">Pre-Seed</option>
-                      <option value="Seed">Seed</option>
-                      <option value="Series A">Series A</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <Input
-                    label="Location (City, Country)"
-                    value={formData.location}
-                    onChange={(e) => updateField('location', e.target.value)}
-                  />
-                  <Input
-                    label="Website URL"
-                    value={formData.website}
-                    onChange={(e) => updateField('website', e.target.value)}
-                  />
-                </div>
-
-                <Input
-                  label="Logo URL"
-                  value={formData.logo}
-                  onChange={(e) => updateField('logo', e.target.value)}
-                />
-              </div>
-            </Card>
-          )}
-
-          {/* STEP 2 */}
-          {currentStep === 2 && (
-            <Card className="p-6 border-slate-200/80 space-y-5">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl">
-                  <Target className="w-5 h-5" strokeWidth={1.75} />
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-slate-900">Step 2: Startup Details</h2>
-                  <p className="text-xs text-slate-500">Explain your problem, solution, and target audience</p>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Problem Statement</label>
-                  <textarea
-                    rows={3}
-                    value={formData.problem}
-                    onChange={(e) => updateField('problem', e.target.value)}
-                    className="w-full bg-slate-50/80 border border-slate-200 rounded-xl p-3 text-sm text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Solution</label>
-                  <textarea
-                    rows={3}
-                    value={formData.solution}
-                    onChange={(e) => updateField('solution', e.target.value)}
-                    className="w-full bg-slate-50/80 border border-slate-200 rounded-xl p-3 text-sm text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none"
-                  />
-                </div>
-              </div>
-            </Card>
-          )}
-
-          {/* STEP 3 */}
-          {currentStep === 3 && (
-            <Card className="p-6 border-slate-200/80 space-y-5">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl">
-                  <Users className="w-5 h-5" strokeWidth={1.75} />
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-slate-900">Step 3: Team Members</h2>
-                  <p className="text-xs text-slate-500">Invite co-founders and set workspace access</p>
-                </div>
-              </div>
-
-              <form onSubmit={handleAddTeamMember} className="flex gap-2">
-                <Input
-                  placeholder="Member email"
-                  value={newMemberEmail}
-                  onChange={(e) => setNewMemberEmail(e.target.value)}
-                  className="flex-1"
-                />
-                <Button type="submit" variant="primary">
-                  <Plus className="w-4 h-4" strokeWidth={1.75} />
-                  <span>Invite</span>
-                </Button>
-              </form>
-
-              <div className="space-y-3 pt-2">
-                {formData.team.map((mem, idx) => (
-                  <div key={idx} className="p-3 bg-slate-50/80 rounded-xl flex items-center justify-between border border-slate-200/80">
-                    <div>
-                      <h4 className="text-xs font-bold text-slate-900">{mem.name}</h4>
-                      <p className="text-[11px] text-slate-500">{mem.role} • {mem.email}</p>
-                    </div>
-                    <Badge variant="emerald">{mem.access}</Badge>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )}
-
-          {/* STEP 4 */}
-          {currentStep === 4 && (
-            <Card className="p-6 border-slate-200/80 space-y-5">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl">
-                  <DollarSign className="w-5 h-5" strokeWidth={1.75} />
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-slate-900">Step 4: Funding & Goals</h2>
-                  <p className="text-xs text-slate-500">Specify round goals and fund utilization</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <Input
-                  label="Target Funding ($ USD)"
-                  type="number"
-                  value={formData.fundingTarget}
-                  onChange={(e) => updateField('fundingTarget', e.target.value)}
-                />
-                <Input
-                  label="Amount Raised So Far ($ USD)"
-                  type="number"
-                  value={formData.fundingRaised}
-                  onChange={(e) => updateField('fundingRaised', e.target.value)}
-                />
-              </div>
-            </Card>
-          )}
-
-          {/* STEP 5 */}
-          {currentStep === 5 && (
-            <Card className="p-6 border-slate-200/80 space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-lg font-bold text-slate-900">Step 5: Review & Publish</h2>
-                  <p className="text-xs text-slate-500">Check all details before publishing live</p>
-                </div>
-                <ProgressRing progress={completionPercent} size={64} strokeWidth={6} />
-              </div>
-
-              <div className="p-4 bg-emerald-50/60 rounded-2xl border border-emerald-200/80 space-y-2">
-                <div className="flex items-center gap-2 text-emerald-700 font-bold text-xs">
-                  <ShieldCheck className="w-4 h-4 text-emerald-600" strokeWidth={1.75} />
-                  <span>TrustNet Verified Founder Status</span>
-                </div>
-                <p className="text-xs text-slate-600">
-                  Publishing will index your startup deck for 500+ verified angel investors.
-                </p>
-              </div>
-
-              <Button variant="primary" size="lg" className="w-full" onClick={handlePublish}>
-                <Rocket className="w-5 h-5" strokeWidth={1.75} />
-                <span>Publish Startup Now</span>
-              </Button>
-            </Card>
-          )}
-
-          {/* Stepper Footer */}
-          <div className="flex items-center justify-between pt-4">
-            <Button
-              variant="outline"
-              onClick={() => setCurrentStep(prev => Math.max(1, prev - 1))}
-              disabled={currentStep === 1}
-            >
-              <ArrowLeft className="w-4 h-4" strokeWidth={1.75} />
-              <span>Previous</span>
-            </Button>
-
-            {currentStep < 5 && (
-              <Button
-                variant="primary"
-                onClick={() => setCurrentStep(prev => Math.min(5, prev + 1))}
-              >
-                <span>Next Step</span>
-                <ArrowRight className="w-4 h-4" strokeWidth={1.75} />
-              </Button>
-            )}
+        {apiError && (
+          <div className="p-4 bg-[#B23A32]/10 border border-[#B23A32]/20 rounded-[4px] text-[#B23A32] text-xs font-mono flex items-start gap-3">
+            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+            <div>
+              <strong className="block uppercase text-[10px] tracking-wider mb-0.5">Error</strong>
+              {apiError}
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Right Sticky Column: REAL-TIME LIVE PREVIEW PANEL (5 Cols) */}
-        <div className="lg:col-span-5">
-          <div className="sticky top-24 space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-emerald-500" strokeWidth={1.75} />
-                Live Startup Card Preview
-              </span>
-              <span className="text-[11px] text-emerald-600 font-semibold">Real-time</span>
+        <Card className="bg-white p-6 sm:p-8 rounded-[8px] border border-[#5B6472]/20 shadow-[0_2px_8px_rgba(14,26,43,0.08)]">
+          <form onSubmit={handleSubmit} className="space-y-6" noValidate>
+            {/* Startup Name */}
+            <div className="space-y-1.5">
+              <label htmlFor="startup-name" className="block text-xs font-semibold text-[#0E1A2B] uppercase tracking-wider">
+                Startup Name
+              </label>
+              <input
+                id="startup-name"
+                type="text"
+                disabled={isSubmitting}
+                value={formData.name}
+                onChange={(e) => handleInputChange('name', e.target.value)}
+                placeholder="e.g. Acme Corporation"
+                className={`w-full bg-[#F7F5EF]/50 text-[#0E1A2B] placeholder:text-[#5B6472]/50 text-sm rounded-[4px] border px-3.5 h-11 transition-all focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0F6E5C]/30 focus:border-[#0F6E5C] ${
+                  errors.name ? 'border-[#B23A32] focus:ring-[#B23A32]/30 focus:border-[#B23A32]' : 'border-[#5B6472]/30'
+                }`}
+              />
+              {errors.name && (
+                <p className="text-xs text-[#B23A32] font-mono mt-1">{errors.name}</p>
+              )}
             </div>
 
-            <Card className="border-slate-200/80 bg-white hoverEffect">
-              <div className="h-32 w-full bg-slate-100 relative">
-                <img src={formData.banner} alt="Banner" className="w-full h-full object-cover" />
+            {/* Slug */}
+            <div className="space-y-1.5">
+              <label htmlFor="startup-slug" className="block text-xs font-semibold text-[#0E1A2B] uppercase tracking-wider">
+                Slug (URL Identifier)
+              </label>
+              <input
+                id="startup-slug"
+                type="text"
+                disabled={isSubmitting}
+                value={formData.slug}
+                onChange={(e) => handleInputChange('slug', e.target.value)}
+                placeholder="e.g. acme-corp"
+                className={`w-full bg-[#F7F5EF]/50 text-[#0E1A2B] placeholder:text-[#5B6472]/50 text-sm rounded-[4px] border px-3.5 h-11 transition-all focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0F6E5C]/30 focus:border-[#0F6E5C] font-mono ${
+                  errors.slug ? 'border-[#B23A32] focus:ring-[#B23A32]/30 focus:border-[#B23A32]' : 'border-[#5B6472]/30'
+                }`}
+              />
+              <span className="text-[10px] font-mono text-[#5B6472] block">
+                Live Preview: trustnet.com/app/startups/{formData.slug || 'slug-url'}
+              </span>
+              {errors.slug && (
+                <p className="text-xs text-[#B23A32] font-mono mt-1">{errors.slug}</p>
+              )}
+            </div>
+
+            {/* Category */}
+            <div className="space-y-1.5">
+              <label htmlFor="startup-category" className="block text-xs font-semibold text-[#0E1A2B] uppercase tracking-wider">
+                Category / Industry
+              </label>
+              <input
+                id="startup-category"
+                type="text"
+                disabled={isSubmitting}
+                value={formData.category}
+                onChange={(e) => handleInputChange('category', e.target.value)}
+                placeholder="e.g. AI & SaaS, Fintech, HealthTech"
+                className={`w-full bg-[#F7F5EF]/50 text-[#0E1A2B] placeholder:text-[#5B6472]/50 text-sm rounded-[4px] border px-3.5 h-11 transition-all focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0F6E5C]/30 focus:border-[#0F6E5C] ${
+                  errors.category ? 'border-[#B23A32] focus:ring-[#B23A32]/30 focus:border-[#B23A32]' : 'border-[#5B6472]/30'
+                }`}
+              />
+              {errors.category && (
+                <p className="text-xs text-[#B23A32] font-mono mt-1">{errors.category}</p>
+              )}
+            </div>
+
+            {/* Description */}
+            <div className="space-y-1.5">
+              <label htmlFor="startup-description" className="block text-xs font-semibold text-[#0E1A2B] uppercase tracking-wider">
+                Description (min. 50 characters)
+              </label>
+              <textarea
+                id="startup-description"
+                rows={5}
+                disabled={isSubmitting}
+                value={formData.description}
+                onChange={(e) => handleInputChange('description', e.target.value)}
+                placeholder="Describe your startup's core mission, product offering, and value proposition..."
+                className={`w-full bg-[#F7F5EF]/50 text-[#0E1A2B] placeholder:text-[#5B6472]/50 text-sm rounded-[4px] border p-3.5 transition-all focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0F6E5C]/30 focus:border-[#0F6E5C] outline-none ${
+                  errors.description ? 'border-[#B23A32] focus:ring-[#B23A32]/30 focus:border-[#B23A32]' : 'border-[#5B6472]/30'
+                }`}
+              />
+              <div className="flex justify-between text-[10px] font-mono text-[#5B6472]">
+                <span>{formData.description.length} characters</span>
+                <span>Minimum 50 characters required</span>
               </div>
+              {errors.description && (
+                <p className="text-xs text-[#B23A32] font-mono mt-1">{errors.description}</p>
+              )}
+            </div>
 
-              <div className="p-6 relative pt-0">
-                <div className="flex items-end justify-between -mt-10 mb-4">
-                  <div className="w-16 h-16 rounded-2xl overflow-hidden border-4 border-white shadow-md bg-white">
-                    <img src={formData.logo} alt="Logo" className="w-full h-full object-cover" />
-                  </div>
-                  <Badge variant="emerald">{formData.stage}</Badge>
-                </div>
-
-                <div>
-                  <h3 className="text-lg font-bold text-slate-900">{formData.name || 'Startup Name'}</h3>
-                  <p className="text-xs font-semibold text-slate-600 mt-1 line-clamp-2">{formData.tagline}</p>
-
-                  <div className="mt-4 pt-4 border-t border-slate-100 space-y-2">
-                    <div className="flex justify-between text-[11px] font-bold">
-                      <span className="text-slate-500">Raised: ${Number(formData.fundingRaised).toLocaleString()}</span>
-                      <span className="text-emerald-600">Goal: ${Number(formData.fundingTarget).toLocaleString()}</span>
-                    </div>
-                    <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-emerald-500 transition-all duration-300"
-                        style={{ width: `${Math.min(100, (formData.fundingRaised / formData.fundingTarget) * 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </Card>
-          </div>
-        </div>
+            {/* Primary Action Button */}
+            <Button
+              type="submit"
+              variant="primary"
+              isLoading={isSubmitting}
+              className="w-full bg-[#0F6E5C] hover:bg-[#0F6E5C]/90 text-white rounded-[4px] border-0 h-11 shadow-[0_2px_8px_rgba(14,26,43,0.08)] active:bg-[#0F6E5C]/80 flex items-center justify-center gap-2"
+            >
+              <Rocket className="w-4 h-4" />
+              <span>Create Startup Profile</span>
+            </Button>
+          </form>
+        </Card>
       </div>
     </div>
   );
