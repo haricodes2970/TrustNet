@@ -1,0 +1,94 @@
+.recent-activity-card {
+  width: 100%;
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.activity-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.activity-table th {
+  padding: 0.75rem 1rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.activity-table td {
+  padding: 1rem;
+  font-size: 0.9rem;
+  color: var(--color-text-dark);
+  border-bottom: 1px solid var(--color-border-light);
+  white-space: nowrap;
+}
+
+.activity-table tr:last-child td {
+  border-bottom: none;
+}
+
+.activity-table tr {
+  transition: background-color var(--transition-fast);
+}
+
+.activity-table tr:hover {
+  background-color: var(--color-bg-page);
+}
+
+.activity-action {
+  font-weight: 600;
+}
+
+.activity-target {
+  font-family: var(--font-sans);
+  color: var(--color-text-dark);
+}
+
+.activity-time {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.activity-status {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.target-type {
+  font-weight: 700;
+  color: var(--color-deep-forest);
+  margin-right: 0.25rem;
+}
+
+.target-id {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.empty-table-cell {
+  padding: 3rem 1rem !important;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-weight: 500;
+  font-style: italic;
+}
+
+.skeleton-cell {
+  display: inline-block;
+  vertical-align: middle;
+}
+
