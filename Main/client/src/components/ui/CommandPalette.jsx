@@ -14,7 +14,8 @@ import {
   Plus,
   Compass,
   Palette,
-  ShieldAlert
+  ShieldAlert,
+  PiggyBank
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
@@ -38,6 +39,7 @@ export const CommandPalette = () => {
     { label: 'Investor Directory', path: '/app/investors', icon: DollarSign, category: 'Network' },
     { label: 'Communities & Accelerators', path: '/app/communities', icon: Users, category: 'Network' },
     { label: 'Opportunities & Job Board', path: '/app/opportunities', icon: Briefcase, category: 'Marketplace' },
+    { label: 'Venture Funding Marketplace', path: '/app/funding-marketplace', icon: PiggyBank, category: 'Marketplace' },
     { label: 'Events & Pitch Days', path: '/app/events', icon: Calendar, category: 'Marketplace' },
     { label: 'Edit Profile & Live Preview', path: '/app/profile/edit', icon: User, category: 'Account' },
     { label: 'Production Design System', path: '/app/design-system', icon: Palette, category: 'System' },

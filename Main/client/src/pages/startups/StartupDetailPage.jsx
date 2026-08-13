@@ -1,15 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
-  Building, 
   MapPin, 
-  Globe, 
   FileText, 
-  Users, 
   DollarSign, 
-  Calendar, 
   CheckCircle2, 
-  Bookmark, 
   Share2, 
   ArrowLeft,
   ChevronRight,
@@ -21,6 +16,8 @@ import { Button } from '../../components/ui/Button';
 import { Avatar } from '../../components/ui/Avatar';
 import { Modal } from '../../components/ui/Modal';
 import { useApp } from '../../context/AppContext';
+import { listFundingRounds } from '../../lib/fundingRoundApi';
+import { createInvestmentInterest } from '../../lib/investmentInterestApi';
 
 export const StartupDetailPage = () => {
   const { id } = useParams();
@@ -29,19 +26,56 @@ export const StartupDetailPage = () => {
   
   const startup = startups.find(s => s.id === id) || startups[0];
   const [isPitchDeckOpen, setIsPitchDeckOpen] = useState(false);
+  const [isInvestModalOpen, setIsInvestModalOpen] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(1);
+  const [interestMessage, setInterestMessage] = useState('');
+  const [submittingInterest, setSubmittingInterest] = useState(false);
+  const [fundingRound, setFundingRound] = useState(null);
 
-  const progressPercent = Math.min(
-    100,
-    Math.round((startup.fundingRaised / startup.fundingTarget) * 100)
-  );
+  useEffect(() => {
+    const fetchRound = async () => {
+      try {
+        const rounds = await listFundingRounds({ startupId: startup.id });
+        if (Array.isArray(rounds) && rounds.length > 0) {
+          setFundingRound(rounds[0]);
+        }
+      } catch (err) {
+        console.error('Failed to fetch funding round:', err);
+      }
+    };
+    fetchRound();
+  }, [startup.id]);
+
+  const raised = fundingRound?.raisedAmount ?? startup.fundingRaised;
+  const target = fundingRound?.targetAmount ?? startup.fundingTarget;
+  const progressPercent = Math.min(100, Math.round((raised / target) * 100));
+
+  const handleSendInterest = async (e) => {
+    e.preventDefault();
+    setSubmittingInterest(true);
+    try {
+      await createInvestmentInterest({
+        startupId: startup.id,
+        startupName: startup.name,
+        message: interestMessage || `Expressed investment interest in ${startup.name}.`
+      });
+      showToast('Interest Submitted!', `Your investment request has been sent to ${startup.name}.`, 'success');
+      setIsInvestModalOpen(false);
+      setInterestMessage('');
+    } catch (err) {
+      console.error(err);
+      showToast('Submission Failed', err.message || 'Could not send investment interest.', 'error');
+    } finally {
+      setSubmittingInterest(false);
+    }
+  };
 
   return (
     <div className="space-y-8">
       {/* Back Button */}
       <button
         onClick={() => navigate('/app/startups')}
-        className="inline-flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-emerald-600 transition-colors"
+        className="inline-flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-emerald-600 transition-colors cursor-pointer"
       >
         <ArrowLeft className="w-4 h-4" />
         <span>Back to Startups</span>
@@ -73,10 +107,14 @@ export const StartupDetailPage = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <Button variant="primary" size="md" onClick={() => setIsPitchDeckOpen(true)}>
-                <FileText className="w-4 h-4" />
-                <span>View Pitch Deck (PDF)</span>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button variant="outline" size="md" onClick={() => setIsPitchDeckOpen(true)}>
+                <FileText className="w-4 h-4 mr-1.5" />
+                <span>View Pitch Deck</span>
+              </Button>
+              <Button variant="primary" size="md" onClick={() => setIsInvestModalOpen(true)}>
+                <DollarSign className="w-4 h-4 mr-1.5" />
+                <span>Express Investment Interest</span>
               </Button>
             </div>
           </div>
@@ -100,8 +138,8 @@ export const StartupDetailPage = () => {
           <Card className="p-6 border-slate-200">
             <h3 className="text-base font-bold text-slate-900 mb-2">Seed Funding Progress</h3>
             <div className="flex items-center justify-between text-sm font-semibold mb-2">
-              <span className="text-slate-600">Raised ${(startup.fundingRaised / 1000).toFixed(0)}k</span>
-              <span className="text-emerald-600 font-bold">{progressPercent}% of ${(startup.fundingTarget / 1000).toFixed(0)}k Target</span>
+              <span className="text-slate-600">Raised ${(raised / 1000).toFixed(0)}k</span>
+              <span className="text-emerald-600 font-bold">{progressPercent}% of ${(target / 1000).toFixed(0)}k Target</span>
             </div>
             <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden mb-4">
               <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full" style={{ width: `${progressPercent}%` }} />
@@ -161,11 +199,39 @@ export const StartupDetailPage = () => {
         </div>
       </div>
 
+      {/* Express Investment Interest Modal */}
+      <Modal
+        isOpen={isInvestModalOpen}
+        onClose={() => setIsInvestModalOpen(false)}
+        title={`Express Investment Interest - ${startup.name}`}
+        subtitle="Submit your investment thesis or check request to the founder"
+      >
+        <form onSubmit={handleSendInterest} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Message to Founders</label>
+            <textarea
+              rows={4}
+              value={interestMessage}
+              onChange={(e) => setInterestMessage(e.target.value)}
+              placeholder="Describe your fund, check size, or valuation expectations..."
+              className="w-full bg-slate-50 border border-slate-200 text-xs rounded-xl p-3 text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500/30"
+              required
+            />
+          </div>
+          <div className="flex gap-2 justify-end pt-2">
+            <Button type="button" variant="outline" onClick={() => setIsInvestModalOpen(false)}>Cancel</Button>
+            <Button type="submit" variant="primary" isLoading={submittingInterest}>
+              <span>Submit Proposal</span>
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
       {/* Pitch Deck PDF Viewer Modal */}
       <Modal
         isOpen={isPitchDeckOpen}
         onClose={() => setIsPitchDeckOpen(false)}
-        title={`${startup.name} - Pitch Deck 2024 (PDF)`}
+        title={`${startup.name} - Pitch Deck (PDF)`}
         subtitle="Confidential Investor Pitch Slides"
         maxWidth="max-w-4xl"
       >
@@ -175,9 +241,9 @@ export const StartupDetailPage = () => {
               <Badge variant="emerald">SLIDE {currentSlide} OF 10</Badge>
               <h2 className="text-3xl font-black text-white">{startup.name} Confidential Pitch</h2>
               <p className="text-sm text-slate-300 max-w-lg mx-auto">
-                {currentSlide === 1 && "Problem: Enterprise workflows are fragmented across 10+ legacy tools."}
-                {currentSlide === 2 && "Solution: NexusAI Autonomous AI Workflow Agents."}
-                {currentSlide === 3 && "Market Traction: Crossed $50k MRR across 45 enterprise accounts."}
+                {currentSlide === 1 && "Problem: Enterprise workflows are fragmented across legacy tools."}
+                {currentSlide === 2 && "Solution: TrustNet Autonomous AI Agents & Verification."}
+                {currentSlide === 3 && "Market Traction: High growth across enterprise accounts."}
                 {currentSlide > 3 && `Slide ${currentSlide}: Financial Projections & Unit Economics.`}
               </p>
             </div>

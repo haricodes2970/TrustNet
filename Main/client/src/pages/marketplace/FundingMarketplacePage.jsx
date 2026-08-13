@@ -1,32 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import { 
   PiggyBank, 
-  Sparkles, 
-  DollarSign, 
   ShieldCheck, 
-  ArrowRight,
-  TrendingUp,
-  Percent,
-  FileText,
-  Building,
-  Bookmark,
+  DollarSign, 
+  FileText, 
   ExternalLink,
-  Plus
+  AlertCircle,
+  RefreshCw
 } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Badge } from '../../components/ui/Badge';
-import { Avatar } from '../../components/ui/Avatar';
 import { Modal } from '../../components/ui/Modal';
 import { useApp } from '../../context/AppContext';
-import { apiClient } from '../../services/apiClient';
+import { listFundingRounds } from '../../lib/fundingRoundApi';
+import { listInvestmentInterests, createInvestmentInterest } from '../../lib/investmentInterestApi';
 
 export const FundingMarketplacePage = () => {
   const { showToast } = useApp();
   const [campaigns, setCampaigns] = useState([]);
   const [lois, setLois] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('campaigns');
 
   // LOI Modal state
@@ -37,15 +33,18 @@ export const FundingMarketplacePage = () => {
   const [loiSubmitting, setLoiSubmitting] = useState(false);
 
   const loadData = async () => {
+    setLoading(true);
+    setError(null);
     try {
-      const [campaignData, loiData] = await Promise.all([
-        apiClient.get('/funding/campaigns'),
-        apiClient.get('/funding/lois')
+      const [roundsData, interestsData] = await Promise.all([
+        listFundingRounds(),
+        listInvestmentInterests()
       ]);
-      setCampaigns(campaignData);
-      setLois(loiData);
+      setCampaigns(Array.isArray(roundsData) ? roundsData : []);
+      setLois(Array.isArray(interestsData) ? interestsData : []);
     } catch (err) {
-      console.error('Failed to load funding marketplace data', err);
+      console.error('Failed to load funding marketplace data:', err);
+      setError(err.message || 'Failed to load funding marketplace data.');
     } finally {
       setLoading(false);
     }
@@ -67,24 +66,33 @@ export const FundingMarketplacePage = () => {
 
     setLoiSubmitting(true);
     try {
-      const saved = await apiClient.post('/funding/lois', {
-        startupId: selectedCampaign.id,
-        startupName: selectedCampaign.name,
+      const targetStartupId = selectedCampaign.startup?._id || selectedCampaign.startup || selectedCampaign.startupId || selectedCampaign.id;
+      const startupName = selectedCampaign.name || selectedCampaign.title || 'Startup Venture';
+      
+      const payload = {
+        startupId: targetStartupId,
+        startupName,
+        message: `Letter of Intent for $${Number(loiAmount).toLocaleString()} (${loiEquity}% equity split, ${loiTerms}).`,
         amount: Number(loiAmount),
         equity: Number(loiEquity),
         terms: loiTerms
-      });
+      };
 
+      const saved = await createInvestmentInterest(payload);
       setLois(prev => [saved, ...prev]);
       setSelectedCampaign(null);
       showToast('LOI Submitted Successfully!', `Your Letter of Intent for $${Number(loiAmount).toLocaleString()} has been sent to the founder.`, 'success');
     } catch (err) {
-      console.error(err);
-      showToast('Failed to submit LOI', 'Please check your inputs.', 'error');
+      console.error('LOI error:', err);
+      showToast('Failed to submit LOI', err.message || 'Please check your inputs.', 'error');
     } finally {
       setLoiSubmitting(false);
     }
   };
+
+  // Analytics totals derived from live responses
+  const totalCapitalTarget = campaigns.reduce((acc, c) => acc + (Number(c.targetAmount || c.fundingTarget || 0)), 0);
+  const totalCapitalRaised = campaigns.reduce((acc, c) => acc + (Number(c.raisedAmount || c.fundingRaised || 0)), 0);
 
   return (
     <div className="space-y-8 max-w-[1440px] mx-auto pb-16">
@@ -144,6 +152,15 @@ export const FundingMarketplacePage = () => {
             <div key={idx} className="h-64 bg-slate-100 rounded-2xl animate-pulse" />
           ))}
         </div>
+      ) : error ? (
+        <Card className="p-8 text-center bg-red-50/50 border-red-200 space-y-3">
+          <AlertCircle className="w-10 h-10 text-red-500 mx-auto" />
+          <p className="text-sm font-semibold text-slate-800">{error}</p>
+          <Button variant="outline" size="sm" onClick={loadData} className="mt-2 inline-flex items-center gap-1.5">
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Retry Loading</span>
+          </Button>
+        </Card>
       ) : (
         <>
           {activeTab === 'campaigns' && (
@@ -154,31 +171,40 @@ export const FundingMarketplacePage = () => {
                 </div>
               ) : (
                 campaigns.map(startup => {
-                  const percent = Math.min(100, Math.round((startup.fundingRaised / startup.fundingTarget) * 100));
+                  const raised = Number(startup.raisedAmount || startup.fundingRaised || 0);
+                  const target = Number(startup.targetAmount || startup.fundingTarget || 100000);
+                  const percent = Math.min(100, Math.round((raised / target) * 100));
+                  const name = startup.name || startup.title || 'Startup Round';
+                  const stage = startup.stage || startup.roundType || 'Seed';
+                  const logo = startup.logo || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&q=80&w=200';
+                  const location = startup.location || 'San Francisco, CA';
+                  const description = startup.description || startup.tagline || 'Innovative tech venture raising capital.';
+                  const minCheck = startup.minimumContribution ? `$${startup.minimumContribution.toLocaleString()}` : '$10,000';
+
                   return (
-                    <Card key={startup.id} className="p-6 border-slate-200/80 bg-white shadow-soft-sm hoverEffect transition-all space-y-4">
+                    <Card key={startup._id || startup.id} className="p-6 border-slate-200/80 bg-white shadow-soft-sm hoverEffect transition-all space-y-4">
                       {/* Startup banner info */}
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <img src={startup.logo} alt={startup.name} className="w-12 h-12 rounded-xl object-cover" />
+                          <img src={logo} alt={name} className="w-12 h-12 rounded-xl object-cover" />
                           <div>
-                            <h4 className="text-sm font-bold text-slate-900">{startup.name}</h4>
-                            <p className="text-[10px] text-slate-500 font-semibold">{startup.location}</p>
+                            <h4 className="text-sm font-bold text-slate-900">{name}</h4>
+                            <p className="text-[10px] text-slate-500 font-semibold">{location}</p>
                           </div>
                         </div>
-                        <Badge variant="emerald">{startup.stage}</Badge>
+                        <Badge variant="emerald">{stage}</Badge>
                       </div>
 
                       {/* Tagline */}
                       <p className="text-xs text-slate-600 font-normal leading-relaxed line-clamp-2">
-                        {startup.description || startup.tagline}
+                        {description}
                       </p>
 
                       {/* Raising target bar */}
                       <div className="space-y-2">
                         <div className="flex items-center justify-between text-xs font-bold">
-                          <span className="text-slate-500">Raised: ${startup.fundingRaised?.toLocaleString()}</span>
-                          <span className="text-emerald-600">{percent}% of ${startup.fundingTarget?.toLocaleString()} Target</span>
+                          <span className="text-slate-500">Raised: ${raised.toLocaleString()}</span>
+                          <span className="text-emerald-600">{percent}% of ${target.toLocaleString()} Target</span>
                         </div>
                         <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
                           <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${percent}%` }} />
@@ -193,17 +219,17 @@ export const FundingMarketplacePage = () => {
                         </div>
                         <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-center">
                           <span className="text-[9px] uppercase font-bold text-slate-400 block">Equity Offered</span>
-                          <strong className="text-slate-800 text-[11px] block mt-0.5">8.0% - 12.0%</strong>
+                          <strong className="text-slate-800 text-[11px] block mt-0.5">5.0% - 12.0%</strong>
                         </div>
                         <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-center">
                           <span className="text-[9px] uppercase font-bold text-slate-400 block">Min Check</span>
-                          <strong className="text-slate-800 text-[11px] block mt-0.5">$25,000</strong>
+                          <strong className="text-slate-800 text-[11px] block mt-0.5">{minCheck}</strong>
                         </div>
                       </div>
 
                       {/* Actions */}
                       <div className="pt-2 flex gap-2">
-                        <Button variant="outline" className="flex-1 justify-center" onClick={() => window.open(startup.website, '_blank')}>
+                        <Button variant="outline" className="flex-1 justify-center" onClick={() => window.open(startup.website || '#', '_blank')}>
                           <ExternalLink className="w-3.5 h-3.5 mr-1" />
                           <span>Review Room</span>
                         </Button>
@@ -231,32 +257,41 @@ export const FundingMarketplacePage = () => {
                 </Card>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {lois.map(loi => (
-                    <Card key={loi.id} className="p-5 border-slate-200/80 bg-white shadow-soft-xs space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="text-xs font-bold text-slate-900">{loi.startupName}</h4>
-                          <span className="text-[9px] text-slate-400 block mt-0.5">Submitted on {loi.createdAt}</span>
-                        </div>
-                        <Badge variant={loi.status === 'Accepted' ? 'emerald' : 'blue'}>{loi.status}</Badge>
-                      </div>
+                  {lois.map(loi => {
+                    const loiName = loi.startupName || loi.startup?.name || 'Startup Venture';
+                    const dateStr = loi.createdAt ? new Date(loi.createdAt).toLocaleDateString() : 'Recently';
+                    const amount = loi.amount || 100000;
+                    const equity = loi.equity || 2.5;
+                    const terms = loi.terms || 'Post-Money SAFE';
+                    const status = loi.status || 'submitted';
 
-                      <div className="grid grid-cols-2 gap-4 border-t border-b border-slate-100 py-3 text-xs">
-                        <div>
-                          <span className="text-slate-400 block text-[9px] uppercase">Investment Intent</span>
-                          <strong className="text-slate-800 font-bold">${loi.amount?.toLocaleString()}</strong>
+                    return (
+                      <Card key={loi._id || loi.id} className="p-5 border-slate-200/80 bg-white shadow-soft-xs space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="text-xs font-bold text-slate-900">{loiName}</h4>
+                            <span className="text-[9px] text-slate-400 block mt-0.5">Submitted on {dateStr}</span>
+                          </div>
+                          <Badge variant={status === 'accepted' ? 'emerald' : 'blue'}>{status}</Badge>
                         </div>
-                        <div>
-                          <span className="text-slate-400 block text-[9px] uppercase">Implied Equity</span>
-                          <strong className="text-slate-800 font-bold">{loi.equity}%</strong>
-                        </div>
-                      </div>
 
-                      <p className="text-[11px] text-slate-500 italic">
-                        "This LOI outlines a non-binding intent to purchase equity shares based on: {loi.terms}."
-                      </p>
-                    </Card>
-                  ))}
+                        <div className="grid grid-cols-2 gap-4 border-t border-b border-slate-100 py-3 text-xs">
+                          <div>
+                            <span className="text-slate-400 block text-[9px] uppercase">Investment Intent</span>
+                            <strong className="text-slate-800 font-bold">${amount.toLocaleString()}</strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block text-[9px] uppercase">Implied Equity</span>
+                            <strong className="text-slate-800 font-bold">{equity}%</strong>
+                          </div>
+                        </div>
+
+                        <p className="text-[11px] text-slate-500 italic">
+                          "{loi.message || `Non-binding intent to purchase equity shares based on: ${terms}.`}"
+                        </p>
+                      </Card>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -265,21 +300,21 @@ export const FundingMarketplacePage = () => {
           {activeTab === 'analytics' && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <Card className="p-6 border-slate-200 bg-white text-center space-y-2">
-                <span className="text-xs text-slate-400 font-bold uppercase block">Total Capital Seeking VC</span>
-                <h3 className="text-3xl font-black text-emerald-600">$18,450,000</h3>
-                <p className="text-[10px] text-slate-500 font-semibold">Indexed from 124 verified Angels</p>
+                <span className="text-xs text-slate-400 font-bold uppercase block">Total Capital Target</span>
+                <h3 className="text-3xl font-black text-emerald-600">${totalCapitalTarget.toLocaleString()}</h3>
+                <p className="text-[10px] text-slate-500 font-semibold">Across active deal rooms</p>
               </Card>
 
               <Card className="p-6 border-slate-200 bg-white text-center space-y-2">
-                <span className="text-xs text-slate-400 font-bold uppercase block">Median SAFE Valuation Cap</span>
-                <h3 className="text-3xl font-black text-slate-900">$8,500,000</h3>
-                <p className="text-[10px] text-slate-500 font-semibold">Across active Seed round files</p>
+                <span className="text-xs text-slate-400 font-bold uppercase block">Total Capital Raised</span>
+                <h3 className="text-3xl font-black text-slate-900">${totalCapitalRaised.toLocaleString()}</h3>
+                <p className="text-[10px] text-slate-500 font-semibold">Confirmed & pledged commitments</p>
               </Card>
 
               <Card className="p-6 border-slate-200 bg-white text-center space-y-2">
                 <span className="text-xs text-slate-400 font-bold uppercase block">Active Deal Flow Pipeline</span>
-                <h3 className="text-3xl font-black text-emerald-600">8 Campaigns</h3>
-                <p className="text-[10px] text-slate-500 font-semibold">100% Verified Delaware corporations</p>
+                <h3 className="text-3xl font-black text-emerald-600">{campaigns.length} Rounds</h3>
+                <p className="text-[10px] text-slate-500 font-semibold">100% Verified corporations</p>
               </Card>
             </div>
           )}
@@ -290,7 +325,7 @@ export const FundingMarketplacePage = () => {
       <Modal
         isOpen={!!selectedCampaign}
         onClose={() => setSelectedCampaign(null)}
-        title={`Draft Letter of Intent (LOI) - ${selectedCampaign?.name}`}
+        title={`Draft Letter of Intent (LOI) - ${selectedCampaign?.name || selectedCampaign?.title || 'Startup'}`}
         subtitle="Submit a non-binding digital investment intent proposal"
         maxWidth="max-w-md"
       >

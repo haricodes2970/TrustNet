@@ -19,7 +19,8 @@ import {
   ShieldAlert,
   Compass,
   Palette,
-  LogOut
+  LogOut,
+  PiggyBank
 } from 'lucide-react';
 import { Avatar } from '../ui/Avatar';
 import { Logo } from './Logo';
@@ -40,6 +41,7 @@ export const Sidebar = () => {
     { label: 'Dashboard', path: '/app/dashboard', icon: LayoutDashboard },
     { label: 'Startup Discovery', path: '/app/discover', icon: Compass },
     { label: 'My Startups', path: '/app/startups/my', icon: Rocket },
+    { label: 'Funding Marketplace', path: '/app/funding-marketplace', icon: PiggyBank },
     { label: 'Calendar', path: '/app/calendar', icon: Calendar },
     { label: 'Social Feed', path: '/app/feed', icon: Rss },
     { label: 'Explore People', path: '/app/people', icon: Users },

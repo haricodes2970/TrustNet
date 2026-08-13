@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Building, 
@@ -18,16 +18,19 @@ import {
   Sparkles,
   ShieldCheck,
   Activity,
-  ArrowLeft
+  ArrowLeft,
+  RefreshCw,
+  AlertCircle
 } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
-import { Tabs } from '../../components/ui/Tabs';
 import { Input } from '../../components/ui/Input';
 import { ProgressRing } from '../../components/ui/ProgressRing';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
+import { listInvestmentInterests, updateInvestmentInterestStatus } from '../../lib/investmentInterestApi';
+import { listFundingRounds } from '../../lib/fundingRoundApi';
 import { 
   ResponsiveContainer, 
   AreaChart, 
@@ -62,11 +65,10 @@ export const StartupManagementDashboard = () => {
     { id: '3', name: 'Elena Rostova', role: 'Head of AI Research', dept: 'AI Lab', access: 'Editor', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400' }
   ]);
 
-  const [investorPipeline] = useState([
-    { id: 'inv1', name: 'Horizon Ventures', contact: 'Sarah Chen', stage: 'Meeting', check: '$500,000', notes: 'Loved the AI workflow demo. Scheduling diligence call.' },
-    { id: 'inv2', name: 'Sequoia Capital', contact: 'Michael Chang', stage: 'Due Diligence', check: '$1,000,000', notes: 'Reviewing cap table and security compliance.' },
-    { id: 'inv3', name: 'Founders Fund', contact: 'David Sachs', stage: 'Term Sheet', check: '$1,500,000', notes: 'Term sheet issued for Seed round leadership.' }
-  ]);
+  // Live Investment Interest CRM Pipeline State
+  const [investorPipeline, setInvestorPipeline] = useState([]);
+  const [loadingPipeline, setLoadingPipeline] = useState(false);
+  const [fundingRounds, setFundingRounds] = useState([]);
 
   const [jobPostings] = useState([
     { id: 'job1', title: 'Senior Frontend Engineer (React + Tailwind)', type: 'Full-time', location: 'San Francisco / Remote', applicants: 34, status: 'Active' },
@@ -77,13 +79,47 @@ export const StartupManagementDashboard = () => {
   const [aiFeedback, setAiFeedback] = useState('');
   const [isAiGenerating, setIsAiGenerating] = useState(false);
 
+  const fetchFundingData = async () => {
+    setLoadingPipeline(true);
+    try {
+      const startupIdParam = startup.id;
+      const [interestsData, roundsData] = await Promise.all([
+        listInvestmentInterests({ startupId: startupIdParam }),
+        listFundingRounds({ startupId: startupIdParam })
+      ]);
+      setInvestorPipeline(Array.isArray(interestsData) ? interestsData : []);
+      setFundingRounds(Array.isArray(roundsData) ? roundsData : []);
+    } catch (err) {
+      console.error('Failed to load investor CRM pipeline:', err);
+    } finally {
+      setLoadingPipeline(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchFundingData();
+  }, [startup.id]);
+
+  const handleUpdateInterestStatus = async (interestId, newStatus) => {
+    try {
+      await updateInvestmentInterestStatus(interestId, newStatus);
+      setInvestorPipeline(prev =>
+        prev.map(i => (i._id === interestId || i.id === interestId ? { ...i, status: newStatus } : i))
+      );
+      showToast('Status Updated', `Investment interest marked as ${newStatus}.`, 'success');
+    } catch (err) {
+      console.error(err);
+      showToast('Update Failed', err.message || 'Could not update status.', 'error');
+    }
+  };
+
   const handleRunAiAdvisor = (e) => {
     e.preventDefault();
     setIsAiGenerating(true);
     setTimeout(() => {
       setIsAiGenerating(false);
       setAiFeedback(
-        `🤖 TrustNet AI Advisor Analysis for ${startup.name}:\n\n1. Pitch Deck Score: 92/100 (Strong market timing, exceptional founder-market fit).\n2. Investor Readiness: Your $${(startup.fundingTarget/1000000).toFixed(1)}M round is priced competitively. Focus outreach on Tier 1 Seed SaaS funds.\n3. Recommended Action: Follow up with Horizon Ventures with updated MRR growth metrics.`
+        `🤖 TrustNet AI Advisor Analysis for ${startup.name}:\n\n1. Pitch Deck Score: 92/100 (Strong market timing, exceptional founder-market fit).\n2. Investor Readiness: Your $${(startup.fundingTarget/1000000).toFixed(1)}M round is priced competitively. Focus outreach on Tier 1 Seed SaaS funds.\n3. Recommended Action: Follow up with active investors with updated MRR growth metrics.`
       );
     }, 1200);
   };
@@ -100,150 +136,138 @@ export const StartupManagementDashboard = () => {
   ];
 
   return (
-    <div className="space-y-8 max-w-[1440px] mx-auto">
-      {/* Back Button */}
-      <button
-        onClick={() => navigate('/app/startups/my')}
-        className="inline-flex items-center gap-2 text-xs font-semibold text-slate-500 hover:text-emerald-600 transition-colors"
-      >
-        <ArrowLeft className="w-4 h-4" strokeWidth={1.75} />
-        <span>Back to My Startups</span>
-      </button>
-
-      {/* Header Showcase Banner */}
-      <Card className="border-slate-200/80 bg-white">
-        <div className="h-44 sm:h-56 w-full bg-slate-100 relative">
-          <img src={startup.banner} alt={startup.name} className="w-full h-full object-cover" />
-        </div>
-
-        <div className="p-6 sm:p-8 relative pt-0">
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 -mt-14 sm:-mt-16 mb-6">
-            <div className="flex items-end gap-4">
-              <div className="w-24 h-24 rounded-2xl overflow-hidden border-4 border-white shadow-md bg-white">
-                <img src={startup.logo} alt={startup.name} className="w-full h-full object-cover" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-3xl font-black text-slate-900 tracking-tight">{startup.name}</h1>
-                  <Badge variant="emerald" size="md">
-                    <ShieldCheck className="w-3.5 h-3.5 mr-1" strokeWidth={1.75} />
-                    Verified Startup
-                  </Badge>
-                </div>
-                <p className="text-xs font-semibold text-slate-600 mt-1">{startup.tagline}</p>
-              </div>
-            </div>
-
+    <div className="space-y-6 max-w-[1440px] mx-auto pb-16">
+      {/* Top Banner Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-5">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="sm" onClick={() => navigate('/app/startups')} className="p-2">
+            <ArrowLeft className="w-4 h-4" />
+          </Button>
+          <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-white shadow-md bg-white flex-shrink-0">
+            <img src={startup.logo} alt={startup.name} className="w-full h-full object-cover" />
+          </div>
+          <div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => navigate(`/app/startups/${startup.id}`)}>
-                <ExternalLink className="w-4 h-4" strokeWidth={1.75} />
-                <span>Public View</span>
-              </Button>
-              <Button variant="primary" size="sm" onClick={() => showToast('Link Copied', `Copied trustnet.io/startups/${startup.id}`, 'info')}>
-                <Share2 className="w-4 h-4" strokeWidth={1.75} />
-                <span>Share Pitch</span>
-              </Button>
+              <h1 className="text-2xl font-black text-slate-900 tracking-tight">{startup.name}</h1>
+              <Badge variant="emerald">Verified Entity</Badge>
             </div>
+            <p className="text-xs text-slate-500 mt-0.5">{startup.tagline || 'Next Generation SaaS Platform'}</p>
           </div>
         </div>
-      </Card>
 
-      {/* Navigation Tabs */}
-      <Card className="p-2 border-slate-200/80 bg-white overflow-x-auto">
-        <Tabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
-      </Card>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => showToast('Link Copied', 'Share link copied to clipboard.', 'success')}>
+            <Share2 className="w-3.5 h-3.5 mr-1" />
+            <span>Share</span>
+          </Button>
+          <Button variant="primary" size="sm" onClick={() => navigate(`/app/startups/${startup.id}`)}>
+            <ExternalLink className="w-3.5 h-3.5 mr-1" />
+            <span>Public Profile</span>
+          </Button>
+        </div>
+      </div>
 
-      {/* SUB-DASHBOARD CONTENTS */}
+      {/* Tabs Menu */}
+      <div className="flex border-b border-slate-200 overflow-x-auto">
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 px-4 py-3 text-xs font-bold transition-all border-b-2 cursor-pointer whitespace-nowrap ${
+                isActive
+                  ? 'border-emerald-500 text-emerald-600 bg-emerald-50/40'
+                  : 'border-transparent text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              <span>{tab.label}</span>
+              {tab.badge !== undefined && (
+                <span className={`px-1.5 py-0.5 text-[10px] rounded-full ${isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                  {tab.badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
 
-      {/* 1. OVERVIEW */}
+      {/* 1. OVERVIEW TAB */}
       {activeTab === 'overview' && (
-        <div className="space-y-8">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            <Card className="p-6 border-slate-200/80">
-              <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Profile Views</span>
-              <h3 className="text-3xl font-black text-slate-900 mt-2">3,450</h3>
-              <span className="text-xs text-emerald-600 font-semibold mt-2 block">+34% vs last month</span>
+        <div className="space-y-6">
+          {/* Key Metrics Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card className="p-5 border-slate-200/80 bg-white">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Seed Target</span>
+              <h3 className="text-2xl font-black text-emerald-600 mt-1">${(startup.fundingTarget / 1000000).toFixed(2)}M</h3>
+              <span className="text-[11px] text-slate-500 mt-1 block">${(startup.fundingRaised / 1000000).toFixed(2)}M raised ({Math.round((startup.fundingRaised / startup.fundingTarget) * 100)}%)</span>
             </Card>
 
-            <Card className="p-6 border-slate-200/80">
-              <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Team Size</span>
-              <h3 className="text-3xl font-black text-slate-900 mt-2">{teamMembers.length} Members</h3>
-              <span className="text-xs text-slate-500 mt-2 block">2 open positions</span>
+            <Card className="p-5 border-slate-200/80 bg-white">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Monthly Pageviews</span>
+              <h3 className="text-2xl font-black text-slate-900 mt-1">3,450</h3>
+              <span className="text-[11px] text-emerald-600 font-semibold mt-1 block">+64% vs last month</span>
             </Card>
 
-            <Card className="p-6 border-slate-200/80">
-              <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Funding Target</span>
-              <h3 className="text-3xl font-black text-emerald-600 mt-2">${(startup.fundingTarget / 1000000).toFixed(2)}M</h3>
-              <span className="text-xs text-slate-500 mt-2 block">${(startup.fundingRaised / 1000000).toFixed(2)}M raised</span>
+            <Card className="p-5 border-slate-200/80 bg-white">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Data Room Downloads</span>
+              <h3 className="text-2xl font-black text-slate-900 mt-1">520</h3>
+              <span className="text-[11px] text-emerald-600 font-semibold mt-1 block">14 active VCs evaluated</span>
             </Card>
 
-            <Card className="p-6 border-slate-200/80 flex items-center justify-between">
-              <div>
-                <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Health Score</span>
-                <h3 className="text-3xl font-black text-emerald-600 mt-2">94%</h3>
-                <span className="text-xs text-emerald-600 font-semibold mt-1 block">Excellent</span>
-              </div>
-              <ProgressRing progress={94} size={56} strokeWidth={5} />
+            <Card className="p-5 border-slate-200/80 bg-white">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Health Readiness Score</span>
+              <h3 className="text-2xl font-black text-emerald-600 mt-1">94/100</h3>
+              <span className="text-[11px] text-slate-500 mt-1 block">Tier 1 Investor Ready</span>
             </Card>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            <div className="lg:col-span-8 space-y-6">
-              <Card className="p-6 border-slate-200/80 space-y-4">
-                <h3 className="text-lg font-bold text-slate-900">Business Description</h3>
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  {startup.description}
-                </p>
+          {/* Quick Actions & Status */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <Card className="lg:col-span-2 p-6 border-slate-200/80 space-y-4">
+              <h3 className="text-base font-bold text-slate-900">Traffic & Engagement Analytics</h3>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={analyticsData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#64748b' }} />
+                    <YAxis tick={{ fontSize: 11, fill: '#64748b' }} />
+                    <Tooltip />
+                    <Area type="monotone" dataKey="views" stroke="#10b981" fill="#10b981" fillOpacity={0.15} strokeWidth={2} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </Card>
 
-                <div className="pt-4 border-t border-slate-100 grid grid-cols-3 gap-4 text-xs">
-                  <div>
-                    <span className="text-slate-400 block text-[10px] uppercase">Industry</span>
-                    <strong className="text-slate-800">{startup.industry}</strong>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-[10px] uppercase">Founded</span>
-                    <strong className="text-slate-800">{startup.foundedYear}</strong>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-[10px] uppercase">Location</span>
-                    <strong className="text-slate-800">{startup.location}</strong>
-                  </div>
-                </div>
-              </Card>
-            </div>
-
-            <div className="lg:col-span-4 space-y-6">
-              <Card className="p-6 border-slate-200/80 space-y-4">
-                <h3 className="text-lg font-bold text-slate-900">Quick Actions</h3>
-                <div className="space-y-2">
-                  <Button variant="outline" className="w-full justify-start" onClick={() => setActiveTab('investors')}>
-                    <DollarSign className="w-4 h-4 text-emerald-500" strokeWidth={1.75} />
-                    <span>View Investor Pipeline</span>
-                  </Button>
-                  <Button variant="outline" className="w-full justify-start" onClick={() => setActiveTab('hiring')}>
-                    <Briefcase className="w-4 h-4 text-emerald-500" strokeWidth={1.75} />
-                    <span>Post New Job Opening</span>
-                  </Button>
-                  <Button variant="outline" className="w-full justify-start" onClick={() => setActiveTab('documents')}>
-                    <FileText className="w-4 h-4 text-emerald-500" strokeWidth={1.75} />
-                    <span>Upload Pitch Deck v2</span>
-                  </Button>
-                </div>
-              </Card>
-            </div>
+            <Card className="p-6 border-slate-200/80 space-y-4">
+              <h3 className="text-base font-bold text-slate-900">Quick Operations</h3>
+              <div className="space-y-2">
+                <Button variant="outline" className="w-full justify-start text-xs" onClick={() => setActiveTab('investors')}>
+                  <DollarSign className="w-4 h-4 mr-2 text-emerald-600" />
+                  <span>Manage Investor Pipeline ({investorPipeline.length})</span>
+                </Button>
+                <Button variant="outline" className="w-full justify-start text-xs" onClick={() => setActiveTab('hiring')}>
+                  <Briefcase className="w-4 h-4 mr-2 text-emerald-600" />
+                  <span>View Open Hiring Positions ({jobPostings.length})</span>
+                </Button>
+                <Button variant="outline" className="w-full justify-start text-xs" onClick={() => setActiveTab('ai-advisor')}>
+                  <Bot className="w-4 h-4 mr-2 text-emerald-600" />
+                  <span>Run AI Startup Advisor</span>
+                </Button>
+              </div>
+            </Card>
           </div>
         </div>
       )}
 
-      {/* 2. TEAM MANAGEMENT */}
+      {/* 2. TEAM TAB */}
       {activeTab === 'team' && (
-        <Card className="p-6 border-slate-200/80 space-y-6">
+        <Card className="p-6 border-slate-200/80 space-y-4">
           <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-bold text-slate-900">Team Members & Access Control</h3>
-              <p className="text-xs text-slate-500 mt-0.5">Manage permissions, roles, and department access.</p>
-            </div>
-            <Button variant="primary" size="sm" onClick={() => showToast('Invite Sent', 'Sent email invitation to workspace.', 'success')}>
+            <h3 className="text-lg font-bold text-slate-900">Team Members & Access Control</h3>
+            <Button variant="primary" size="sm" onClick={() => showToast('Invite Sent', 'Team invitation email sent.', 'success')}>
               <Plus className="w-4 h-4" strokeWidth={1.75} />
               <span>Invite Member</span>
             </Button>
@@ -255,103 +279,11 @@ export const StartupManagementDashboard = () => {
                 <div className="flex items-center gap-3">
                   <img src={member.avatar} alt={member.name} className="w-10 h-10 rounded-xl object-cover" />
                   <div>
-                    <h4 className="text-xs font-bold text-slate-900">{member.name}</h4>
-                    <p className="text-[11px] text-slate-500">{member.role} • {member.dept}</p>
+                    <h4 className="text-sm font-bold text-slate-900">{member.name}</h4>
+                    <p className="text-xs text-slate-500">{member.role} • {member.dept}</p>
                   </div>
                 </div>
-
-                <div className="flex items-center gap-3">
-                  <Badge variant="emerald">{member.access}</Badge>
-                  <Button variant="ghost" size="sm">Edit</Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {/* 3. ANALYTICS */}
-      {activeTab === 'analytics' && (
-        <Card className="p-6 border-slate-200/80 space-y-4">
-          <h3 className="text-lg font-bold text-slate-900">Pitch Deck Visitor Trends</h3>
-          <div className="h-72 w-full pt-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={analyticsData}>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-                <XAxis dataKey="month" stroke="#6b7280" />
-                <YAxis stroke="#6b7280" />
-                <Tooltip />
-                <Area type="monotone" dataKey="views" stroke="#10b981" fill="#10b981" fillOpacity={0.15} />
-                <Area type="monotone" dataKey="downloads" stroke="#94a3b8" fill="#94a3b8" fillOpacity={0.15} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-      )}
-
-      {/* 4. DOCUMENT VAULT */}
-      {activeTab === 'documents' && (
-        <Card className="p-6 border-slate-200/80 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-bold text-slate-900">Document Vault</h3>
-            <Button variant="primary" size="sm" onClick={() => showToast('Uploaded', 'Pitch Deck v2.4 uploaded.', 'success')}>
-              <Plus className="w-4 h-4" strokeWidth={1.75} />
-              <span>Upload File</span>
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-            <div className="p-4 border border-slate-200/80 rounded-xl bg-slate-50/60 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <FileText className="w-7 h-7 text-emerald-500" strokeWidth={1.75} />
-                <div>
-                  <h4 className="text-xs font-bold text-slate-900">Pitch Deck v2.4 (PDF)</h4>
-                  <p className="text-[10px] text-slate-500">Updated 2 days ago • 14.2 MB</p>
-                </div>
-              </div>
-              <Button variant="outline" size="sm">
-                <Download className="w-3.5 h-3.5" strokeWidth={1.75} />
-              </Button>
-            </div>
-
-            <div className="p-4 border border-slate-200/80 rounded-xl bg-slate-50/60 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <FileText className="w-7 h-7 text-slate-600" strokeWidth={1.75} />
-                <div>
-                  <h4 className="text-xs font-bold text-slate-900">Financial Model 2026-2028 (XLSX)</h4>
-                  <p className="text-[10px] text-slate-500">Updated last week • 4.8 MB</p>
-                </div>
-              </div>
-              <Button variant="outline" size="sm">
-                <Download className="w-3.5 h-3.5" strokeWidth={1.75} />
-              </Button>
-            </div>
-          </div>
-        </Card>
-      )}
-
-      {/* 5. HIRING BOARD */}
-      {activeTab === 'hiring' && (
-        <Card className="p-6 border-slate-200/80 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-bold text-slate-900">Hiring Board</h3>
-            <Button variant="primary" size="sm" onClick={() => showToast('Job Posted', 'Job opening published live.', 'success')}>
-              <Plus className="w-4 h-4" strokeWidth={1.75} />
-              <span>Post Opening</span>
-            </Button>
-          </div>
-
-          <div className="space-y-3 pt-2">
-            {jobPostings.map((job) => (
-              <div key={job.id} className="p-4 rounded-xl border border-slate-200/80 flex items-center justify-between bg-white">
-                <div>
-                  <h4 className="text-xs font-bold text-slate-900">{job.title}</h4>
-                  <p className="text-[11px] text-slate-500">{job.type} • {job.location}</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-bold text-emerald-600">{job.applicants} Applicants</span>
-                  <Badge variant="emerald">{job.status}</Badge>
-                </div>
+                <Badge variant="purple">{member.access}</Badge>
               </div>
             ))}
           </div>
@@ -362,27 +294,77 @@ export const StartupManagementDashboard = () => {
       {activeTab === 'investors' && (
         <Card className="p-6 border-slate-200/80 space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-bold text-slate-900">Investor Pipeline CRM</h3>
-            <Button variant="primary" size="sm" onClick={() => showToast('Investor Added', 'Added VC to CRM.', 'success')}>
-              <Plus className="w-4 h-4" strokeWidth={1.75} />
-              <span>Add Investor</span>
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">Investor Pipeline CRM</h3>
+              <p className="text-xs text-slate-500">Track and manage inbound investment interests and VC proposals.</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={fetchFundingData} className="inline-flex items-center gap-1.5">
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Refresh CRM</span>
             </Button>
           </div>
 
-          <div className="divide-y divide-slate-100 pt-2">
-            {investorPipeline.map((inv) => (
-              <div key={inv.id} className="py-3.5 flex items-center justify-between">
-                <div>
-                  <h4 className="text-xs font-bold text-slate-900">{inv.name}</h4>
-                  <p className="text-[11px] text-slate-500">Contact: {inv.contact} • {inv.notes}</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-bold text-slate-900">{inv.check}</span>
-                  <Badge variant="emerald">{inv.stage}</Badge>
-                </div>
-              </div>
-            ))}
-          </div>
+          {loadingPipeline ? (
+            <div className="space-y-3 py-4">
+              {Array.from({ length: 3 }).map((_, idx) => (
+                <div key={idx} className="h-16 bg-slate-100 rounded-xl animate-pulse" />
+              ))}
+            </div>
+          ) : investorPipeline.length === 0 ? (
+            <div className="text-center py-12 text-slate-400 space-y-2">
+              <DollarSign className="w-10 h-10 mx-auto text-slate-300" />
+              <p className="text-sm font-semibold text-slate-700">No Inbound Investment Interests Yet</p>
+              <p className="text-xs text-slate-500">Inbound LOIs and pitch requests from investors will populate here.</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100 pt-2">
+              {investorPipeline.map((inv) => {
+                const idVal = inv._id || inv.id;
+                const invName = inv.startupName || inv.investor?.name || inv.name || 'Interested VC';
+                const statusStr = inv.status || 'submitted';
+                const msg = inv.message || inv.notes || 'Inbound interest proposal.';
+                const amount = inv.amount ? `$${inv.amount.toLocaleString()}` : (inv.check || '$100,000');
+
+                return (
+                  <div key={idVal} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-xs font-bold text-slate-900">{invName}</h4>
+                        <Badge variant={statusStr === 'accepted' ? 'emerald' : statusStr === 'declined' ? 'red' : 'blue'}>
+                          {statusStr}
+                        </Badge>
+                      </div>
+                      <p className="text-[11px] text-slate-600 mt-1 line-clamp-2">{msg}</p>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="text-xs font-bold text-slate-900 mr-2">{amount}</span>
+                      {statusStr === 'submitted' && (
+                        <>
+                          <Button variant="outline" size="xs" onClick={() => handleUpdateInterestStatus(idVal, 'reviewing')}>
+                            Review
+                          </Button>
+                          <Button variant="primary" size="xs" onClick={() => handleUpdateInterestStatus(idVal, 'accepted')}>
+                            Accept
+                          </Button>
+                        </>
+                      )}
+                      {statusStr === 'reviewing' && (
+                        <Button variant="primary" size="xs" onClick={() => handleUpdateInterestStatus(idVal, 'accepted')}>
+                          Accept
+                        </Button>
+                      )}
+                      {statusStr !== 'declined' && statusStr !== 'accepted' && (
+                        <Button variant="outline" size="xs" onClick={() => handleUpdateInterestStatus(idVal, 'declined')}>
+                          Decline
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </Card>
       )}
 

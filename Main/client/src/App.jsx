@@ -82,6 +82,7 @@ const NotFoundPage = lazy(() => import('./pages/errors/NotFoundPage').then(m => 
 // Backend modules with no page in the original design -- minimal stubs
 // added during integration (see integration report).
 const MarketplacePage = lazy(() => import('./pages/marketplace/MarketplacePage').then(m => ({ default: m.MarketplacePage })));
+const FundingMarketplacePage = lazy(() => import('./pages/marketplace/FundingMarketplacePage').then(m => ({ default: m.FundingMarketplacePage })));
 const ReportsPage = lazy(() => import('./pages/reports/ReportsPage').then(m => ({ default: m.ReportsPage })));
 const AIInsightsPage = lazy(() => import('./pages/ai/AIInsightsPage').then(m => ({ default: m.AIInsightsPage })));
 
@@ -178,6 +179,7 @@ export function App() {
                   {/* Backend modules with no page in the original design --
                       minimal stubs added during integration. */}
                   <Route path="marketplace" element={<MarketplacePage />} />
+                  <Route path="funding-marketplace" element={<FundingMarketplacePage />} />
                   <Route path="reports" element={<ReportsPage />} />
                   <Route path="ai" element={<AIInsightsPage />} />
 
