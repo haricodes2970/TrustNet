@@ -11,14 +11,18 @@ import {
   Folder,
   Briefcase,
   Bot,
-  FileText
+  FileText,
+  RefreshCw
 } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
+import { Badge } from '../../components/ui/Badge';
 import { LedgerStamp } from '../../components/ui/LedgerStamp';
 import { useApp } from '../../context/AppContext';
 import * as startupApi from '../../lib/startupApi';
 import { normalizeStartup } from '../../lib/adapters/startupAdapter';
+import { listInvestmentInterests, updateInvestmentInterestStatus } from '../../lib/investmentInterestApi';
+import { listFundingRounds } from '../../lib/fundingRoundApi';
 
 export const StartupManagementDashboard = () => {
   const { id } = useParams();
@@ -29,6 +33,11 @@ export const StartupManagementDashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('overview');
+
+  // Live Investment Interest CRM Pipeline State
+  const [investorPipeline, setInvestorPipeline] = useState([]);
+  const [loadingPipeline, setLoadingPipeline] = useState(false);
+  const [fundingRounds, setFundingRounds] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -48,6 +57,40 @@ export const StartupManagementDashboard = () => {
       cancelled = true;
     };
   }, [id]);
+
+  const fetchFundingData = async () => {
+    if (!startup?.id) return;
+    setLoadingPipeline(true);
+    try {
+      const [interestsData, roundsData] = await Promise.all([
+        listInvestmentInterests({ startupId: startup.id }),
+        listFundingRounds({ startupId: startup.id })
+      ]);
+      setInvestorPipeline(Array.isArray(interestsData) ? interestsData : []);
+      setFundingRounds(Array.isArray(roundsData) ? roundsData : []);
+    } catch (err) {
+      console.error('Failed to load investor CRM pipeline:', err);
+    } finally {
+      setLoadingPipeline(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchFundingData();
+  }, [startup?.id]);
+
+  const handleUpdateInterestStatus = async (interestId, newStatus) => {
+    try {
+      await updateInvestmentInterestStatus(interestId, newStatus);
+      setInvestorPipeline(prev =>
+        prev.map(i => (i._id === interestId || i.id === interestId ? { ...i, status: newStatus } : i))
+      );
+      showToast('Status Updated', `Investment interest marked as ${newStatus}.`, 'success');
+    } catch (err) {
+      console.error(err);
+      showToast('Update Failed', err.message || 'Could not update status.', 'error');
+    }
+  };
 
   const handleShare = () => {
     navigator.clipboard.writeText(`${window.location.origin}/app/startups/${startup.id}`);
@@ -79,8 +122,10 @@ export const StartupManagementDashboard = () => {
     );
   }
 
-  const progressPercent = startup.fundingTarget
-    ? Math.min(100, Math.round((startup.fundingRaised / startup.fundingTarget) * 100))
+  const raisedAmount = fundingRounds[0]?.raisedAmount ?? startup.fundingRaised ?? 0;
+  const targetAmount = fundingRounds[0]?.targetAmount ?? startup.fundingTarget ?? 0;
+  const progressPercent = targetAmount
+    ? Math.min(100, Math.round((raisedAmount / targetAmount) * 100))
     : 0;
 
   return (
@@ -148,24 +193,35 @@ export const StartupManagementDashboard = () => {
       </Card>
 
       {/* Contextual Navigation Tabs */}
-      <div className="flex border-b border-[#5B6472]/20">
+      <div className="flex border-b border-[#5B6472]/20 overflow-x-auto">
         <button
           onClick={() => setActiveTab('overview')}
-          className={`px-4 py-2 text-xs font-bold border-b-2 tracking-wide uppercase transition-all ${
+          className={`px-4 py-2 text-xs font-bold border-b-2 tracking-wide uppercase transition-all whitespace-nowrap ${
             activeTab === 'overview' ? 'border-[#0F6E5C] text-[#0F6E5C]' : 'border-transparent text-[#5B6472] hover:text-[#0E1A2B]'
           }`}
         >
           Overview
         </button>
+        <button
+          onClick={() => setActiveTab('investors')}
+          className={`px-4 py-2 text-xs font-bold border-b-2 tracking-wide uppercase transition-all whitespace-nowrap flex items-center gap-1.5 ${
+            activeTab === 'investors' ? 'border-[#0F6E5C] text-[#0F6E5C]' : 'border-transparent text-[#5B6472] hover:text-[#0E1A2B]'
+          }`}
+        >
+          <span>Investor CRM</span>
+          <span className="px-1.5 py-0.5 text-[10px] bg-[#0F6E5C]/10 text-[#0F6E5C] rounded-[4px] font-mono">
+            {investorPipeline.length}
+          </span>
+        </button>
         <Link
           to={`/app/startups/${startup.id}/team`}
-          className="px-4 py-2 text-xs font-semibold border-b-2 border-transparent text-[#5B6472] hover:text-[#0E1A2B] font-sans tracking-wide uppercase transition-colors"
+          className="px-4 py-2 text-xs font-semibold border-b-2 border-transparent text-[#5B6472] hover:text-[#0E1A2B] font-sans tracking-wide uppercase transition-colors whitespace-nowrap"
         >
           Team
         </Link>
         <Link
           to={`/app/workspaces/${startup.id}`}
-          className="px-4 py-2 text-xs font-semibold border-b-2 border-transparent text-[#5B6472] hover:text-[#0E1A2B] font-sans tracking-wide uppercase transition-colors"
+          className="px-4 py-2 text-xs font-semibold border-b-2 border-transparent text-[#5B6472] hover:text-[#0E1A2B] font-sans tracking-wide uppercase transition-colors whitespace-nowrap"
         >
           Workspace
         </Link>
@@ -179,14 +235,14 @@ export const StartupManagementDashboard = () => {
             <Card className="p-6 bg-white rounded-[8px] border border-[#5B6472]/20 shadow-[0_2px_8px_rgba(14,26,43,0.08)]">
               <span className="text-[10px] font-mono text-[#5B6472] uppercase block tracking-wider">Round Target</span>
               <h3 className="text-2xl font-mono font-bold text-[#0E1A2B] mt-1">
-                {startup.fundingTarget ? `$${startup.fundingTarget.toLocaleString()}` : '—'}
+                {targetAmount ? `$${targetAmount.toLocaleString()}` : '—'}
               </h3>
             </Card>
 
             <Card className="p-6 bg-white rounded-[8px] border border-[#5B6472]/20 shadow-[0_2px_8px_rgba(14,26,43,0.08)]">
               <span className="text-[10px] font-mono text-[#5B6472] uppercase block tracking-wider">Amount Raised</span>
               <h3 className="text-2xl font-mono font-bold text-[#0F6E5C] mt-1">
-                ${startup.fundingRaised.toLocaleString()}
+                ${raisedAmount.toLocaleString()}
               </h3>
             </Card>
 
@@ -286,6 +342,84 @@ export const StartupManagementDashboard = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Investor CRM Tab */}
+      {activeTab === 'investors' && (
+        <Card className="p-6 bg-white rounded-[8px] border border-[#5B6472]/20 shadow-[0_2px_8px_rgba(14,26,43,0.08)] space-y-4">
+          <div className="flex items-center justify-between border-b border-[#5B6472]/10 pb-4">
+            <div>
+              <h3 className="text-sm font-semibold text-[#0E1A2B] uppercase tracking-wider">Investor Pipeline CRM</h3>
+              <p className="text-xs text-[#5B6472] mt-0.5 font-sans">Track and manage inbound investment interests and VC proposals.</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={fetchFundingData} className="inline-flex items-center gap-1.5 border-[#5B6472]/30 text-[#0E1A2B] rounded-[4px]">
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Refresh CRM</span>
+            </Button>
+          </div>
+
+          {loadingPipeline ? (
+            <div className="space-y-3 py-4">
+              {Array.from({ length: 3 }).map((_, idx) => (
+                <div key={idx} className="h-16 bg-[#5B6472]/10 rounded-[4px] animate-pulse" />
+              ))}
+            </div>
+          ) : investorPipeline.length === 0 ? (
+            <div className="text-center py-12 text-[#5B6472] space-y-2">
+              <DollarSign className="w-10 h-10 mx-auto text-[#5B6472]/40" />
+              <p className="text-sm font-semibold text-[#0E1A2B]">No Inbound Investment Interests Yet</p>
+              <p className="text-xs text-[#5B6472]">Inbound LOIs and pitch requests from investors will populate here.</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-[#5B6472]/10 pt-2">
+              {investorPipeline.map((inv) => {
+                const idVal = inv._id || inv.id;
+                const invName = inv.startupName || inv.investor?.fullName || inv.investor?.name || inv.name || 'Interested VC';
+                const statusStr = inv.status || 'submitted';
+                const msg = inv.message || inv.notes || 'Inbound interest proposal.';
+                const amount = inv.amount ? `$${inv.amount.toLocaleString()}` : (inv.check || '$100,000');
+
+                return (
+                  <div key={idVal} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 font-sans">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-xs font-bold text-[#0E1A2B]">{invName}</h4>
+                        <Badge variant={statusStr === 'accepted' ? 'emerald' : statusStr === 'declined' ? 'red' : 'blue'}>
+                          {statusStr}
+                        </Badge>
+                      </div>
+                      <p className="text-[11px] text-[#5B6472] mt-1 line-clamp-2">{msg}</p>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="text-xs font-bold text-[#0E1A2B] font-mono mr-2">{amount}</span>
+                      {statusStr === 'submitted' && (
+                        <>
+                          <Button variant="outline" size="xs" onClick={() => handleUpdateInterestStatus(idVal, 'reviewing')}>
+                            Review
+                          </Button>
+                          <Button variant="primary" size="xs" onClick={() => handleUpdateInterestStatus(idVal, 'accepted')}>
+                            Accept
+                          </Button>
+                        </>
+                      )}
+                      {statusStr === 'reviewing' && (
+                        <Button variant="primary" size="xs" onClick={() => handleUpdateInterestStatus(idVal, 'accepted')}>
+                          Accept
+                        </Button>
+                      )}
+                      {statusStr !== 'declined' && statusStr !== 'accepted' && (
+                        <Button variant="outline" size="xs" onClick={() => handleUpdateInterestStatus(idVal, 'declined')}>
+                          Decline
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
       )}
     </div>
   );

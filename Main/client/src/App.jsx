@@ -85,6 +85,7 @@ const NotFoundPage = lazy(() => import('./pages/errors/NotFoundPage').then(m => 
 // Backend modules with no page in the original design -- minimal stubs
 // added during integration (see integration report).
 const MarketplacePage = lazy(() => import('./pages/marketplace/MarketplacePage').then(m => ({ default: m.MarketplacePage })));
+const FundingMarketplacePage = lazy(() => import('./pages/marketplace/FundingMarketplacePage').then(m => ({ default: m.FundingMarketplacePage })));
 const ServiceDetailPage = lazy(() => import('./pages/marketplace/ServiceDetailPage').then(m => ({ default: m.ServiceDetailPage })));
 const MyServicesPage = lazy(() => import('./pages/provider/MyServicesPage').then(m => ({ default: m.MyServicesPage })));
 const EngagementRequestsPage = lazy(() => import('./pages/engagementRequests/EngagementRequestsPage').then(m => ({ default: m.EngagementRequestsPage })));
@@ -195,6 +196,7 @@ export function App() {
                   {/* Backend modules with no page in the original design --
                       minimal stubs added during integration. */}
                   <Route path="marketplace" element={<MarketplacePage />} />
+                  <Route path="funding-marketplace" element={<FundingMarketplacePage />} />
                   <Route path="discover/marketplace" element={<MarketplacePage />} />
                   <Route path="service-listings/:id" element={<ServiceDetailPage />} />
                   <Route path="provider/services" element={<MyServicesPage />} />

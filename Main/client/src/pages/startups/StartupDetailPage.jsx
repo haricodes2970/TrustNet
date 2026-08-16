@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import {
-  MapPin,
-  FileText,
-  Share2,
+import { 
+  MapPin, 
+  FileText, 
+  Share2, 
   ArrowLeft,
   Globe,
   DollarSign,
@@ -13,8 +13,11 @@ import {
 } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
+import { Modal } from '../../components/ui/Modal';
 import { LedgerStamp } from '../../components/ui/LedgerStamp';
 import { useApp } from '../../context/AppContext';
+import { listFundingRounds } from '../../lib/fundingRoundApi';
+import { createInvestmentInterest } from '../../lib/investmentInterestApi';
 import * as startupApi from '../../lib/startupApi';
 import { normalizeStartup } from '../../lib/adapters/startupAdapter';
 
@@ -26,6 +29,11 @@ export const StartupDetailPage = () => {
   const [startup, setStartup] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [fundingRound, setFundingRound] = useState(null);
+
+  const [isInvestModalOpen, setIsInvestModalOpen] = useState(false);
+  const [interestMessage, setInterestMessage] = useState('');
+  const [submittingInterest, setSubmittingInterest] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -46,9 +54,44 @@ export const StartupDetailPage = () => {
     };
   }, [id]);
 
+  useEffect(() => {
+    if (!startup?.id) return;
+    const fetchRound = async () => {
+      try {
+        const rounds = await listFundingRounds({ startupId: startup.id });
+        if (Array.isArray(rounds) && rounds.length > 0) {
+          setFundingRound(rounds[0]);
+        }
+      } catch (err) {
+        console.error('Failed to fetch funding round:', err);
+      }
+    };
+    fetchRound();
+  }, [startup?.id]);
+
   const handleShare = () => {
     navigator.clipboard.writeText(window.location.href);
     showToast('Link Copied', 'Startup page URL copied to clipboard.', 'success');
+  };
+
+  const handleSendInterest = async (e) => {
+    e.preventDefault();
+    setSubmittingInterest(true);
+    try {
+      await createInvestmentInterest({
+        startupId: startup.id,
+        startupName: startup.name,
+        message: interestMessage || `Expressed investment interest in ${startup.name}.`
+      });
+      showToast('Interest Submitted!', `Your investment request has been sent to ${startup.name}.`, 'success');
+      setIsInvestModalOpen(false);
+      setInterestMessage('');
+    } catch (err) {
+      console.error(err);
+      showToast('Submission Failed', err.message || 'Could not send investment interest.', 'error');
+    } finally {
+      setSubmittingInterest(false);
+    }
   };
 
   if (isLoading) {
@@ -76,9 +119,9 @@ export const StartupDetailPage = () => {
     );
   }
 
-  const progressPercent = startup.fundingTarget
-    ? Math.min(100, Math.round((startup.fundingRaised / startup.fundingTarget) * 100))
-    : 0;
+  const raised = fundingRound?.raisedAmount ?? startup.fundingRaised ?? 0;
+  const target = fundingRound?.targetAmount ?? startup.fundingTarget ?? 0;
+  const progressPercent = target > 0 ? Math.min(100, Math.round((raised / target) * 100)) : 0;
 
   return (
     <div className="bg-[#F7F5EF] text-[#0E1A2B] font-sans p-6 sm:p-8 min-h-screen -m-6 sm:-m-8 space-y-6">
@@ -160,7 +203,7 @@ export const StartupDetailPage = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               {startup.pitchDeckUrl && (
                 <Button
                   variant="primary"
@@ -168,10 +211,19 @@ export const StartupDetailPage = () => {
                   className="bg-[#0F6E5C] hover:bg-[#0F6E5C]/90 text-white rounded-[4px] border-0 shadow-[0_2px_8px_rgba(14,26,43,0.08)]"
                   onClick={() => window.open(startup.pitchDeckUrl, '_blank', 'noopener')}
                 >
-                  <FileText className="w-4 h-4" />
+                  <FileText className="w-4 h-4 mr-2" />
                   <span>View Pitch Deck</span>
                 </Button>
               )}
+              <Button
+                variant="outline"
+                size="md"
+                className="border border-[#5B6472]/30 text-[#0E1A2B] hover:bg-[#F7F5EF] rounded-[4px]"
+                onClick={() => setIsInvestModalOpen(true)}
+              >
+                <DollarSign className="w-4 h-4 mr-1.5" />
+                <span>Express Interest</span>
+              </Button>
               <Button
                 variant="outline"
                 size="md"
@@ -215,17 +267,17 @@ export const StartupDetailPage = () => {
               <div className="flex justify-between items-end text-xs font-mono">
                 <div>
                   <span className="text-[#5B6472] uppercase block text-[10px]">Total Raised</span>
-                  <strong className="text-lg text-[#0F6E5C] font-bold">${startup.fundingRaised.toLocaleString()}</strong>
+                  <strong className="text-lg text-[#0F6E5C] font-bold">${raised.toLocaleString()}</strong>
                 </div>
                 <div className="text-right">
                   <span className="text-[#5B6472] uppercase block text-[10px]">Funding Goal</span>
                   <strong className="text-lg text-[#0E1A2B] font-bold">
-                    {startup.fundingTarget ? `$${startup.fundingTarget.toLocaleString()}` : '—'}
+                    {target ? `$${target.toLocaleString()}` : '—'}
                   </strong>
                 </div>
               </div>
 
-              {startup.fundingTarget > 0 && (
+              {target > 0 && (
                 <div className="space-y-1">
                   <div className="h-3 w-full bg-[#F7F5EF] border border-[#5B6472]/20 rounded-[4px] overflow-hidden">
                     <div
@@ -334,6 +386,34 @@ export const StartupDetailPage = () => {
           )}
         </div>
       </div>
+
+      {/* Express Investment Interest Modal */}
+      <Modal
+        isOpen={isInvestModalOpen}
+        onClose={() => setIsInvestModalOpen(false)}
+        title={`Express Investment Interest - ${startup.name}`}
+        subtitle="Submit your investment thesis or check request to the founder"
+      >
+        <form onSubmit={handleSendInterest} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Message to Founders</label>
+            <textarea
+              rows={4}
+              value={interestMessage}
+              onChange={(e) => setInterestMessage(e.target.value)}
+              placeholder="Describe your fund, check size, or valuation expectations..."
+              className="w-full bg-slate-50 border border-slate-200 text-xs rounded-xl p-3 text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500/30"
+              required
+            />
+          </div>
+          <div className="flex gap-2 justify-end pt-2">
+            <Button type="button" variant="outline" onClick={() => setIsInvestModalOpen(false)}>Cancel</Button>
+            <Button type="submit" variant="primary" isLoading={submittingInterest}>
+              <span>Submit Proposal</span>
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };

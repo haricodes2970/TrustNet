@@ -1,4 +1,5 @@
 const InvestorProfile = require("../models/InvestorProfile");
+const User = require("../models/User");
 const ApiError = require("../utils/ApiError");
 const { applyQueryOptions, handleServiceError, normalizeFilter, assertOwner } = require("./serviceUtils");
 
@@ -42,7 +43,7 @@ async function createProfile(
 
 async function getProfileById(id) {
   try {
-    const profile = await InvestorProfile.findById(id).lean();
+    const profile = await InvestorProfile.findById(id).populate("user", "fullName avatarUrl email bio").lean();
     if (!profile) {
       throw new ApiError(404, "Investor profile not found.");
     }
@@ -54,7 +55,7 @@ async function getProfileById(id) {
 
 async function listProfiles(filter = {}, options = {}) {
   try {
-    const query = InvestorProfile.find(normalizeFilter(filter));
+    const query = InvestorProfile.find(normalizeFilter(filter)).populate("user", "fullName avatarUrl email bio");
     return applyQueryOptions(query, options).lean();
   } catch (error) {
     throw handleServiceError(error, "Failed to list investor profiles.");

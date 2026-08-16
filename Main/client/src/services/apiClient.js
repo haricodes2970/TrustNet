@@ -1,6 +1,6 @@
 import * as mockData from '../data/mockData';
 
-const BASE_URL = 'http://localhost:5000/api';
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
 
 // Helper to get or initialize localStorage keys
 function getStorageItem(key, defaultValue) {
@@ -613,15 +613,256 @@ async function requestMock(path, method, body = {}) {
     };
   }
 
+  // 11. Investor Directory Endpoints
+  if (urlPath === '/investors' || urlPath.startsWith('/investors/')) {
+    const users = getStorageItem('trustnet_users', mockData.MOCK_USERS);
+    const investorProfiles = users
+      .filter(u => u.role === 'Investor')
+      .map(u => ({
+        _id: u.id,
+        id: u.id,
+        user: { _id: u.id, name: u.name, email: u.email, avatar: u.avatar },
+        organization: u.organization || 'Venture Capital Partner',
+        investmentThesis: u.bio || 'Investing in early-stage tech startups.',
+        preferredStages: ['pre-seed', 'seed', 'early-stage'],
+        preferredIndustries: u.interests || ['AI & SaaS', 'Fintech'],
+        preferredRegions: ['North America', 'Global'],
+        checkSize: u.checkSize || '$500k - $2M',
+        name: u.name,
+        avatar: u.avatar,
+        bio: u.bio,
+        interests: u.interests
+      }));
+
+    if (method === 'GET') {
+      if (urlPath.split('/')[2]) {
+        const single = investorProfiles.find(p => p.id === urlPath.split('/')[2]);
+        return { success: true, data: single || investorProfiles[0] };
+      }
+      return { success: true, data: investorProfiles };
+    }
+    if (method === 'POST') {
+      const newProf = { _id: 'inv_' + Date.now(), ...body };
+      return { success: true, data: newProf };
+    }
+    if (method === 'PUT') {
+      return { success: true, data: { _id: urlPath.split('/')[2], ...body } };
+    }
+  }
+
+  // 12. Investment Interest Endpoints
+  if (urlPath === '/investment-interests' || urlPath.startsWith('/investment-interests/')) {
+    let interests = getStorageItem('trustnet_investment_interests', [
+      {
+        _id: 'interest_1',
+        id: 'interest_1',
+        startup: 'stp_1',
+        startupId: 'stp_1',
+        startupName: 'Nexus AI',
+        investor: 'usr_me',
+        message: 'Interested in leading Seed round. Requesting data room access.',
+        status: 'submitted',
+        amount: 100000,
+        equity: 2.5,
+        terms: 'Post-Money SAFE (Valuation Cap)',
+        createdAt: new Date().toLocaleDateString()
+      }
+    ]);
+
+    if (method === 'GET') {
+      let filtered = [...interests];
+      if (queryParams.startupId) {
+        filtered = filtered.filter(i => i.startup === queryParams.startupId || i.startupId === queryParams.startupId);
+      }
+      if (queryParams.status) {
+        filtered = filtered.filter(i => i.status === queryParams.status);
+      }
+      return { success: true, data: filtered };
+    }
+
+    if (method === 'POST') {
+      const newInterest = {
+        _id: 'int_' + Date.now(),
+        id: 'int_' + Date.now(),
+        startup: body.startupId,
+        startupId: body.startupId,
+        startupName: body.startupName || 'Startup Venture',
+        investor: 'usr_me',
+        message: body.message || 'Expressed investment interest.',
+        status: 'submitted',
+        amount: Number(body.amount || 100000),
+        equity: Number(body.equity || 2.5),
+        terms: body.terms || 'Post-Money SAFE',
+        createdAt: new Date().toLocaleDateString()
+      };
+      interests.unshift(newInterest);
+      setStorageItem('trustnet_investment_interests', interests);
+      return { success: true, data: newInterest };
+    }
+
+    if (urlPath.includes('/status')) {
+      const id = urlPath.split('/')[2];
+      interests = interests.map(i => i._id === id || i.id === id ? { ...i, status: body.status } : i);
+      setStorageItem('trustnet_investment_interests', interests);
+      const updated = interests.find(i => i._id === id || i.id === id);
+      return { success: true, data: updated };
+    }
+
+    if (urlPath.includes('/withdraw')) {
+      const id = urlPath.split('/')[2];
+      interests = interests.map(i => i._id === id || i.id === id ? { ...i, status: 'withdrawn' } : i);
+      setStorageItem('trustnet_investment_interests', interests);
+      return { success: true, data: { status: 'withdrawn' } };
+    }
+  }
+
+  // 13. Funding Round Endpoints
+  if (urlPath === '/funding-rounds' || urlPath.startsWith('/funding-rounds/')) {
+    let rounds = getStorageItem('trustnet_funding_rounds', [
+      {
+        _id: 'fr_1',
+        id: 'fr_1',
+        startup: 'stp_1',
+        startupId: 'stp_1',
+        name: 'Nexus AI',
+        title: 'Nexus AI - Seed Growth Expansion Round',
+        roundType: 'seed',
+        targetAmount: 2500000,
+        raisedAmount: 1750000,
+        currency: 'USD',
+        minimumContribution: 25000,
+        status: 'open',
+        stage: 'Seed',
+        description: 'Decentralized GPU Compute infrastructure scaling for LLM inferencing engines.',
+        location: 'San Francisco, CA',
+        valuation: '$10.0M',
+        website: 'https://nexusai.io',
+        logo: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&q=80&w=200'
+      },
+      {
+        _id: 'fr_2',
+        id: 'fr_2',
+        startup: 'stp_2',
+        startupId: 'stp_2',
+        name: 'EcoSense',
+        title: 'EcoSense - Pre-Seed Carbon Pilot',
+        roundType: 'pre-seed',
+        targetAmount: 1000000,
+        raisedAmount: 600000,
+        currency: 'USD',
+        minimumContribution: 10000,
+        status: 'open',
+        stage: 'Pre-Seed',
+        description: 'Automated satellite and drone carbon credit verification protocols.',
+        location: 'Boston, MA',
+        valuation: '$5.0M',
+        website: 'https://ecosense.io',
+        logo: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&q=80&w=200'
+      }
+    ]);
+
+    if (method === 'GET') {
+      const parts = urlPath.split('/');
+      if (parts[2] && parts[2] !== 'undefined') {
+        const single = rounds.find(r => r._id === parts[2] || r.id === parts[2]);
+        return { success: true, data: single || rounds[0] };
+      }
+      let filtered = [...rounds];
+      if (queryParams.startupId) {
+        filtered = filtered.filter(r => r.startup === queryParams.startupId || r.startupId === queryParams.startupId);
+      }
+      if (queryParams.status) {
+        filtered = filtered.filter(r => r.status === queryParams.status);
+      }
+      return { success: true, data: filtered };
+    }
+
+    if (method === 'POST') {
+      const newRound = {
+        _id: 'fr_' + Date.now(),
+        id: 'fr_' + Date.now(),
+        startup: body.startupId,
+        startupId: body.startupId,
+        title: body.title,
+        roundType: body.roundType || 'seed',
+        targetAmount: Number(body.targetAmount || 1000000),
+        raisedAmount: 0,
+        currency: body.currency || 'USD',
+        minimumContribution: Number(body.minimumContribution || 10000),
+        status: 'draft',
+        description: body.description || ''
+      };
+      rounds.unshift(newRound);
+      setStorageItem('trustnet_funding_rounds', rounds);
+      return { success: true, data: newRound };
+    }
+
+    if (urlPath.includes('/open') || urlPath.includes('/close') || urlPath.includes('/cancel')) {
+      const parts = urlPath.split('/');
+      const id = parts[2];
+      const action = parts[3];
+      const newStatus = action === 'open' ? 'open' : action === 'close' ? 'closed' : 'cancelled';
+      rounds = rounds.map(r => r._id === id || r.id === id ? { ...r, status: newStatus } : r);
+      setStorageItem('trustnet_funding_rounds', rounds);
+      const updated = rounds.find(r => r._id === id || r.id === id);
+      return { success: true, data: updated };
+    }
+  }
+
+  // 14. Funding Contribution Endpoints
+  if (urlPath === '/funding-contributions' || urlPath.startsWith('/funding-contributions/')) {
+    let contributions = getStorageItem('trustnet_funding_contributions', []);
+
+    if (method === 'GET') {
+      let filtered = [...contributions];
+      if (queryParams.fundingRoundId) {
+        filtered = filtered.filter(c => c.fundingRound === queryParams.fundingRoundId || c.fundingRoundId === queryParams.fundingRoundId);
+      }
+      return { success: true, data: filtered };
+    }
+
+    if (method === 'POST') {
+      const newContrib = {
+        _id: 'fc_' + Date.now(),
+        id: 'fc_' + Date.now(),
+        fundingRound: body.fundingRoundId,
+        fundingRoundId: body.fundingRoundId,
+        investor: 'usr_me',
+        amount: Number(body.amount),
+        currency: body.currency || 'USD',
+        status: 'pledged',
+        note: body.note || '',
+        createdAt: new Date().toLocaleDateString()
+      };
+      contributions.unshift(newContrib);
+      setStorageItem('trustnet_funding_contributions', contributions);
+      return { success: true, data: newContrib };
+    }
+
+    if (urlPath.includes('/confirm') || urlPath.includes('/reject') || urlPath.includes('/withdraw')) {
+      const parts = urlPath.split('/');
+      const id = parts[2];
+      const action = parts[3];
+      const statusMap = { confirm: 'confirmed', reject: 'rejected', withdraw: 'withdrawn' };
+      const newStatus = statusMap[action];
+      contributions = contributions.map(c => c._id === id || c.id === id ? { ...c, status: newStatus } : c);
+      setStorageItem('trustnet_funding_contributions', contributions);
+      const updated = contributions.find(c => c._id === id || c.id === id);
+      return { success: true, data: updated };
+    }
+  }
+
   // Default fallback
-  if (method === 'GET') return [];
+  if (method === 'GET') return { success: true, data: [] };
   return { success: true };
 }
 
 async function request(path, options = {}) {
   const url = `${BASE_URL}${path}`;
+  const token = localStorage.getItem('trustnet_access_token');
   const headers = {
     'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...options.headers,
   };
 
@@ -638,10 +879,17 @@ async function request(path, options = {}) {
     const response = await fetch(url, config);
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      const err = new Error(errorData.message || errorData.error || `HTTP error! status: ${response.status}`);
+      err.status = response.status;
+      err.data = errorData;
+      throw err;
     }
     return await response.json();
   } catch (err) {
+    // Re-throw 401/403 authorization errors so components can handle auth status directly if requested
+    if (err.status === 401 || err.status === 403) {
+      throw err;
+    }
     console.warn(`[API CLIENT] Backend server at ${url} not available. Falling back to client-side mock database...`);
     
     let parsedBody = {};
