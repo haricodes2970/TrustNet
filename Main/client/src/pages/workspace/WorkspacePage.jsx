@@ -264,9 +264,9 @@ export const WorkspacePage = () => {
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {workspacesList.map((ws) => (
+            {workspacesList.map((ws, idx) => (
               <Card
-                key={ws._id}
+                key={ws._id || ws.id || idx}
                 className="bg-white rounded-[8px] border border-[#5B6472]/20 shadow-[0_2px_8px_rgba(14,26,43,0.08)] p-6 hover:shadow-[0_4px_12px_rgba(14,26,43,0.12)] transition-shadow flex flex-col justify-between"
               >
                 <div className="space-y-3">
@@ -608,9 +608,9 @@ export const WorkspacePage = () => {
                 </Card>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {projects.map((proj) => (
+                  {projects.map((proj, idx) => (
                     <Card
-                      key={proj._id}
+                      key={proj._id || proj.id || idx}
                       className="p-5 bg-white rounded-[8px] border border-[#5B6472]/20 shadow-[0_2px_8px_rgba(14,26,43,0.08)] flex flex-col justify-between"
                     >
                       <div className="space-y-3">
@@ -690,17 +690,17 @@ export const WorkspacePage = () => {
                 </div>
               ) : (
                 <div className="divide-y divide-[#5B6472]/10">
-                  {members.map((member) => (
-                    <div key={member.id || member.email} className="p-3 flex items-center justify-between">
+                  {members.map((member, idx) => (
+                    <div key={member.id || member.email || idx} className="p-3 flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <div className="w-7 h-7 rounded-[4px] bg-[#F7F5EF] flex items-center justify-center border border-[#5B6472]/10">
                           <User className="w-4 h-4 text-[#5B6472]" />
                         </div>
                         <div>
                           <h4 className="text-xs font-bold text-[#0E1A2B]">
-                            {member.name || member.email.split('@')[0]}
+                            {member.name || member.email?.split('@')[0] || 'Unknown Member'}
                           </h4>
-                          <p className="text-[9px] text-[#5B6472] font-mono">{member.email}</p>
+                          <p className="text-[9px] text-[#5B6472] font-mono">{member.email || 'No email provided'}</p>
                         </div>
                       </div>
 
