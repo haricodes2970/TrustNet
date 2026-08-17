@@ -8,11 +8,20 @@ export const ProgressRing = ({
   strokeWidth, 
   stroke 
 }) => {
-  const finalPercentage = percentage !== undefined ? percentage : (progress !== undefined ? progress : 85);
-  const finalStrokeWidth = strokeWidth !== undefined ? strokeWidth : (stroke !== undefined ? stroke : 6);
-  const finalSize = size !== undefined ? size : (propRadius !== undefined ? propRadius * 2 : 64);
+  const parseNum = (val, fallback) => {
+    const num = Number(val);
+    return isNaN(num) || num === null || val === undefined ? fallback : num;
+  };
 
-  const radius = (finalSize - finalStrokeWidth) / 2;
+  const finalPercentage = parseNum(percentage !== undefined ? percentage : progress, 85);
+  const finalStrokeWidth = parseNum(strokeWidth !== undefined ? strokeWidth : stroke, 6);
+  const finalSize = parseNum(size !== undefined ? size : (propRadius !== undefined ? propRadius * 2 : undefined), 64);
+
+  let radius = (finalSize - finalStrokeWidth) / 2;
+  if (isNaN(radius) || radius <= 0) {
+    radius = 29; // Safe default for size = 64, stroke = 6
+  }
+
   const circumference = radius * 2 * Math.PI;
   const strokeDashoffset = circumference - (finalPercentage / 100) * circumference;
 
@@ -22,7 +31,7 @@ export const ProgressRing = ({
         <circle
           cx={finalSize / 2}
           cy={finalSize / 2}
-          r={radius > 0 ? radius : 0}
+          r={radius}
           stroke="currentColor"
           strokeWidth={finalStrokeWidth}
           fill="transparent"
@@ -31,7 +40,7 @@ export const ProgressRing = ({
         <circle
           cx={finalSize / 2}
           cy={finalSize / 2}
-          r={radius > 0 ? radius : 0}
+          r={radius}
           stroke="currentColor"
           strokeWidth={finalStrokeWidth}
           fill="transparent"
