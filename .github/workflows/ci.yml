@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend-build:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: Main/client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Main/client/package-lock.json
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Build
+        run: npm run build
+
+  backend-tests:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: Main/server
+    # CI-only placeholders required by src/config/env.js at startup. No test
+    # reaches an external service: MongoDB is in-memory
+    # (mongodb-memory-server), Cloudinary uploads are mocked, SMTP/LLM are
+    # unused by the suite. Real secrets are never needed here.
+    env:
+      MONGO_URI: mongodb://127.0.0.1:27017/trustnet
+      JWT_SECRET: ci-only-placeholder
+      JWT_EXPIRES_IN: 7d
+      JWT_ACCESS_SECRET: ci-only-access-placeholder
+      JWT_REFRESH_SECRET: ci-only-refresh-placeholder
+      JWT_ACCESS_EXPIRES_IN: 15m
+      JWT_REFRESH_EXPIRES_IN: 7d
+      CLOUDINARY_API_KEY: ci-only
+      CLOUDINARY_API_SECRET: ci-only
+      CLOUDINARY_CLOUD_NAME: ci-only
+      CLIENT_URL: http://localhost:5173
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Main/server/package-lock.json
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Sanity check (app loads)
+        run: npm run build
+      - name: Run full test suite
+        run: npm run test:all
