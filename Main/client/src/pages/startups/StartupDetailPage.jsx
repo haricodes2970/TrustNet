@@ -126,7 +126,7 @@ export const StartupDetailPage = () => {
       {/* Header Showcase Info */}
       <Card className="bg-white rounded-[8px] border border-[#5B6472]/20 shadow-[0_2px_8px_rgba(14,26,43,0.08)] overflow-hidden">
         {/* Banner with neutral fallback background, no gradients */}
-        <div className="h-44 sm:h-56 w-full bg-[#5B6472]/10 relative">
+        <div className="h-20 sm:h-28 w-full bg-[#5B6472]/10 relative">
           <div className="absolute top-4 right-4">
             <Button
               variant="outline"

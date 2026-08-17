@@ -63,7 +63,8 @@ export const StartupTeamPage = () => {
       const newTeam = await teamApi.createTeam({
         startupId: startup.id,
         name: `${startup.name} Core Team`,
-        description: `Core execution team for ${startup.name}.`
+        description: `Core execution team for ${startup.name}.`,
+        email: currentUser?.email || ''
       });
       setTeam(newTeam);
       showToast('Team Created', 'Your primary startup team has been initialized.', 'success');
