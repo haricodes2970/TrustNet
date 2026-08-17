@@ -1,0 +1,295 @@
+.content-moderation-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Tabs Bar */
+.moderation-tabs-nav {
+  display: flex;
+  border-bottom: 2px solid var(--color-border);
+  gap: 1rem;
+  padding-bottom: 0.25rem;
+}
+
+.tab-item-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  padding: 0.75rem 1rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.tab-item-btn:hover {
+  color: var(--color-text-dark);
+}
+
+.tab-item-btn.active {
+  color: var(--color-deep-forest);
+  border-bottom-color: var(--color-deep-forest);
+}
+
+/* Filter Card */
+.moderation-filter-card {
+  padding: 0.75rem 1rem;
+}
+
+.moderation-search-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.moderation-search-wrapper input {
+  width: 100%;
+  padding-left: 2.5rem;
+  height: 38px;
+  border-radius: 6px;
+}
+
+.moderation-search-wrapper .search-icon {
+  position: absolute;
+  left: 0.9rem;
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+/* Table grid */
+.moderation-table-card {
+  padding: 0;
+}
+
+.moderation-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.moderation-table th {
+  padding: 1rem 1.5rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.moderation-table td {
+  padding: 1.1rem 1.5rem;
+  font-size: 0.9rem;
+  border-bottom: 1px solid var(--color-border-light);
+  vertical-align: top;
+}
+
+.moderation-table tr:last-child td {
+  border-bottom: none;
+}
+
+.moderation-table tr:hover {
+  background-color: var(--color-bg-page);
+}
+
+/* Item details cell */
+.moderation-item-cell {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.moderation-type-icon-wrapper {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background-color: var(--color-mint-light);
+  color: var(--color-deep-forest);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border);
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+}
+
+.moderation-item-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.item-primary-title {
+  font-weight: 700;
+  color: var(--color-text-dark);
+  line-height: 1.3;
+}
+
+.item-secondary-meta {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.item-snippet-text {
+  font-size: 0.84rem;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+  margin-top: 0.4rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 350px;
+}
+
+/* Status Badges */
+.moderation-pill {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  border: 1px solid transparent;
+  width: fit-content;
+  display: inline-block;
+}
+
+.moderation-pill.active {
+  background-color: var(--color-status-success-bg);
+  color: var(--color-status-success);
+  border-color: var(--color-status-success-border);
+}
+
+.moderation-pill.hidden {
+  background-color: var(--color-status-pending-bg);
+  color: var(--color-status-pending);
+  border-color: var(--color-status-pending-border);
+}
+
+.moderation-pill.deleted {
+  background-color: var(--color-status-danger-bg);
+  color: var(--color-status-danger);
+  border-color: var(--color-status-danger-border);
+}
+
+.creation-date-label {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+/* Action toolbars */
+.moderation-actions-toolbar {
+  display: flex;
+  gap: 0.35rem;
+  justify-content: flex-end;
+}
+
+.moderation-actions-toolbar .action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 0.25rem 0.6rem;
+  height: 30px;
+}
+
+.moderation-actions-toolbar .restore-btn:hover {
+  background-color: var(--color-status-success-bg);
+  color: var(--color-status-success);
+  border-color: var(--color-status-success-border);
+}
+
+.moderation-actions-toolbar .hide-btn:hover {
+  background-color: var(--color-status-pending-bg);
+  color: var(--color-status-pending);
+  border-color: var(--color-status-pending-border);
+}
+
+.moderation-actions-toolbar .delete-btn:hover {
+  background-color: var(--color-status-danger-bg);
+  color: var(--color-status-danger);
+  border-color: var(--color-status-danger-border);
+}
+
+/* Skeletons */
+.skeleton-moderation-cell {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.skeleton-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.skeleton-text-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.skeleton-line-short {
+  width: 120px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+.skeleton-line-long {
+  width: 200px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.skeleton-badge {
+  width: 65px;
+  height: 20px;
+  border-radius: 4px;
+}
+
+.skeleton-actions-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.skeleton-btn {
+  width: 65px;
+  height: 30px;
+  border-radius: 6px;
+}
+
+.empty-moderation-cell {
+  padding: 5rem 1.5rem !important;
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+.empty-icon {
+  opacity: 0.3;
+  margin-bottom: 0.5rem;
+  display: inline-block;
+}
+
+.moderation-error-banner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  background-color: var(--color-status-danger-bg);
+  border: 1px solid var(--color-status-danger-border);
+  color: var(--color-status-danger);
+  border-radius: 12px;
+}
+
+@media (min-width: 768px) {
+  .item-snippet-text {
+    max-width: 500px;
+  }
+}

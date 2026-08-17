@@ -98,6 +98,22 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (fields) => authApi.register(fields);
 
+  const refreshUser = async () => {
+    try {
+      const user = await authApi.fetchCurrentUser();
+      setCurrentUser(user);
+      setIsAuthenticated(true);
+      setAuthState('authenticated');
+      return user;
+    } catch (err) {
+      setToken(null);
+      setCurrentUser(null);
+      setIsAuthenticated(false);
+      setAuthState('unauthenticated');
+      throw err;
+    }
+  };
+
   const logout = async () => {
     try {
       await authApi.logout();
@@ -135,6 +151,7 @@ export const AuthProvider = ({ children }) => {
         completeTwoFactorLogin,
         loginWithToken,
         register,
+        refreshUser,
         logout,
         updateUserProfile,
       }}

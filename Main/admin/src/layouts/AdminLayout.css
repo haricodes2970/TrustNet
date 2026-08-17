@@ -1,0 +1,40 @@
+.admin-layout-container {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background-color: var(--color-bg-page);
+}
+
+/* Sidebar Wrapper for Large Screens */
+.desktop-sidebar-wrapper {
+  display: none;
+  height: 100%;
+}
+
+/* Main Viewport Container (Header + Content) */
+.admin-main-viewport {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Content Scroll Container */
+.admin-content-scroller {
+  flex-grow: 1;
+  padding: 1.5rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Responsive breakdowns */
+@media (min-width: 1025px) {
+  .desktop-sidebar-wrapper {
+    display: block; /* Show persistent sidebar on desktop */
+  }
+  .admin-content-scroller {
+    padding: 2.25rem 2.5rem;
+  }
+}

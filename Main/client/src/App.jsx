@@ -122,7 +122,14 @@ export function App() {
                 <Route path="/oauth/callback" element={<OAuthCallbackPage />} />
 
                 {/* Onboarding Wizard */}
-                <Route path="/onboarding" element={<OnboardingWizard />} />
+                <Route
+                  path="/onboarding"
+                  element={
+                    <ProtectedRoute>
+                      <OnboardingWizard />
+                    </ProtectedRoute>
+                  }
+                />
 
                 {/* Logged-In SaaS Application -- requires a real, backend-
                     verified session (GET /auth/me). Previously unprotected. */}
@@ -172,9 +179,9 @@ export function App() {
                   <Route path="investors" element={<InvestorsPage />} />
                   {/* Mentors: User.role has a 'mentor' enum value but no
                       mentor-matching/session backend exists; disabled. */}
-                  <Route path="mentors" element={<ComingSoonPage />} />
-                  <Route path="communities" element={<CommunitiesPage />} />
-                  <Route path="opportunities" element={<OpportunitiesPage />} />
+                   <Route path="mentors" element={<MentorsPage />} />
+                   <Route path="communities" element={<CommunitiesPage />} />
+                   <Route path="opportunities" element={<OpportunitiesPage />} />
                   {/* Events: no backend module; disabled. */}
                   <Route path="events" element={<ComingSoonPage />} />
 
@@ -201,7 +208,7 @@ export function App() {
                       module exists); disabled gracefully. Analytics has a
                       real backend module but is not wired this pass (still
                       mock-data-driven) -- left as-is, out of scope. */}
-                  <Route path="connections" element={<ComingSoonPage />} />
+                  <Route path="connections" element={<ConnectionsPage />} />
                   <Route path="saved" element={<ComingSoonPage />} />
                   <Route path="analytics" element={<AnalyticsPage />} />
                   <Route path="files" element={<FilesPage />} />
@@ -232,7 +239,14 @@ export function App() {
                   />
                 </Route>
 
-                <Route path="/verification" element={<AppLayout />}>
+                <Route
+                  path="/verification"
+                  element={
+                    <ProtectedRoute>
+                      <AppLayout />
+                    </ProtectedRoute>
+                  }
+                >
                   <Route index element={<VerificationPage />} />
                 </Route>
 
