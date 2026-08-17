@@ -89,23 +89,6 @@ export const FeedPage = () => {
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-      {/* Main Post Creation & Feed Stream */}
-      <div className="lg:col-span-8 space-y-6">
-        {/* Post Creation Box */}
-        <Card className="p-5 border-slate-200 shadow-soft-sm">
-          <form onSubmit={handleCreatePost} className="space-y-3">
-            <div className="flex items-start gap-3">
-              <Avatar src={currentUser.avatar} alt={currentUser.name} size="md" isVerified={currentUser?.isVerified || false} />
-              <textarea
-                rows={3}
-                placeholder="Share a startup milestone, pitch deck, or advice with the TrustNet ecosystem..."
-                value={postText}
-                onChange={(e) => setPostText(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 resize-none"
-              />
-            </div>
-
     <div className="bg-[#F7F5EF] min-h-screen p-4 sm:p-6 font-ui text-[#0E1A2B]">
       <div className="max-w-[1440px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
         
@@ -123,7 +106,6 @@ export const FeedPage = () => {
                   <span>{formError}</span>
                 </div>
               )}
- main
 
               {/* Title input (optional) */}
               <div className="flex flex-col gap-1.5">
