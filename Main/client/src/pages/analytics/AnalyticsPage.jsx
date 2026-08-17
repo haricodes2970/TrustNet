@@ -1,59 +1,25 @@
-import React from 'react';
-import { 
-  AreaChart, 
-  Area, 
-  BarChart,
-  Bar,
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip as RechartsTooltip, 
-  ResponsiveContainer 
-} from 'recharts';
-import { BarChart3, TrendingUp, Eye, FileText, Calendar } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { BarChart3, BriefcaseBusiness, CheckSquare, Users } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
-import { Badge } from '../../components/ui/Badge';
-import { MOCK_ANALYTICS_DATA } from '../../data/mockData';
+import { EmptyState } from '../../components/common/EmptyState';
+import { getMyStartups } from '../../lib/startupApi';
+import { getAnalyticsOverview } from '../../lib/analyticsApi';
+
+const Stat = ({ label, value, Icon }) => <Card className="p-5"><Icon className="h-5 w-5 text-trust-verified" /><p className="mt-4 font-mono text-2xl text-trust-ink">{value ?? 0}</p><p className="mt-1 text-sm text-trust-slate">{label}</p></Card>;
 
 export const AnalyticsPage = () => {
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-black text-slate-900 tracking-tight">Ecosystem Analytics Center</h1>
-        <p className="text-xs text-slate-500 mt-1">Deep insights into startup pitch deck views, investor reach, and profile views</p>
-      </div>
+  const [startups, setStartups] = useState([]);
+  const [startupId, setStartupId] = useState('');
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="p-6 border-slate-200">
-          <h3 className="text-base font-bold text-slate-900 mb-4">Weekly Profile Views</h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={MOCK_ANALYTICS_DATA.profileViews}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
-                <RechartsTooltip />
-                <Area type="monotone" dataKey="views" stroke="#10B981" fill="#ecfdf5" strokeWidth={3} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
+  useEffect(() => { (async () => { try { const entries = await getMyStartups(); setStartups(entries); setStartupId(entries[0]?._id || entries[0]?.id || ''); } catch (err) { setError(err.message || 'Unable to load your startups.'); } finally { setLoading(false); } })(); }, []);
+  useEffect(() => { if (!startupId) return; (async () => { setLoading(true); setError(''); try { setData(await getAnalyticsOverview(startupId)); } catch (err) { setError(err.message || 'Unable to load analytics.'); } finally { setLoading(false); } })(); }, [startupId]);
 
-        <Card className="p-6 border-slate-200">
-          <h3 className="text-base font-bold text-slate-900 mb-4">Investor Reach & Impressions</h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={MOCK_ANALYTICS_DATA.profileViews}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
-                <RechartsTooltip />
-                <Bar dataKey="searches" fill="#34d399" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-      </div>
-    </div>
-  );
+  if (loading && !startups.length) return <p className="text-sm text-trust-slate">Loading analytics…</p>;
+  if (error) return <EmptyState icon={BarChart3} title="Analytics unavailable" description={error} />;
+  if (!startups.length) return <EmptyState icon={BarChart3} title="No startup analytics yet" description="Create or join a startup to view its real analytics." />;
+
+  return <div className="space-y-6"><header><h1 className="font-display text-3xl text-trust-ink">Analytics</h1><p className="mt-1 text-sm text-trust-slate">Live operational data for your selected startup.</p></header><label className="block max-w-md text-sm font-semibold text-trust-ink">Startup<select className="mt-2 h-11 w-full rounded border border-trust-slate/30 bg-white px-3 text-sm focus-ring" value={startupId} onChange={(event) => setStartupId(event.target.value)}>{startups.map((startup) => <option key={startup._id || startup.id} value={startup._id || startup.id}>{startup.name}</option>)}</select></label>{loading ? <p className="text-sm text-trust-slate">Loading analytics…</p> : <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><Stat label="Team members" value={data?.startup?.teamSize} Icon={Users} /><Stat label="Projects" value={data?.projects?.totalProjects} Icon={BriefcaseBusiness} /><Stat label="Tasks" value={data?.tasks?.totalTasks} Icon={CheckSquare} /><Stat label="Task completion" value={`${data?.tasks?.completionRate ?? 0}%`} Icon={BarChart3} /></section>}</div>;
 };

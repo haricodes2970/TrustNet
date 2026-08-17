@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link, useLocation } from 'react-router-dom';
 import { 
   Mail, 
   Lock, 
@@ -20,6 +20,7 @@ import { BASE_URL } from '../../lib/apiClient';
 
 export const LoginPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const { login, currentUser, isAuthenticated } = useAuth();
 
@@ -38,7 +39,7 @@ export const LoginPage = () => {
     }
   }, [isAuthenticated, currentUser, navigate]);
 
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(location.state?.email || '');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [selectedRole, setSelectedRole] = useState('Entrepreneur');
@@ -94,7 +95,11 @@ export const LoginPage = () => {
     try {
       const result = await login(email, password);
       if (result.requiresTwoFactor) {
-        navigate('/verify-otp', { state: { twoFactorToken: result.twoFactorToken } });
+        navigate('/verify-otp', { state: { twoFactorToken: result.twoFactorToken, email } });
+        return;
+      }
+      if (!result.user?.emailVerified) {
+        navigate('/verify-otp', { state: { email } });
         return;
       }
       // Everyone lands on the normal dashboard regardless of the workspace
@@ -102,7 +107,7 @@ export const LoginPage = () => {
       // Real administrators reach the Admin Console via the sidebar link,
       // which only renders for accounts whose backend-verified role is
       // 'admin' (see components/common/Sidebar.jsx).
-      navigate('/app/dashboard');
+      navigate(result.user?.verificationStatus === 'approved' ? '/app/dashboard' : '/verification');
     } catch (err) {
       setError(err.message || 'Invalid email or password.');
     } finally {
@@ -142,39 +147,39 @@ export const LoginPage = () => {
             const Icon = role.icon;
             const isSelected = selectedRole === role.id;
             return (
-              <div
-                key={role.id}
-                onClick={() => handleRoleSelect(role.id)}
-                className={`p-3 rounded-2xl border transition-all duration-200 cursor-pointer select-none relative ${
-                  isSelected
-                    ? 'bg-white border-emerald-500 shadow-soft-sm ring-2 ring-emerald-500/20'
-                    : 'bg-slate-50/60 border-slate-200/80 hover:bg-white hover:border-slate-300 hover:scale-[1.01]'
-                } ${isLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
-              >
-                {isSelected && (
-                  <div className="absolute top-2.5 right-2.5 w-4 h-4 bg-emerald-500 text-white rounded-full flex items-center justify-center shadow-xs">
-                    <Check className="w-3 h-3 stroke-[3]" />
-                  </div>
-                )}
+                  <div
+                    key={role.id}
+                    onClick={() => handleRoleSelect(role.id)}
+                    className={`p-3 rounded-2xl border transition-all duration-200 cursor-pointer select-none relative ${
+                      isSelected
+                        ? 'bg-white border-trust-verified shadow-soft-sm ring-2 ring-trust-verified/20'
+                        : 'bg-trust-paper/60 border-trust-slate/20 hover:bg-white hover:border-trust-slate/40 hover:scale-[1.01]'
+                    } ${isLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                  >
+                    {isSelected && (
+                      <div className="absolute top-2.5 right-2.5 w-4 h-4 bg-trust-verified text-white rounded-full flex items-center justify-center shadow-xs">
+                        <Check className="w-3 h-3 stroke-[3]" />
+                      </div>
+                    )}
 
-                <div className="flex items-start gap-2.5">
-                  <div className={`p-2 rounded-xl transition-colors ${
-                    isSelected ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'
-                  }`}>
-                    <Icon className="w-4 h-4" strokeWidth={1.75} />
-                  </div>
+                    <div className="flex items-start gap-2.5">
+                      <div className={`p-2 rounded-xl transition-colors ${
+                        isSelected ? 'bg-trust-verified/10 text-trust-verified' : 'bg-trust-slate/10 text-trust-slate'
+                      }`}>
+                        <Icon className="w-4 h-4" strokeWidth={1.75} />
+                      </div>
 
-                  <div className="min-w-0 flex-1">
-                    <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                      {role.title}
-                    </h4>
-                    <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">{role.desc}</p>
-                    <span className="text-[10px] font-semibold text-emerald-600 mt-1 block">
-                      "{role.footer}"
-                    </span>
+                      <div className="min-w-0 flex-1">
+                        <h4 className="text-xs font-bold text-trust-ink flex items-center gap-1.5">
+                          {role.title}
+                        </h4>
+                        <p className="text-[11px] text-trust-slate mt-0.5 line-clamp-1">{role.desc}</p>
+                        <span className="text-[10px] font-semibold text-trust-verified mt-1 block">
+                          "{role.footer}"
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
             );
           })}
         </div>
@@ -187,8 +192,8 @@ export const LoginPage = () => {
       )}
 
       {signingMessage && (
-        <div className="p-3 text-xs bg-emerald-50 text-emerald-700 rounded-xl border border-emerald-200 font-bold flex items-center gap-2 animate-pulse">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600" strokeWidth={1.75} />
+        <div className="p-3 text-xs bg-trust-verified/10 text-trust-verified rounded-xl border border-trust-verified/30 font-bold flex items-center gap-2 animate-pulse">
+          <CheckCircle2 className="w-4 h-4 text-trust-verified" strokeWidth={1.75} />
           <span>{signingMessage}</span>
         </div>
       )}
@@ -229,10 +234,10 @@ export const LoginPage = () => {
 
         <div className="flex items-center justify-between text-xs pt-1">
           <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" defaultChecked disabled={isLoading} className="rounded border-slate-300 text-emerald-500 focus:ring-emerald-500" />
-            <span className="text-slate-600 font-medium">Remember this device</span>
+            <input type="checkbox" defaultChecked disabled={isLoading} className="rounded border-trust-slate/40 text-trust-verified focus:ring-trust-verified" />
+            <span className="text-trust-slate font-medium">Remember this device</span>
           </label>
-          <Link to="/forgot-password" className="text-emerald-600 hover:underline font-semibold">
+          <Link to="/forgot-password" className="text-trust-verified hover:underline font-semibold">
             Forgot password?
           </Link>
         </div>
@@ -274,7 +279,7 @@ export const LoginPage = () => {
 
       <div className="text-center text-xs text-slate-500 pt-4 border-t border-slate-100">
         Don't have an account?{' '}
-        <Link to="/signup" className="text-emerald-600 font-bold hover:underline">
+        <Link to="/signup" className="text-trust-verified font-bold hover:underline">
           Create account
         </Link>
       </div>

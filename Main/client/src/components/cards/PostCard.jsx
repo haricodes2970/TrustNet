@@ -13,7 +13,7 @@ export const PostCard = ({ post }) => {
   const { currentUser } = useAuth();
   const [showComments, setShowComments] = useState(false);
   const [commentInput, setCommentInput] = useState('');
-  
+
   // Real comments state
   const [comments, setComments] = useState([]);
   const [isLoadingComments, setIsLoadingComments] = useState(false);

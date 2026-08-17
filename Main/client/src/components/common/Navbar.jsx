@@ -8,18 +8,18 @@ export const Navbar = () => {
   const navigate = useNavigate();
 
   return (
-    <header className="sticky top-0 z-40 w-full glass-panel border-b border-slate-200/80">
+    <header className="sticky top-0 z-40 w-full bg-trust-paper border-b border-trust-ink/10">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         {/* Exact Brand Logo matching image */}
         <Logo size="md" />
 
         {/* Public Nav Links */}
-        <nav className="hidden md:flex items-center gap-8 text-sm font-semibold text-slate-600">
-          <Link to="/" className="hover:text-emerald-600 transition-colors">Features</Link>
-          <a href="#how-it-works" className="hover:text-emerald-600 transition-colors">How It Works</a>
-          <a href="#showcase" className="hover:text-emerald-600 transition-colors">Startups</a>
-          <a href="#investors" className="hover:text-emerald-600 transition-colors">Investors</a>
-          <Link to="/pricing" className="hover:text-emerald-600 transition-colors">Pricing</Link>
+        <nav className="hidden md:flex items-center gap-8 text-sm font-semibold text-trust-slate">
+          <Link to="/" className="hover:text-trust-verified transition-colors">Features</Link>
+          <a href="#how-it-works" className="hover:text-trust-verified transition-colors">How It Works</a>
+          <a href="#showcase" className="hover:text-trust-verified transition-colors">Startups</a>
+          <a href="#investors" className="hover:text-trust-verified transition-colors">Investors</a>
+          <Link to="/pricing" className="hover:text-trust-verified transition-colors">Pricing</Link>
         </nav>
 
         {/* Auth CTAs */}

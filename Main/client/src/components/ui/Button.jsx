@@ -2,6 +2,8 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
 
+// TrustNet primary action = verified teal. Destructive = alert rose.
+// Radius 4px (rounded), single soft shadow, 44px min touch target.
 export const Button = ({
   children,
   variant = 'primary', // primary, secondary, outline, ghost, danger
@@ -13,14 +15,14 @@ export const Button = ({
   type = 'button',
   ...props
 }) => {
-  const baseStyles = 'relative inline-flex items-center justify-center font-semibold rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed select-none min-h-[44px]';
+  const baseStyles = 'relative inline-flex items-center justify-center font-semibold rounded transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-trust-verified focus-visible:ring-offset-2 focus-visible:ring-offset-trust-paper disabled:opacity-50 disabled:cursor-not-allowed select-none min-h-[44px]';
 
   const variants = {
-    primary: 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-soft-sm hover:shadow-soft-md active:bg-emerald-700',
-    secondary: 'bg-white hover:bg-emerald-50/50 text-emerald-600 border border-emerald-500 shadow-xs',
-    outline: 'border border-slate-200 hover:border-emerald-500 bg-white hover:bg-emerald-50/30 text-slate-700 hover:text-emerald-600 shadow-xs',
-    ghost: 'text-slate-600 hover:text-emerald-600 hover:bg-slate-100/80',
-    danger: 'bg-red-600 hover:bg-red-700 text-white shadow-xs',
+    primary: 'bg-trust-verified hover:bg-trust-verified/90 active:bg-trust-verified text-white shadow-soft-sm',
+    secondary: 'bg-white hover:bg-trust-verified/5 text-trust-verified border border-trust-verified',
+    outline: 'border border-trust-slate/30 hover:border-trust-verified bg-white text-trust-ink hover:text-trust-verified',
+    ghost: 'text-trust-slate hover:text-trust-verified hover:bg-trust-ink/5',
+    danger: 'bg-trust-alert hover:bg-trust-alert/90 text-white shadow-soft-sm',
   };
 
   const sizes = {

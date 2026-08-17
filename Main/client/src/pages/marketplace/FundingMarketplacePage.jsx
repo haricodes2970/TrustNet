@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { 
   PiggyBank, 
   Sparkles, 
@@ -20,7 +20,7 @@ import { Badge } from '../../components/ui/Badge';
 import { Avatar } from '../../components/ui/Avatar';
 import { Modal } from '../../components/ui/Modal';
 import { useApp } from '../../context/AppContext';
-import { apiClient } from '../../services/apiClient';
+import { apiClient } from '../../lib/apiClient';
 
 export const FundingMarketplacePage = () => {
   const { showToast } = useApp();

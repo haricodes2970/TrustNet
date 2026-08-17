@@ -3,7 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { SkeletonPage } from '../ui/SkeletonLoaders';
 
-export const ProtectedRoute = ({ children, allowedRoles = [] }) => {
+export const ProtectedRoute = ({ children, allowedRoles = [], requireVerifiedEmail = false, requireApprovedVerification = false }) => {
   const { currentUser, isAuthenticated, isLoading, authState } = useAuth();
   const location = useLocation();
 
@@ -14,57 +14,32 @@ export const ProtectedRoute = ({ children, allowedRoles = [] }) => {
     return <SkeletonPage />;
   }
 
-  // 1. Check if authenticated
   if (!isAuthenticated || authState === 'unauthenticated' || authState === 'expired') {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // 2. Check if email/OTP verified
-  if (!currentUser?.emailVerified) {
-    if (location.pathname !== '/verify-otp') {
-      return <Navigate to="/verify-otp" state={{ email: currentUser?.email }} replace />;
-    }
-    return children;
-  }
-
-  // 3. Check if onboarding is completed
-  if (!currentUser?.onboardingCompleted) {
-    if (location.pathname !== '/onboarding') {
-      return <Navigate to="/onboarding" replace />;
-    }
-    return children;
-  }
-
-  // 4. Check if identity verification is complete
+  // Normalize role matching (e.g. 'admin' or 'Administrator')
   const userRole = (currentUser?.role || '').toLowerCase();
+  const normalizedAllowedRoles = allowedRoles.map(r => r.toLowerCase());
+
+  const hasPermission = normalizedAllowedRoles.length === 0 ||
+    normalizedAllowedRoles.includes(userRole) ||
+    (userRole === 'administrator' && normalizedAllowedRoles.includes('admin')) ||
+    (userRole === 'admin' && normalizedAllowedRoles.includes('administrator'));
+
+  if (!hasPermission) {
+    return <Navigate to="/app/403" replace />;
+  }
+
+  // `verificationStatus` from GET /auth/me is the KYC source of truth.
+  // Admins are deliberately exempt: their backend-authorized admin routes
+  // must remain available even if their own normal-user KYC state differs.
   const isAdmin = userRole === 'admin' || userRole === 'administrator';
-  const isKycVerified = currentUser?.isVerified || false;
-
-  // Identity verification is required for all non-admins
-  const requiresVerification = !isKycVerified && !isAdmin;
-
-  if (requiresVerification) {
-    if (location.pathname !== '/verification') {
-      return <Navigate to="/verification" replace />;
-    }
-    return children;
+  if (requireVerifiedEmail && !isAdmin && !currentUser?.emailVerified) {
+    return <Navigate to="/verify-otp" state={{ email: currentUser?.email, from: location }} replace />;
   }
-
-  // 5. If they are already fully verified, they shouldn't access onboarding
-  if (location.pathname === '/onboarding') {
-    return <Navigate to="/app/dashboard" replace />;
-  }
-
-  // 6. Check role permissions if applicable
-  if (allowedRoles.length > 0) {
-    const normalizedAllowedRoles = allowedRoles.map(r => r.toLowerCase());
-    const hasPermission = normalizedAllowedRoles.includes(userRole) ||
-      (userRole === 'administrator' && normalizedAllowedRoles.includes('admin')) ||
-      (userRole === 'admin' && normalizedAllowedRoles.includes('administrator'));
-
-    if (!hasPermission) {
-      return <Navigate to="/app/403" replace />;
-    }
+  if (requireApprovedVerification && !isAdmin && currentUser?.verificationStatus !== 'approved') {
+    return <Navigate to="/verification" state={{ from: location }} replace />;
   }
 
   return children;

@@ -33,7 +33,8 @@ async function request(path, { method = 'GET', body, query } = {}) {
     }
   }
 
-  const headers = { 'Content-Type': 'application/json' };
+  const isFormData = body instanceof FormData;
+  const headers = isFormData ? {} : { 'Content-Type': 'application/json' };
   const token = getToken();
   if (token) {
     headers.Authorization = `Bearer ${token}`;
@@ -43,7 +44,7 @@ async function request(path, { method = 'GET', body, query } = {}) {
     method,
     headers,
     credentials: 'include', // send the refresh cookie alongside the bearer token
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: body !== undefined ? (isFormData ? body : JSON.stringify(body)) : undefined,
   });
 
   let payload = null;

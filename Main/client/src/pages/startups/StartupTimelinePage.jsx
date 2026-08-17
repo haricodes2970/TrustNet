@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { 
   Calendar, 
   Sparkles, 
@@ -18,7 +18,7 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Badge } from '../../components/ui/Badge';
 import { useApp } from '../../context/AppContext';
-import { apiClient } from '../../services/apiClient';
+import { apiClient } from '../../lib/apiClient';
 
 export const StartupTimelinePage = () => {
   const { showToast, startups, setStartups } = useApp();

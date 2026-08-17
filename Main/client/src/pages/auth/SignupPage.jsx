@@ -78,8 +78,8 @@ export const SignupPage = () => {
     setIsLoading(true);
     try {
       await register({ email, password, fullName: name });
-      // Transition directly to the OTP verification page with the user email
-      navigate('/verify-otp', { state: { email, isSignup: true } });
+      // Register → immediate OTP entry (real backend issues the email OTP).
+      navigate('/verify-otp', { state: { email, justRegistered: true } });
     } catch (err) {
       setError(err.message || 'Could not create your account.');
     } finally {
@@ -90,20 +90,20 @@ export const SignupPage = () => {
   const getStrengthColor = () => {
     if (strengthScore <= 2) return 'bg-red-500 text-red-600 dark:text-red-400';
     if (strengthScore === 3) return 'bg-amber-500 text-amber-600 dark:text-amber-400';
-    return 'bg-emerald-500 text-emerald-600 dark:text-emerald-400';
+    return 'bg-trust-verified text-white dark:text-white';
   };
 
   const getStrengthTextColor = () => {
     if (strengthScore <= 2) return 'text-red-500';
     if (strengthScore === 3) return 'text-amber-500';
-    return 'text-emerald-500';
+    return 'text-trust-verified';
   };
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-black text-slate-900 tracking-tight">Create your TrustNet account</h1>
-        <p className="text-xs text-slate-500 mt-1">Join 12,000+ founders, VCs, and mentors today</p>
+        <h1 className="text-2xl font-black text-trust-ink tracking-tight">Create your TrustNet account</h1>
+        <p className="text-xs text-trust-slate mt-1">Join 12,000+ founders, VCs, and mentors today</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -143,7 +143,7 @@ export const SignupPage = () => {
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3.5 top-9 text-slate-400 hover:text-slate-600 text-xs"
+            className="absolute right-3.5 top-9 text-trust-slate hover:text-trust-ink text-xs"
             disabled={isLoading}
           >
             {showPassword ? <EyeOff className="w-4 h-4" strokeWidth={1.75} /> : <Eye className="w-4 h-4" strokeWidth={1.75} />}
@@ -153,16 +153,16 @@ export const SignupPage = () => {
         {password && (
           <div className="space-y-1">
             <div className="flex justify-between items-center text-[11px] font-semibold">
-              <span className="text-slate-500">Password Strength</span>
+              <span className="text-trust-slate">Password Strength</span>
               <span className={getStrengthTextColor()}>{strengthLabel}</span>
             </div>
-            <div className="flex gap-1 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-              <div 
-                className={`h-full transition-all duration-300 rounded-full ${getStrengthColor().split(' ')[0]}`} 
-                style={{ width: `${(strengthScore / 5) * 100}%` }} 
+            <div className="flex gap-1 h-1.5 w-full bg-trust-slate/10 rounded-full overflow-hidden">
+              <div
+                className={`h-full transition-all duration-300 rounded-full ${getStrengthColor().split(' ')[0]}`}
+                style={{ width: `${(strengthScore / 5) * 100}%` }}
               />
             </div>
-            <p className="text-[10px] text-slate-400">
+            <p className="text-[10px] text-trust-slate">
               Must be at least 8 characters with digits and symbols.
             </p>
           </div>
@@ -180,13 +180,12 @@ export const SignupPage = () => {
         </Button>
       </form>
 
-      <div className="text-center text-xs text-slate-500 pt-4 border-t border-slate-100">
+      <div className="text-center text-xs text-trust-slate pt-4 border-t border-trust-ink/10">
         Already have an account?{' '}
-        <Link to="/login" className="text-emerald-600 font-bold hover:underline">
+        <Link to="/login" className="text-trust-verified font-bold hover:underline">
           Log In
         </Link>
       </div>
     </div>
   );
 };
-

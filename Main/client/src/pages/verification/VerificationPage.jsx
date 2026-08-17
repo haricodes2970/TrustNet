@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  ShieldCheck, 
-  Upload, 
-  CheckCircle2, 
-  Clock, 
-  AlertCircle, 
-  Users, 
-  FileCheck, 
-  Rocket, 
-  Globe, 
-  FileText, 
-  Lock, 
-  Loader2 
+import {
+  ShieldCheck,
+  Upload,
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  Users,
+  FileCheck,
+  Rocket,
+  Globe,
+  FileText,
+  Lock,
+  Loader2
 } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
@@ -25,12 +25,12 @@ import { BASE_URL, getToken } from '../../lib/apiClient';
 export const VerificationPage = () => {
   const { showToast } = useApp();
   const { currentUser, refreshUser } = useAuth();
-  
+
   const [docsState, setDocsState] = useState({
     government_id: { file: null, progress: 0, status: 'idle', errorMessage: '' },
     company_registration: { file: null, progress: 0, status: 'idle', errorMessage: '' },
     business_website: { file: null, progress: 0, status: 'idle', errorMessage: '' },
-    linkedin: { file: null, progress: 0, status: 'idle', errorMessage: '' }
+    linkedin: { file: null, progress: 0, status: 'idle', errorMessage: '' },
   });
 
   const [verificationStatus, setVerificationStatus] = useState('draft'); // 'draft' | 'pending' | 'approved' | 'rejected' | 'resubmission_requested'
@@ -70,7 +70,7 @@ export const VerificationPage = () => {
         government_id: { file: null, progress: 0, status: 'idle', errorMessage: '' },
         company_registration: { file: null, progress: 0, status: 'idle', errorMessage: '' },
         business_website: { file: null, progress: 0, status: 'idle', errorMessage: '' },
-        linkedin: { file: null, progress: 0, status: 'idle', errorMessage: '' }
+        linkedin: { file: null, progress: 0, status: 'idle', errorMessage: '' },
       };
 
       if (data.documents) {
@@ -216,8 +216,8 @@ export const VerificationPage = () => {
   if (isPageLoading) {
     return (
       <div className="min-h-[400px] flex flex-col items-center justify-center space-y-4">
-        <Loader2 className="w-10 h-10 text-emerald-500 animate-spin" />
-        <p className="text-xs text-slate-500">Loading your identity verification files...</p>
+        <Loader2 className="w-10 h-10 text-trust-verified animate-spin" />
+        <p className="text-xs text-trust-slate">Loading your identity verification files...</p>
       </div>
     );
   }
@@ -226,32 +226,32 @@ export const VerificationPage = () => {
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Identity & Founder Verification</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium">
+          <h1 className="text-2xl font-black text-trust-ink tracking-tight">Identity & Founder Verification</h1>
+          <p className="text-xs text-trust-slate mt-1 font-medium">
             Get your verified green checkmark badge to boost deal flow trust.
           </p>
         </div>
         <div>
           {verificationStatus === 'approved' && (
-            <Badge variant="success" size="lg" className="flex items-center gap-1.5 py-1.5 px-3 bg-emerald-500 text-white font-bold rounded-full">
+            <Badge variant="success" size="lg" className="flex items-center gap-1.5 py-1.5 px-3 bg-trust-verified text-white font-bold rounded-full">
               <ShieldCheck className="w-4 h-4" />
               <span>Verified Account</span>
             </Badge>
           )}
           {verificationStatus === 'pending' && (
-            <Badge variant="warning" size="lg" className="flex items-center gap-1.5 py-1.5 px-3 bg-amber-500 text-white font-bold rounded-full">
+            <Badge variant="warning" size="lg" className="flex items-center gap-1.5 py-1.5 px-3 bg-trust-signal text-white font-bold rounded-full">
               <Clock className="w-4 h-4 animate-pulse" />
               <span>Under Review</span>
             </Badge>
           )}
           {(verificationStatus === 'rejected' || verificationStatus === 'resubmission_requested') && (
-            <Badge variant="danger" size="lg" className="flex items-center gap-1.5 py-1.5 px-3 bg-red-500 text-white font-bold rounded-full">
+            <Badge variant="danger" size="lg" className="flex items-center gap-1.5 py-1.5 px-3 bg-trust-alert text-white font-bold rounded-full">
               <AlertCircle className="w-4 h-4" />
               <span>Action Required</span>
             </Badge>
           )}
           {verificationStatus === 'draft' && (
-            <Badge variant="secondary" size="lg" className="flex items-center gap-1.5 py-1.5 px-3 bg-slate-500 text-white font-bold rounded-full">
+            <Badge variant="secondary" size="lg" className="flex items-center gap-1.5 py-1.5 px-3 bg-trust-slate text-white font-bold rounded-full">
               <FileText className="w-4 h-4" />
               <span>Draft Submission</span>
             </Badge>
@@ -266,18 +266,18 @@ export const VerificationPage = () => {
       )}
 
       {/* Verification status highlights */}
-      <LedgerStamp 
-        status={verificationStatus} 
-        timestamp={submittedAt} 
+      <LedgerStamp
+        status={verificationStatus}
+        timestamp={submittedAt}
         className="w-full shadow-soft-sm"
       />
 
       {/* Grid of upload categories */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <IdentityUploadCard 
-          title="Government ID" 
-          subtitle="Passport, national ID, or driver's license (JPEG/PNG/PDF up to 10MB)" 
-          icon={ShieldCheck} 
+        <IdentityUploadCard
+          title="Government ID"
+          subtitle="Passport, national ID, or driver's license (JPEG/PNG/PDF up to 10MB)"
+          icon={ShieldCheck}
           allowedTypes={['image/jpeg', 'image/png', 'application/pdf']}
           maxSizeMB={10}
           file={docsState.government_id.file}
@@ -288,10 +288,10 @@ export const VerificationPage = () => {
           onRemove={() => handleRemoveFile('government_id')}
         />
 
-        <IdentityUploadCard 
-          title="Company Registration" 
-          subtitle="Certificate of incorporation or official formation document" 
-          icon={Rocket} 
+        <IdentityUploadCard
+          title="Company Registration"
+          subtitle="Certificate of incorporation or official formation document"
+          icon={Rocket}
           allowedTypes={['image/jpeg', 'image/png', 'application/pdf']}
           maxSizeMB={10}
           file={docsState.company_registration.file}
@@ -302,10 +302,10 @@ export const VerificationPage = () => {
           onRemove={() => handleRemoveFile('company_registration')}
         />
 
-        <IdentityUploadCard 
-          title="Business Website Proof" 
-          subtitle="Screenshot of hosting console or official web bill" 
-          icon={Globe} 
+        <IdentityUploadCard
+          title="Business Website Proof"
+          subtitle="Screenshot of hosting console or official web bill"
+          icon={Globe}
           allowedTypes={['image/jpeg', 'image/png', 'application/pdf']}
           maxSizeMB={10}
           file={docsState.business_website.file}
@@ -316,10 +316,10 @@ export const VerificationPage = () => {
           onRemove={() => handleRemoveFile('business_website')}
         />
 
-        <IdentityUploadCard 
-          title="LinkedIn Proof" 
-          subtitle="PDF export of profile or settings dashboard proof" 
-          icon={Users} 
+        <IdentityUploadCard
+          title="LinkedIn Proof"
+          subtitle="PDF export of profile or settings dashboard proof"
+          icon={Users}
           allowedTypes={['image/jpeg', 'image/png', 'application/pdf']}
           maxSizeMB={10}
           file={docsState.linkedin.file}
@@ -339,25 +339,25 @@ export const VerificationPage = () => {
               <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2.5">Verification Checklist</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div className="flex items-center gap-2.5">
-                  <div className={`p-1 rounded-full ${docsState.government_id.status === 'success' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
+                  <div className={`p-1 rounded-full ${docsState.government_id.status === 'success' ? 'bg-trust-verified/10 text-trust-verified' : 'bg-slate-100 text-slate-400'}`}>
                     <CheckCircle2 className="w-4 h-4" />
                   </div>
                   <span className="text-xs text-slate-600">Government ID Uploaded</span>
                 </div>
                 <div className="flex items-center gap-2.5">
-                  <div className={`p-1 rounded-full ${docsState.company_registration.status === 'success' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
+                  <div className={`p-1 rounded-full ${docsState.company_registration.status === 'success' ? 'bg-trust-verified/10 text-trust-verified' : 'bg-slate-100 text-slate-400'}`}>
                     <CheckCircle2 className="w-4 h-4" />
                   </div>
                   <span className="text-xs text-slate-600">Company Registration Uploaded</span>
                 </div>
                 <div className="flex items-center gap-2.5">
-                  <div className={`p-1 rounded-full ${docsState.business_website.status === 'success' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
+                  <div className={`p-1 rounded-full ${docsState.business_website.status === 'success' ? 'bg-trust-verified/10 text-trust-verified' : 'bg-slate-100 text-slate-400'}`}>
                     <CheckCircle2 className="w-4 h-4" />
                   </div>
                   <span className="text-xs text-slate-600">Business Website Proof Uploaded</span>
                 </div>
                 <div className="flex items-center gap-2.5">
-                  <div className={`p-1 rounded-full ${docsState.linkedin.status === 'success' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
+                  <div className={`p-1 rounded-full ${docsState.linkedin.status === 'success' ? 'bg-trust-verified/10 text-trust-verified' : 'bg-slate-100 text-slate-400'}`}>
                     <CheckCircle2 className="w-4 h-4" />
                   </div>
                   <span className="text-xs text-slate-600">LinkedIn Proof Uploaded</span>
@@ -369,9 +369,9 @@ export const VerificationPage = () => {
               <p className="text-xs text-slate-500 leading-normal max-w-md">
                 Ensure all documents match your professional profile credentials. Submitting sends your credentials directly for admin validation.
               </p>
-              <Button 
-                variant="primary" 
-                size="lg" 
+              <Button
+                variant="primary"
+                size="lg"
                 disabled={!allDocumentsUploaded || submitLoading}
                 isLoading={submitLoading}
                 onClick={handleSubmit}

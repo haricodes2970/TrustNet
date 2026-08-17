@@ -95,6 +95,23 @@ export const AdminDashboardPage = () => {
   const [verificationsError, setVerificationsError] = useState('');
   const [actioningId, setActioningId] = useState(null);
 
+  // Per-user document detail. The queue LIST only returns document
+  // summaries (type/status/uploadedAt, no URL, on purpose). The actual
+  // viewable files are short-lived signed Cloudinary URLs returned only by
+  // GET /admin/verifications/:id, so we fetch them on demand when the admin
+  // opens a request. { [userId]: { status, docs, error } }
+  const [docDetail, setDocDetail] = useState({});
+
+  const loadDocuments = useCallback(async (userId) => {
+    setDocDetail((prev) => ({ ...prev, [userId]: { status: 'loading', docs: [], error: '' } }));
+    try {
+      const detail = await adminApi.getVerification(userId);
+      setDocDetail((prev) => ({ ...prev, [userId]: { status: 'ready', docs: detail?.verificationDocuments || [], error: '' } }));
+    } catch (err) {
+      setDocDetail((prev) => ({ ...prev, [userId]: { status: 'error', docs: [], error: err.message || 'Could not load documents.' } }));
+    }
+  }, []);
+
   const loadVerifications = useCallback(async () => {
     setVerificationsLoading(true);
     setVerificationsError('');
@@ -412,20 +429,45 @@ export const AdminDashboardPage = () => {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {(item.verificationDocuments || []).map((doc) => (
-                    <a
-                      key={doc._id || doc.type}
-                      href={doc.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex"
-                    >
-                      <Button variant="outline" size="sm">
-                        <Eye className="w-3.5 h-3.5" strokeWidth={1.75} />
-                        <span>{doc.type}</span>
-                      </Button>
-                    </a>
-                  ))}
+                  {(() => {
+                    const d = docDetail[item._id];
+                    if (!d) {
+                      return (
+                        <Button variant="outline" size="sm" onClick={() => loadDocuments(item._id)}>
+                          <Eye className="w-3.5 h-3.5" strokeWidth={1.75} />
+                          <span>Review documents</span>
+                        </Button>
+                      );
+                    }
+                    if (d.status === 'loading') {
+                      return <Button variant="outline" size="sm" isLoading disabled><span>Loading…</span></Button>;
+                    }
+                    if (d.status === 'error') {
+                      return (
+                        <button type="button" onClick={() => loadDocuments(item._id)} className="text-[11px] font-semibold text-trust-alert hover:underline">
+                          {d.error} — retry
+                        </button>
+                      );
+                    }
+                    if (!d.docs.length) {
+                      return <span className="text-[11px] text-slate-500">No documents</span>;
+                    }
+                    return d.docs.map((doc) => (
+                      <a
+                        key={doc._id || doc.type}
+                        href={doc.url || undefined}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex"
+                        aria-disabled={!doc.url}
+                      >
+                        <Button variant="outline" size="sm" disabled={!doc.url}>
+                          <Eye className="w-3.5 h-3.5" strokeWidth={1.75} />
+                          <span>{doc.type}</span>
+                        </Button>
+                      </a>
+                    ));
+                  })()}
                   <Button
                     variant="outline"
                     size="sm"

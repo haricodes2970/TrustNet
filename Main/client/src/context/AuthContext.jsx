@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import * as authApi from '../lib/authApi';
 import { getToken, setToken } from '../lib/apiClient';
 
-const AuthContext = createContext();
+export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
@@ -10,6 +10,12 @@ export const AuthProvider = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [authState, setAuthState] = useState('initializing'); // 'initializing' | 'authenticated' | 'unauthenticated' | 'expired' | 'error'
   const [authError, setAuthError] = useState(null);
+
+  // Derived verification state from GET /auth/me response
+  const isEmailVerified = currentUser?.emailVerified || false;
+  const verificationStatus = currentUser?.verificationStatus || 'draft';
+  const isVerified = currentUser?.isVerified || false;
+  const accountStatus = currentUser?.accountStatus || 'EMAIL_PENDING';
 
   // On mount, restore the session from a stored access token by asking the
   // backend who it belongs to (GET /auth/me). No token stored -> logged out.
@@ -76,9 +82,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Used by the OAuth callback page: the backend redirects here with an
-  // access token already issued (Google/LinkedIn succeeded server-side) --
-  // store it, then ask who it belongs to via GET /auth/me.
   const loginWithToken = async (token) => {
     setToken(token);
     try {
@@ -129,11 +132,13 @@ export const AuthProvider = ({ children }) => {
     setCurrentUser((prev) => ({ ...prev, ...updatedFields }));
   };
 
-  // Explicitly separate verification state from auth state using backend properties
-  const isEmailVerified = currentUser?.emailVerified || false;
-  const verificationStatus = currentUser?.verificationStatus || 'draft';
-  const isVerified = currentUser?.isVerified || false;
-  const accountStatus = currentUser?.accountStatus || 'EMAIL_PENDING';
+  const refreshCurrentUser = async () => {
+    const user = await authApi.fetchCurrentUser();
+    setCurrentUser(user);
+    setIsAuthenticated(true);
+    setAuthState('authenticated');
+    return user;
+  };
 
   return (
     <AuthContext.Provider
@@ -154,6 +159,7 @@ export const AuthProvider = ({ children }) => {
         refreshUser,
         logout,
         updateUserProfile,
+        refreshCurrentUser,
       }}
     >
       {children}

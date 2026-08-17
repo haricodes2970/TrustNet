@@ -14,41 +14,41 @@ export const ProfileCompletionCard = () => {
 
   // Completion calculation derived strictly from existing backend User schema properties
   const tasks = [
-    { 
-      id: 'avatar_cover', 
-      label: 'Upload Profile Photo & Banner', 
-      done: !!currentUser.avatarUrl, 
-      route: '/app/settings' 
+    {
+      id: 'avatar_cover',
+      label: 'Upload Profile Photo & Banner',
+      done: !!currentUser.avatarUrl,
+      route: '/app/settings'
     },
-    { 
-      id: 'headline_bio', 
-      label: 'Add Headline & Bio', 
-      done: !!(currentUser.designation && currentUser.bio), 
-      route: '/app/settings' 
+    {
+      id: 'headline_bio',
+      label: 'Add Headline & Bio',
+      done: !!(currentUser.designation && currentUser.bio),
+      route: '/app/settings'
     },
-    { 
-      id: 'org_country', 
-      label: 'Add Organization & Country', 
-      done: !!currentUser.location, 
-      route: '/app/settings' 
+    {
+      id: 'org_country',
+      label: 'Add Organization & Country',
+      done: !!currentUser.location,
+      route: '/app/settings'
     },
-    { 
-      id: 'kyc', 
-      label: 'Complete Identity Verification', 
-      done: currentUser.verificationStatus === 'approved', 
-      route: '/verification' 
+    {
+      id: 'kyc',
+      label: 'Complete Identity Verification',
+      done: currentUser.verificationStatus === 'approved',
+      route: '/verification'
     },
-    { 
-      id: 'pitch_deck', 
-      label: 'Upload Startup Pitch Deck', 
+    {
+      id: 'pitch_deck',
+      label: 'Upload Startup Pitch Deck',
       done: false, // Pitch deck field does not exist in backend schema (BACKEND GAP)
-      route: '/app/settings' 
+      route: '/app/settings'
     },
-    { 
-      id: 'socials', 
-      label: 'Connect GitHub & LinkedIn', 
-      done: !!currentUser.linkedin, 
-      route: '/app/settings' 
+    {
+      id: 'socials',
+      label: 'Connect GitHub & LinkedIn',
+      done: !!currentUser.linkedin,
+      route: '/app/settings'
     }
   ];
 
@@ -67,8 +67,8 @@ export const ProfileCompletionCard = () => {
             Profile Strength: {percentage === 100 ? 'Complete' : percentage >= 60 ? 'High' : 'Moderate'}
           </h4>
           <p className="text-[11px] text-slate-500 mt-0.5">
-            {percentage === 100 
-              ? 'Excellent! Your profile details are fully configured.' 
+            {percentage === 100
+              ? 'Excellent! Your profile details are fully configured.'
               : 'Complete remaining steps to boost trust and platform discovery.'}
           </p>
         </div>

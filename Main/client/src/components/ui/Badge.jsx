@@ -1,19 +1,26 @@
 import React from 'react';
 
+// TrustNet badge: 4px radius, mapped to the token palette. Legacy variant
+// names (emerald/blue/indigo/purple/amber/rose) are kept so existing
+// callers keep working, but they all resolve to trust tokens now.
 export const Badge = ({
   children,
-  variant = 'emerald', // emerald, slate, amber, rose
+  variant = 'verified',
   size = 'md',
   className = ''
 }) => {
   const variants = {
-    emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200/80 font-semibold',
-    slate: 'bg-slate-100 text-slate-700 border-slate-200 font-medium',
-    blue: 'bg-slate-100 text-slate-800 border-slate-200 font-semibold',
-    indigo: 'bg-emerald-50 text-emerald-700 border-emerald-200/80 font-semibold',
-    amber: 'bg-amber-50 text-amber-700 border-amber-200/80 font-semibold',
-    purple: 'bg-emerald-50 text-emerald-700 border-emerald-200/80 font-semibold',
-    rose: 'bg-red-50 text-red-700 border-red-200/80 font-semibold',
+    verified: 'bg-trust-verified/10 text-trust-verified border-trust-verified/20 font-semibold',
+    signal: 'bg-trust-signal/10 text-trust-signal border-trust-signal/20 font-semibold',
+    alert: 'bg-trust-alert/10 text-trust-alert border-trust-alert/20 font-semibold',
+    slate: 'bg-trust-slate/10 text-trust-slate border-trust-slate/20 font-medium',
+    // legacy aliases
+    emerald: 'bg-trust-verified/10 text-trust-verified border-trust-verified/20 font-semibold',
+    blue: 'bg-trust-slate/10 text-trust-ink border-trust-slate/20 font-semibold',
+    indigo: 'bg-trust-verified/10 text-trust-verified border-trust-verified/20 font-semibold',
+    amber: 'bg-trust-signal/10 text-trust-signal border-trust-signal/20 font-semibold',
+    purple: 'bg-trust-verified/10 text-trust-verified border-trust-verified/20 font-semibold',
+    rose: 'bg-trust-alert/10 text-trust-alert border-trust-alert/20 font-semibold',
   };
 
   const sizes = {
@@ -23,7 +30,7 @@ export const Badge = ({
   };
 
   return (
-    <span className={`inline-flex items-center rounded-full border ${variants[variant] || variants.emerald} ${sizes[size]} ${className}`}>
+    <span className={`inline-flex items-center rounded border ${variants[variant] || variants.verified} ${sizes[size]} ${className}`}>
       {children}
     </span>
   );

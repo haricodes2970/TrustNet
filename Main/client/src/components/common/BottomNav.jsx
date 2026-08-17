@@ -12,7 +12,7 @@ export const BottomNav = () => {
   ];
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 px-2 py-2 flex items-center justify-around">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-trust-paper border-t border-trust-ink/10 px-2 py-2 flex items-center justify-around">
       {mobileTabs.map((tab) => {
         const Icon = tab.icon;
         return (
@@ -20,8 +20,8 @@ export const BottomNav = () => {
             key={tab.path}
             to={tab.path}
             className={({ isActive }) =>
-              `flex flex-col items-center gap-1 p-2 rounded-xl text-[10px] font-bold transition-colors ${
-                isActive ? 'text-emerald-600' : 'text-slate-400 hover:text-slate-700'
+              `flex flex-col items-center gap-1 p-2 rounded text-[10px] font-bold transition-colors focus-ring ${
+                isActive ? 'text-trust-verified' : 'text-trust-slate hover:text-trust-ink'
               }`
             }
           >

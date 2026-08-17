@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { 
+import {
   Building,
   DollarSign,
   Users,
@@ -29,10 +29,10 @@ import { getDashboardData } from '../../lib/dashboardApi';
 import { BASE_URL, getToken } from '../../lib/apiClient';
 
 export const DashboardPage = () => {
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const { currentUser } = useAuth();
   const { showToast } = useApp();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [activeRole, setActiveRole] = useState('Entrepreneur');
   const [dashboardData, setDashboardData] = useState(null);
@@ -57,7 +57,7 @@ export const DashboardPage = () => {
     setIsPageLoading(true);
     setPageError('');
     setIsDashboardLocked(false);
-    
+
     try {
       const token = getToken();
 
@@ -106,7 +106,7 @@ export const DashboardPage = () => {
       <div className="space-y-8 max-w-[1440px] mx-auto animate-pulse" aria-hidden="true">
         {/* Role switcher skeleton */}
         <div className="h-16 w-full bg-slate-100 rounded-2xl" />
-        
+
         {/* Header skeleton */}
         <div className="space-y-2">
           <Skeleton className="h-8 w-64" />
@@ -121,7 +121,7 @@ export const DashboardPage = () => {
                 <div key={i} className="h-24 bg-slate-100 rounded-2xl" />
               ))}
             </div>
-            
+
             <div className="space-y-4">
               <Skeleton className="h-6 w-48" />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -235,10 +235,10 @@ export const DashboardPage = () => {
                   role="tab"
                   aria-selected={isActive}
                   onClick={() => setActiveRole(r.id)}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all min-h-[44px] focus:outline-none focus:ring-2 focus:ring-emerald-500/50 ${
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all min-h-[44px] focus:outline-none focus:ring-2 focus:ring-trust-verified/50 ${
                     isActive
-                      ? 'bg-emerald-500 text-white shadow-soft-sm'
-                      : 'text-slate-600 hover:bg-slate-50'
+                      ? 'bg-trust-verified text-white shadow-soft-sm'
+                      : 'text-trust-slate hover:bg-trust-slate/10'
                   }`}
                 >
                   <Icon className="w-4 h-4" strokeWidth={1.75} />
@@ -248,7 +248,7 @@ export const DashboardPage = () => {
             })}
           </div>
 
-          <Badge variant="emerald" className="hidden lg:flex">
+          <Badge variant="verified" className="hidden lg:flex">
             Role Switcher Active
           </Badge>
         </div>
@@ -271,13 +271,13 @@ export const DashboardPage = () => {
         {/* Main Content (Left Column - 8 Cols) */}
         <div className="lg:col-span-8 space-y-8">
           {isDashboardLocked ? (
-            <Card className="p-8 border-amber-200 bg-amber-50/30 space-y-6 text-center">
-              <div className="w-14 h-14 bg-amber-500/10 text-amber-600 rounded-2xl flex items-center justify-center mx-auto shadow-xs">
+            <Card className="p-8 border-trust-signal/30 bg-trust-signal/5 space-y-6 text-center">
+              <div className="w-14 h-14 bg-trust-signal/10 text-trust-signal rounded-2xl flex items-center justify-center mx-auto shadow-xs">
                 <Lock className="w-7 h-7" />
               </div>
               <div className="space-y-2">
-                <h3 className="text-lg font-bold text-slate-900">{lockContent.title}</h3>
-                <p className="text-xs text-slate-600 leading-relaxed max-w-md mx-auto">
+                <h3 className="text-lg font-bold text-trust-ink">{lockContent.title}</h3>
+                <p className="text-xs text-trust-slate leading-relaxed max-w-md mx-auto">
                   {lockContent.desc}
                 </p>
               </div>
@@ -299,14 +299,14 @@ export const DashboardPage = () => {
                   <h3 className="text-3xl font-black text-slate-900 mt-2">
                     {dashboardData?.stats?.startups || 0} Registered
                   </h3>
-                  <span className="text-xs text-emerald-600 font-semibold mt-2 block">Real-time platform records</span>
+                  <span className="text-xs text-trust-verified font-semibold mt-2 block">Real-time platform records</span>
                 </Card>
 
                 <Card className="p-6 border-slate-200/80 hoverEffect">
                   <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">
                     {activeRole === 'Entrepreneur' ? 'Collaboration Requests' : activeRole === 'Investor' ? 'Inbound Deals' : 'Mentorship Requests'}
                   </span>
-                  <h3 className="text-3xl font-black text-emerald-600 mt-2">
+                  <h3 className="text-3xl font-black text-slate-900 mt-2">
                     {dashboardData?.stats?.collaborations || 0} Pending
                   </h3>
                   <span className="text-xs text-slate-500 mt-2 block">Requires your review</span>
@@ -325,7 +325,7 @@ export const DashboardPage = () => {
                   <h3 className="text-3xl font-black text-slate-900 mt-2">
                     {dashboardData?.stats?.posts || 0} Shared
                   </h3>
-                  <span className="text-xs text-emerald-600 font-semibold mt-2 block">Updates and announcements</span>
+                  <span className="text-xs text-trust-verified font-semibold mt-2 block">Updates and announcements</span>
                 </Card>
               </div>
 
@@ -393,14 +393,14 @@ export const DashboardPage = () => {
                         {community.logoUrl ? (
                           <img src={community.logoUrl} alt={community.name} className="w-12 h-12 rounded-xl object-cover" />
                         ) : (
-                          <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold text-sm">
+                          <div className="w-12 h-12 rounded-xl bg-trust-verified/10 text-trust-verified flex items-center justify-center font-bold text-sm">
                             C
                           </div>
                         )}
                         <div className="space-y-1">
                           <h4 className="text-xs font-bold text-slate-900">{community.name}</h4>
                           <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">{community.description}</p>
-                          <span className="text-[10px] text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded-full inline-block">
+                          <span className="text-[10px] text-trust-verified font-semibold bg-trust-verified/10 px-2 py-0.5 rounded-full inline-block">
                             {community.memberCount || 0} members
                           </span>
                         </div>
@@ -419,10 +419,10 @@ export const DashboardPage = () => {
           {verificationData && (
             <Card className="p-5 border-slate-200/80 bg-white shadow-soft-sm space-y-3">
               <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Identity Status</h4>
-              <LedgerStamp 
-                status={verificationData.status} 
-                submittedAt={verificationData.submittedAt} 
-                reviewedAt={verificationData.reviewedAt} 
+              <LedgerStamp
+                status={verificationData.status}
+                submittedAt={verificationData.submittedAt}
+                reviewedAt={verificationData.reviewedAt}
               />
             </Card>
           )}
@@ -434,55 +434,55 @@ export const DashboardPage = () => {
           <Card className="p-5 border-slate-200/80 bg-white shadow-soft-sm space-y-4">
             <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Quick Actions</h4>
             <div className="grid grid-cols-2 gap-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => navigate('/app/profile/edit')} 
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate('/app/profile/edit')}
                 className="w-full text-xs py-2 h-auto text-left justify-start"
                 aria-label="Edit Profile Details"
               >
                 <span>Edit Profile</span>
               </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => navigate('/verification')} 
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate('/verification')}
                 className="w-full text-xs py-2 h-auto text-left justify-start"
                 aria-label="Access Identity KYC Verification"
               >
                 <span>Identity KYC</span>
               </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => navigate('/app/startups/create')} 
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate('/app/startups/create')}
                 className="w-full text-xs py-2 h-auto text-left justify-start"
                 aria-label="Create Startup Listing"
               >
                 <span>Create Startup</span>
               </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => navigate('/app/discover')} 
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate('/app/discover')}
                 className="w-full text-xs py-2 h-auto text-left justify-start"
                 aria-label="Discover Startups and Deals"
               >
                 <span>Find Deals</span>
               </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => navigate('/app/people')} 
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate('/app/people')}
                 className="w-full text-xs py-2 h-auto text-left justify-start"
                 aria-label="Access Ecosystem People Directory"
               >
                 <span>Directory</span>
               </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => navigate('/app/messages')} 
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate('/app/messages')}
                 className="w-full text-xs py-2 h-auto text-left justify-start"
                 aria-label="Open Messages Center"
               >
@@ -492,7 +492,7 @@ export const DashboardPage = () => {
           </Card>
 
           {/* Suggested People */}
-          {!isDashboardLocked && suggestedPeople && (
+          {!isDashboardLocked && (
             <div className="space-y-4">
               <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Suggested People</h4>
               {formattedPeople.length === 0 ? (

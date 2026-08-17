@@ -3,13 +3,12 @@ import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { Lock, Eye, EyeOff, CheckCircle2, ArrowRight, Check, X } from 'lucide-react';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
-import * as authApi from '../../lib/authApi';
+import { resetPassword } from '../../lib/authApi';
 
 export const ResetPasswordPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const token = searchParams.get('token');
-
+  const token = searchParams.get('token') || '';
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -31,8 +30,8 @@ export const ResetPasswordPage = () => {
     if (password.length === 0) return { label: 'Enter Password', score: 0, color: 'bg-slate-200', text: 'text-slate-400', message: '' };
     if (!hasMinLength) return { label: 'Weak', score: 1, color: 'bg-red-500', text: 'text-red-500', message: '❌ Too short (minimum 8 characters)' };
     if (!hasNumber) return { label: 'Fair', score: 2, color: 'bg-amber-500', text: 'text-amber-600', message: '✔ Length  ❌ Missing number' };
-    if (passedRulesCount < 5) return { label: 'Strong', score: 3, color: 'bg-emerald-500', text: 'text-emerald-600', message: '✔ All requirements met' };
-    return { label: 'Very Strong', score: 4, color: 'bg-emerald-500', text: 'text-emerald-600', message: '✓ Strong password · Ready to continue' };
+    if (passedRulesCount < 5) return { label: 'Strong', score: 3, color: 'bg-trust-verified', text: 'text-trust-verified', message: '✔ All requirements met' };
+    return { label: 'Very Strong', score: 4, color: 'bg-trust-verified', text: 'text-trust-verified', message: '✓ Strong password · Ready to continue' };
   };
 
   const strength = getStrengthState();
@@ -41,7 +40,7 @@ export const ResetPasswordPage = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!token) {
-      setError('Password reset token is missing. Please request a new password reset link.');
+      setError('This password reset link is invalid or missing its token.');
       return;
     }
     if (!isStrong) {
@@ -57,13 +56,10 @@ export const ResetPasswordPage = () => {
     setIsLoading(true);
 
     try {
-      await authApi.resetPassword({ token, password, confirmPassword });
+      await resetPassword({ token, password, confirmPassword });
       setIsSuccess(true);
-      setTimeout(() => {
-        navigate('/login');
-      }, 2500);
     } catch (err) {
-      setError(err.message || 'This password reset link is invalid or has expired.');
+      setError(err.message || 'Unable to reset your password. The link may have expired.');
     } finally {
       setIsLoading(false);
     }
@@ -74,8 +70,8 @@ export const ResetPasswordPage = () => {
       {!isSuccess ? (
         <>
           <div>
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight">Create New Password</h1>
-            <p className="text-xs text-slate-500 mt-1">
+            <h1 className="text-2xl font-black text-trust-ink tracking-tight">Create New Password</h1>
+            <p className="text-xs text-trust-slate mt-1">
               Your new password must satisfy TrustNet security requirements.
             </p>
           </div>
@@ -102,7 +98,7 @@ export const ResetPasswordPage = () => {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3.5 top-9 text-slate-400 hover:text-slate-600 text-xs"
+                className="absolute right-3.5 top-9 text-trust-slate hover:text-trust-ink text-xs"
                 disabled={isLoading || !token}
               >
                 {showPassword ? <EyeOff className="w-4 h-4" strokeWidth={1.75} /> : <Eye className="w-4 h-4" strokeWidth={1.75} />}
@@ -113,37 +109,37 @@ export const ResetPasswordPage = () => {
             {password.length > 0 && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs font-semibold">
-                  <span className="text-slate-500">Strength:</span>
+                  <span className="text-trust-slate">Strength:</span>
                   <span className={strength.text}>{strength.label}</span>
                 </div>
 
-                <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden flex gap-1">
+                <div className="h-1.5 w-full bg-trust-slate/10 rounded-full overflow-hidden flex gap-1">
                   <div className={`h-full flex-1 transition-all duration-300 ${strength.score >= 1 ? strength.color : 'bg-slate-200'}`} />
                   <div className={`h-full flex-1 transition-all duration-300 ${strength.score >= 2 ? strength.color : 'bg-slate-200'}`} />
                   <div className={`h-full flex-1 transition-all duration-300 ${strength.score >= 3 ? strength.color : 'bg-slate-200'}`} />
                   <div className={`h-full flex-1 transition-all duration-300 ${strength.score >= 4 ? strength.color : 'bg-slate-200'}`} />
                 </div>
 
-                <p className="text-[11px] font-bold text-slate-700 pt-0.5">{strength.message}</p>
+                <p className="text-[11px] font-bold text-trust-ink pt-0.5">{strength.message}</p>
               </div>
             )}
 
             {/* Checklist: Auto-Collapses when Strong */}
             {!isStrong && password.length > 0 && (
-              <div className="p-3 bg-slate-50 rounded-xl space-y-1.5 text-[11px] border border-slate-200/80 transition-all duration-300">
-                <div className={`flex items-center gap-2 ${hasMinLength ? 'text-emerald-600 font-semibold' : 'text-slate-400'}`}>
+              <div className="p-3 bg-trust-slate/5 rounded-xl space-y-1.5 text-[11px] border border-trust-slate/20 transition-all duration-300">
+                <div className={`flex items-center gap-2 ${hasMinLength ? 'text-trust-verified font-semibold' : 'text-trust-slate'}`}>
                   {hasMinLength ? <Check className="w-3.5 h-3.5" strokeWidth={2.5} /> : <X className="w-3.5 h-3.5" />}
                   <span>Minimum 8 characters</span>
                 </div>
-                <div className={`flex items-center gap-2 ${hasNumber ? 'text-emerald-600 font-semibold' : 'text-slate-400'}`}>
+                <div className={`flex items-center gap-2 ${hasNumber ? 'text-trust-verified font-semibold' : 'text-trust-slate'}`}>
                   {hasNumber ? <Check className="w-3.5 h-3.5" strokeWidth={2.5} /> : <X className="w-3.5 h-3.5" />}
                   <span>At least 1 number (0-9)</span>
                 </div>
-                <div className={`flex items-center gap-2 ${hasUppercase ? 'text-emerald-600 font-semibold' : 'text-slate-400'}`}>
+                <div className={`flex items-center gap-2 ${hasUppercase ? 'text-trust-verified font-semibold' : 'text-trust-slate'}`}>
                   {hasUppercase ? <Check className="w-3.5 h-3.5" strokeWidth={2.5} /> : <X className="w-3.5 h-3.5" />}
                   <span>At least 1 uppercase letter (A-Z)</span>
                 </div>
-                <div className={`flex items-center gap-2 ${hasSpecialChar ? 'text-emerald-600 font-semibold' : 'text-slate-400'}`}>
+                <div className={`flex items-center gap-2 ${hasSpecialChar ? 'text-trust-verified font-semibold' : 'text-trust-slate'}`}>
                   {hasSpecialChar ? <Check className="w-3.5 h-3.5" strokeWidth={2.5} /> : <X className="w-3.5 h-3.5" />}
                   <span>At least 1 special character (!@#$)</span>
                 </div>
@@ -151,8 +147,8 @@ export const ResetPasswordPage = () => {
             )}
 
             {isStrong && (
-              <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-xs font-bold text-emerald-700 flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" strokeWidth={1.75} />
+              <div className="p-3 bg-trust-verified/10 rounded-xl border border-trust-verified/30 text-xs font-bold text-trust-verified flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-trust-verified" strokeWidth={1.75} />
                 <span>✓ Strong password · Ready to continue</span>
               </div>
             )}
@@ -172,7 +168,7 @@ export const ResetPasswordPage = () => {
               <button
                 type="button"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                className="absolute right-3.5 top-9 text-slate-400 hover:text-slate-600 text-xs"
+                className="absolute right-3.5 top-9 text-trust-slate hover:text-trust-ink text-xs"
                 disabled={isLoading || !token}
               >
                 {showConfirmPassword ? <EyeOff className="w-4 h-4" strokeWidth={1.75} /> : <Eye className="w-4 h-4" strokeWidth={1.75} />}
@@ -187,19 +183,19 @@ export const ResetPasswordPage = () => {
         </>
       ) : (
         <div className="text-center space-y-6 py-6">
-          <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-inner animate-bounce">
+          <div className="w-16 h-16 bg-trust-verified/10 text-trust-verified rounded-full flex items-center justify-center mx-auto shadow-inner animate-bounce">
             <CheckCircle2 className="w-9 h-9" strokeWidth={1.75} />
           </div>
 
           <div>
-            <h2 className="text-2xl font-black text-slate-900">Password Updated!</h2>
-            <p className="text-xs text-slate-500 mt-2">
-              Your password has been updated successfully. Redirecting to login in 2 seconds...
+            <h2 className="text-2xl font-black text-trust-ink">Password Updated!</h2>
+            <p className="text-xs text-trust-slate mt-2">
+              Your password has been updated successfully.
             </p>
           </div>
 
-          <Button variant="primary" size="lg" className="w-full h-12" onClick={() => navigate('/login')}>
-            <span>Sign In Now</span>
+          <Button variant="primary" size="lg" className="w-full h-12" onClick={() => navigate('/login', { replace: true })}>
+            <span>Back to Login</span>
             <ArrowRight className="w-4 h-4" strokeWidth={1.75} />
           </Button>
         </div>

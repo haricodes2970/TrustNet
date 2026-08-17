@@ -105,34 +105,34 @@ export const CommandPalette = () => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setIsCommandPaletteOpen(false)}
-            className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs"
+            className="fixed inset-0 bg-trust-ink/50"
           />
 
           <motion.div
             initial={{ opacity: 0, scale: 0.96, y: -10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: -10 }}
-            className="relative w-full max-w-xl bg-white rounded-2xl shadow-soft-lg border border-slate-200/80 overflow-hidden z-10"
+            className="relative w-full max-w-xl bg-trust-paper rounded-lg shadow-soft-sm border border-trust-ink/15 overflow-hidden z-10"
           >
-            <div className="flex items-center px-4 border-b border-slate-100 bg-slate-50/50 min-h-[52px]">
-              <Search className="w-4 h-4 text-slate-400 mr-3" strokeWidth={1.75} />
+            <div className="flex items-center px-4 border-b border-trust-ink/10 bg-white min-h-[52px]">
+              <Search className="w-4 h-4 text-trust-slate mr-3" strokeWidth={1.75} />
               <input
                 type="text"
                 autoFocus
                 placeholder="Type a command or search (Ctrl + K)..."
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                className="w-full py-3 text-sm bg-transparent border-none text-slate-900 focus:outline-none placeholder:text-slate-400 font-medium"
+                className="w-full py-3 text-sm bg-transparent border-none text-trust-ink focus:outline-none placeholder:text-trust-slate font-medium"
               />
               <button
                 onClick={() => setIsCommandPaletteOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-md"
+                className="p-2 text-trust-slate hover:text-trust-ink rounded focus-ring"
               >
                 <X className="w-4 h-4" strokeWidth={1.75} />
               </button>
             </div>
 
-            <div className="max-h-80 overflow-y-auto p-2 divide-y divide-slate-100">
+            <div className="max-h-80 overflow-y-auto p-2 divide-y divide-trust-ink/10">
               {filteredItems.length > 0 ? (
                 filteredItems.map((item, idx) => {
                   const Icon = item.icon;
@@ -143,30 +143,30 @@ export const CommandPalette = () => {
                       onClick={() => handleSelect(item.path)}
                       className={`w-full flex items-center justify-between p-3 rounded-xl text-left transition-all ${
                         isSelected
-                          ? 'bg-emerald-50 text-emerald-700 font-semibold border-l-4 border-emerald-500'
-                          : 'hover:bg-slate-50 text-slate-700'
+                          ? 'bg-trust-verified/10 text-trust-verified font-semibold border-l-4 border-trust-verified'
+                          : 'hover:bg-white text-trust-ink'
                       }`}
                     >
                       <div className="flex items-center gap-3">
                         <div className={`p-2 rounded-lg transition-colors ${
-                          isSelected ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-500'
+                          isSelected ? 'bg-trust-verified text-white' : 'bg-white text-trust-slate'
                         }`}>
                           <Icon className="w-4 h-4" strokeWidth={1.75} />
                         </div>
                         <span className="text-sm font-semibold">{item.label}</span>
                       </div>
-                      <span className="text-xs text-slate-400 font-medium">{item.category}</span>
+                      <span className="text-xs text-trust-slate font-medium">{item.category}</span>
                     </button>
                   );
                 })
               ) : (
-                <div className="p-8 text-center text-xs text-slate-500">
+                <div className="p-8 text-center text-xs text-trust-slate">
                   No commands found matching "{query}"
                 </div>
               )}
             </div>
 
-            <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-100 text-xs text-slate-400 flex items-center justify-between">
+            <div className="px-4 py-2.5 bg-white border-t border-trust-ink/10 text-xs text-trust-slate flex items-center justify-between">
               <span>Use <kbd className="px-1.5 py-0.5 bg-white border border-slate-200 rounded text-[10px] font-mono">↑</kbd> <kbd className="px-1.5 py-0.5 bg-white border border-slate-200 rounded text-[10px] font-mono">↓</kbd> to navigate</span>
               <span><kbd className="px-1.5 py-0.5 bg-white border border-slate-200 rounded text-[10px] font-mono">ENTER</kbd> to select</span>
             </div>

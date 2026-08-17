@@ -3,43 +3,19 @@ import { useNavigate, useLocation, useSearchParams, Link } from 'react-router-do
 import { ShieldCheck, ArrowRight, ArrowLeft, RefreshCw } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { useAuth } from '../../context/AuthContext';
-import * as authApi from '../../lib/authApi';
 import { useApp } from '../../context/AppContext';
+import { resendVerification, verifyEmail } from '../../lib/authApi';
 
 export const VerifyOtpPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const { completeTwoFactorLogin, refreshUser, currentUser, isAuthenticated } = useAuth();
+  const { completeTwoFactorLogin, currentUser, refreshCurrentUser } = useAuth();
   const { showToast } = useApp();
-  const userEmail = currentUser?.email || location.state?.email || '';
+  const userEmail = location.state?.email || currentUser?.email || '';
 
-  // Redirect if already verified
-  useEffect(() => {
-    if (isAuthenticated && currentUser?.emailVerified) {
-      if (!currentUser?.onboardingCompleted) {
-        navigate('/onboarding', { replace: true });
-      } else if (!currentUser?.isVerified && currentUser?.role !== 'admin' && currentUser?.role !== 'administrator') {
-        navigate('/verification', { replace: true });
-      } else {
-        navigate('/app/dashboard', { replace: true });
-      }
-    }
-  }, [isAuthenticated, currentUser, navigate]);
-
-  // Redirect to login if no email is available
-  useEffect(() => {
-    if (!userEmail) {
-      navigate('/login', { replace: true });
-    }
-  }, [userEmail, navigate]);
-
-  // Real 2FA-login case: arrives here from LoginPage (state.twoFactorToken,
-  // after POST /auth/login returned requiresTwoFactor) or from an OAuth
-  // redirect (backend sends 2FA-enabled users to
-  // /login?twoFactorToken=... -- LoginPage forwards them here).
-
-
+  // Login 2FA uses a short-lived token; signup and unverified-login use
+  // the email OTP issued by the backend during registration.
   const twoFactorToken = location.state?.twoFactorToken || searchParams.get('twoFactorToken');
 
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
@@ -97,20 +73,14 @@ export const VerifyOtpPage = () => {
     }
   };
 
-  const handleResend = async () => {
+  const handleResend = () => {
     if (!canResend) return;
     setResendTimer(60);
     setCanResend(false);
     setError('');
-    setIsLoading(true);
-    try {
-      await authApi.resendVerification({ email: userEmail });
-      showToast('Verification Code Resent', 'A new 6-digit OTP code has been sent.', 'success');
-    } catch (err) {
-      setError(err.message || 'Failed to resend verification code.');
-    } finally {
-      setIsLoading(false);
-    }
+    resendVerification({ email: userEmail })
+      .then(() => showToast('Verification Code Resent', 'A new 6-digit OTP code has been sent.', 'success'))
+      .catch((err) => setError(err.message || 'Unable to resend a code.'));
   };
 
   const handleSubmit = async (e) => {
@@ -126,8 +96,11 @@ export const VerifyOtpPage = () => {
 
     if (twoFactorToken) {
       try {
-        await completeTwoFactorLogin(twoFactorToken, code);
-        navigate('/app/dashboard', { replace: true });
+        const result = await completeTwoFactorLogin(twoFactorToken, code);
+        navigate(result.user?.emailVerified && result.user?.verificationStatus === 'approved' ? '/app/dashboard' : result.user?.emailVerified ? '/verification' : '/verify-otp', {
+          replace: true,
+          state: result.user?.emailVerified ? undefined : { email: userEmail },
+        });
       } catch (err) {
         setError(err.message || 'Invalid or expired authentication code.');
       } finally {
@@ -136,16 +109,14 @@ export const VerifyOtpPage = () => {
       return;
     }
 
-    // Email verification path (real API call)
+    // Registration / login OTP path: real POST /auth/verify-email, then
+    // refresh the session and continue to the KYC document flow.
     try {
-      await authApi.verifyEmail({ email: userEmail, otp: code });
-      showToast('Email Verified Successfully', 'Your TrustNet account is now active.', 'success');
-      if (isAuthenticated) {
-        await refreshUser();
-        navigate('/onboarding', { replace: true });
-      } else {
-        navigate('/login', { state: { justVerified: true, email: userEmail } });
-      }
+      if (!userEmail) throw new Error('Sign in again to verify your email address.');
+      await verifyEmail({ email: userEmail, otp: code });
+      await refreshCurrentUser();
+      showToast('Email Verified', 'Your email is now verified. Continue with your KYC documents.', 'success');
+      navigate('/verification', { replace: true });
     } catch (err) {
       setError(err.message || 'Invalid or expired verification code.');
     } finally {
@@ -156,30 +127,30 @@ export const VerifyOtpPage = () => {
   return (
     <div className="space-y-6 max-w-sm mx-auto">
       <Link
-        to="/forgot-password"
-        className="inline-flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-emerald-600 transition-colors"
+        to="/login"
+        className="inline-flex items-center gap-2 text-xs font-bold text-trust-slate hover:text-trust-verified transition-colors"
       >
         <ArrowLeft className="w-4 h-4" />
         <span>Back</span>
       </Link>
 
       <div className="text-center space-y-2">
-        <div className="w-14 h-14 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 rounded-2xl flex items-center justify-center mx-auto shadow-soft-sm">
+        <div className="w-14 h-14 bg-trust-verified/10 text-trust-verified rounded-2xl flex items-center justify-center mx-auto shadow-soft-sm">
           <ShieldCheck className="w-8 h-8" />
         </div>
 
-        <h1 className="text-xl font-black text-slate-900 dark:text-white">
+        <h1 className="text-xl font-black text-trust-ink">
           {twoFactorToken ? 'Two-Factor Authentication' : 'Enter Verification Code'}
         </h1>
-        <p className="text-xs text-slate-500 dark:text-slate-400">
+        <p className="text-xs text-trust-slate">
           {twoFactorToken
             ? 'Enter the 6-digit code from your authenticator app.'
-            : <>We sent a 6-digit OTP code to <span className="font-semibold text-slate-700 dark:text-slate-300">{userEmail}</span>.</>}
+            : <>We sent a 6-digit OTP code to <span className="font-semibold text-trust-ink">{userEmail || 'your email address'}</span>.</>}
         </p>
       </div>
 
       {error && (
-        <div className="p-3 text-xs bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400 rounded-xl text-center border border-red-200 dark:border-red-900">
+        <div className="p-3 text-xs bg-red-50 text-red-600 rounded-xl text-center border border-red-200 font-medium">
           {error}
         </div>
       )}
@@ -198,7 +169,7 @@ export const VerifyOtpPage = () => {
               onKeyDown={(e) => handleKeyDown(idx, e)}
               disabled={isLoading}
               aria-label={`Digit ${idx + 1}`}
-              className="w-11 h-12 text-center text-lg font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-11 h-12 text-center text-lg font-bold bg-white border border-trust-slate/20 text-trust-ink rounded-xl focus:outline-none focus:ring-2 focus:ring-trust-verified/40 focus:border-trust-verified transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             />
           ))}
         </div>
@@ -210,20 +181,20 @@ export const VerifyOtpPage = () => {
       </form>
 
       {!twoFactorToken && (
-      <div className="text-center text-xs text-slate-500 dark:text-slate-400">
-        Didn't receive code?{' '}
-        <button
-          type="button"
-          onClick={handleResend}
-          disabled={!canResend}
-          className={`font-bold inline-flex items-center gap-1 ${
-            canResend ? 'text-emerald-600 hover:underline cursor-pointer' : 'text-slate-400 cursor-not-allowed'
-          }`}
-        >
-          <RefreshCw className={`w-3 h-3 ${!canResend ? 'animate-spin' : ''}`} />
-          {canResend ? 'Resend Code' : `Resend in ${resendTimer}s`}
-        </button>
-      </div>
+        <div className="text-center text-xs text-trust-slate">
+          Didn't receive code?{' '}
+          <button
+            type="button"
+            onClick={handleResend}
+            disabled={!canResend}
+            className={`font-bold inline-flex items-center gap-1 ${
+              canResend ? 'text-trust-verified hover:underline cursor-pointer' : 'text-trust-slate cursor-not-allowed'
+            }`}
+          >
+            <RefreshCw className={`w-3 h-3 ${!canResend ? 'animate-spin' : ''}`} />
+            {canResend ? 'Resend Code' : `Resend in ${resendTimer}s`}
+          </button>
+        </div>
       )}
     </div>
   );
