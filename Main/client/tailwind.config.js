@@ -16,13 +16,20 @@ export default {
           alert: '#B23A32',    // rejected / error / destructive
           slate: '#5B6472',    // secondary text / borders / dividers
         },
-        // The old emerald `brand` scale (0 usages) and the green `slate`
-        // override were removed. `slate-*` now falls back to Tailwind's
-        // neutral default; use the `trust-*` tokens for all brand surfaces.
+        // Legacy alias kept for upstream components that reference it;
+        // maps to the same TrustNet token palette (no emerald).
+        trustnet: {
+          bg: '#F7F5EF',
+          text: '#0E1A2B',
+          primary: '#0F6E5C',
+          pending: '#C8862B',
+          rejected: '#B23A32',
+          secondary: '#5B6472',
+        },
       },
       fontFamily: {
+        sans: ['IBM Plex Sans', 'Plus Jakarta Sans', 'Inter', 'system-ui', 'sans-serif'],
         display: ['Fraunces', 'Georgia', 'serif'],
-        sans: ['IBM Plex Sans', 'Inter', 'system-ui', 'sans-serif'],
         mono: ['IBM Plex Mono', 'ui-monospace', 'monospace'],
       },
       boxShadow: {
@@ -30,6 +37,7 @@ export default {
         'soft-sm': '0 2px 8px rgba(14, 26, 43, 0.08)',
         'soft-md': '0 2px 8px rgba(14, 26, 43, 0.08)',
         'soft-lg': '0 2px 8px rgba(14, 26, 43, 0.08)',
+        'trustnet-shadow': '0 2px 8px rgba(14, 26, 43, 0.08)',
       },
     },
   },

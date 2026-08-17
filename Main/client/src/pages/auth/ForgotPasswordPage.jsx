@@ -36,7 +36,7 @@ export const ForgotPasswordPage = () => {
     <div className="space-y-6">
       <Link
         to="/login"
-        className="inline-flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-emerald-600 transition-colors"
+        className="inline-flex items-center gap-2 text-xs font-bold text-trust-slate hover:text-trust-verified transition-colors"
       >
         <ArrowLeft className="w-4 h-4" />
         <span>Back to Login</span>
@@ -45,14 +45,14 @@ export const ForgotPasswordPage = () => {
       {!isSent ? (
         <>
           <div>
-            <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Reset your password</h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Enter your work email address and we'll send you a 6-digit OTP verification code.
+            <h1 className="text-2xl font-black text-trust-ink tracking-tight">Reset your password</h1>
+            <p className="text-xs text-trust-slate mt-1">
+              Enter your work email address and we'll send you a password reset link.
             </p>
           </div>
 
           {error && (
-            <div className="p-3 text-xs bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400 rounded-xl border border-red-200 dark:border-red-900">
+            <div className="p-3 text-xs bg-red-50 text-red-600 rounded-xl border border-red-200 font-medium">
               {error}
             </div>
           )}
@@ -65,6 +65,7 @@ export const ForgotPasswordPage = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="alex@nexusai.io"
+              disabled={isLoading}
               required
             />
 
@@ -72,31 +73,31 @@ export const ForgotPasswordPage = () => {
               type="submit"
               variant="primary"
               size="lg"
-              className="w-full"
+              className="w-full h-12"
               isLoading={isLoading}
             >
-              <span>Send Reset OTP</span>
+              <span>Send Reset Link</span>
               <ArrowRight className="w-4 h-4" />
             </Button>
           </form>
         </>
       ) : (
         <div className="text-center space-y-6 py-4">
-          <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mx-auto shadow-inner">
+          <div className="w-16 h-16 bg-trust-verified/10 text-trust-verified rounded-full flex items-center justify-center mx-auto shadow-inner">
             <CheckCircle2 className="w-8 h-8" />
           </div>
 
           <div>
-            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Email Sent Successfully</h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 max-w-sm mx-auto leading-relaxed">
-              If an account exists for <span className="font-bold text-slate-800 dark:text-slate-200">{email}</span>, we've sent a password reset link. Please check your inbox.
+            <h2 className="text-xl font-bold text-trust-ink">Email Sent Successfully</h2>
+            <p className="text-xs text-trust-slate mt-2 max-w-sm mx-auto leading-relaxed">
+              If an account exists for <span className="font-bold text-trust-ink">{email}</span>, we've sent a password reset link. Please check your inbox.
             </p>
           </div>
 
           <Button
             variant="primary"
             size="lg"
-            className="w-full"
+            className="w-full h-12"
             onClick={() => navigate('/login')}
           >
             <span>Back to Login</span>

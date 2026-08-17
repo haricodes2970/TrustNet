@@ -15,7 +15,7 @@ export const ResetPasswordPage = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(token ? '' : 'Password reset token is missing. Please request a new password reset link.');
 
   // Password Requirements Evaluation
   const hasMinLength = password.length >= 8;
@@ -39,16 +39,16 @@ export const ResetPasswordPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!token) {
+      setError('This password reset link is invalid or missing its token.');
+      return;
+    }
     if (!isStrong) {
       setError('Password is too weak. Please meet security rules.');
       return;
     }
     if (password !== confirmPassword) {
       setError('Passwords do not match.');
-      return;
-    }
-    if (!token) {
-      setError('This password reset link is invalid or missing its token.');
       return;
     }
 
@@ -58,9 +58,6 @@ export const ResetPasswordPage = () => {
     try {
       await resetPassword({ token, password, confirmPassword });
       setIsSuccess(true);
-      setTimeout(() => {
-        navigate('/login');
-      }, 2500);
     } catch (err) {
       setError(err.message || 'Unable to reset your password. The link may have expired.');
     } finally {
@@ -73,8 +70,8 @@ export const ResetPasswordPage = () => {
       {!isSuccess ? (
         <>
           <div>
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight">Create New Password</h1>
-            <p className="text-xs text-slate-500 mt-1">
+            <h1 className="text-2xl font-black text-trust-ink tracking-tight">Create New Password</h1>
+            <p className="text-xs text-trust-slate mt-1">
               Your new password must satisfy TrustNet security requirements.
             </p>
           </div>
@@ -95,12 +92,14 @@ export const ResetPasswordPage = () => {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••••••"
                 className="h-12"
+                disabled={isLoading || !token}
                 required
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3.5 top-9 text-slate-400 hover:text-slate-600 text-xs"
+                className="absolute right-3.5 top-9 text-trust-slate hover:text-trust-ink text-xs"
+                disabled={isLoading || !token}
               >
                 {showPassword ? <EyeOff className="w-4 h-4" strokeWidth={1.75} /> : <Eye className="w-4 h-4" strokeWidth={1.75} />}
               </button>
@@ -110,37 +109,37 @@ export const ResetPasswordPage = () => {
             {password.length > 0 && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs font-semibold">
-                  <span className="text-slate-500">Strength:</span>
+                  <span className="text-trust-slate">Strength:</span>
                   <span className={strength.text}>{strength.label}</span>
                 </div>
 
-                <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden flex gap-1">
+                <div className="h-1.5 w-full bg-trust-slate/10 rounded-full overflow-hidden flex gap-1">
                   <div className={`h-full flex-1 transition-all duration-300 ${strength.score >= 1 ? strength.color : 'bg-slate-200'}`} />
                   <div className={`h-full flex-1 transition-all duration-300 ${strength.score >= 2 ? strength.color : 'bg-slate-200'}`} />
                   <div className={`h-full flex-1 transition-all duration-300 ${strength.score >= 3 ? strength.color : 'bg-slate-200'}`} />
                   <div className={`h-full flex-1 transition-all duration-300 ${strength.score >= 4 ? strength.color : 'bg-slate-200'}`} />
                 </div>
 
-                <p className="text-[11px] font-bold text-slate-700 pt-0.5">{strength.message}</p>
+                <p className="text-[11px] font-bold text-trust-ink pt-0.5">{strength.message}</p>
               </div>
             )}
 
             {/* Checklist: Auto-Collapses when Strong */}
             {!isStrong && password.length > 0 && (
-              <div className="p-3 bg-slate-50 rounded-xl space-y-1.5 text-[11px] border border-slate-200/80 transition-all duration-300">
-                <div className={`flex items-center gap-2 ${hasMinLength ? 'text-trust-verified font-semibold' : 'text-slate-400'}`}>
+              <div className="p-3 bg-trust-slate/5 rounded-xl space-y-1.5 text-[11px] border border-trust-slate/20 transition-all duration-300">
+                <div className={`flex items-center gap-2 ${hasMinLength ? 'text-trust-verified font-semibold' : 'text-trust-slate'}`}>
                   {hasMinLength ? <Check className="w-3.5 h-3.5" strokeWidth={2.5} /> : <X className="w-3.5 h-3.5" />}
                   <span>Minimum 8 characters</span>
                 </div>
-                <div className={`flex items-center gap-2 ${hasNumber ? 'text-trust-verified font-semibold' : 'text-slate-400'}`}>
+                <div className={`flex items-center gap-2 ${hasNumber ? 'text-trust-verified font-semibold' : 'text-trust-slate'}`}>
                   {hasNumber ? <Check className="w-3.5 h-3.5" strokeWidth={2.5} /> : <X className="w-3.5 h-3.5" />}
                   <span>At least 1 number (0-9)</span>
                 </div>
-                <div className={`flex items-center gap-2 ${hasUppercase ? 'text-trust-verified font-semibold' : 'text-slate-400'}`}>
+                <div className={`flex items-center gap-2 ${hasUppercase ? 'text-trust-verified font-semibold' : 'text-trust-slate'}`}>
                   {hasUppercase ? <Check className="w-3.5 h-3.5" strokeWidth={2.5} /> : <X className="w-3.5 h-3.5" />}
                   <span>At least 1 uppercase letter (A-Z)</span>
                 </div>
-                <div className={`flex items-center gap-2 ${hasSpecialChar ? 'text-trust-verified font-semibold' : 'text-slate-400'}`}>
+                <div className={`flex items-center gap-2 ${hasSpecialChar ? 'text-trust-verified font-semibold' : 'text-trust-slate'}`}>
                   {hasSpecialChar ? <Check className="w-3.5 h-3.5" strokeWidth={2.5} /> : <X className="w-3.5 h-3.5" />}
                   <span>At least 1 special character (!@#$)</span>
                 </div>
@@ -163,18 +162,20 @@ export const ResetPasswordPage = () => {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="••••••••••••"
                 className="h-12"
+                disabled={isLoading || !token}
                 required
               />
               <button
                 type="button"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                className="absolute right-3.5 top-9 text-slate-400 hover:text-slate-600 text-xs"
+                className="absolute right-3.5 top-9 text-trust-slate hover:text-trust-ink text-xs"
+                disabled={isLoading || !token}
               >
                 {showConfirmPassword ? <EyeOff className="w-4 h-4" strokeWidth={1.75} /> : <Eye className="w-4 h-4" strokeWidth={1.75} />}
               </button>
             </div>
 
-            <Button type="submit" variant="primary" size="lg" className="w-full h-12 mt-4" isLoading={isLoading} disabled={!isStrong}>
+            <Button type="submit" variant="primary" size="lg" className="w-full h-12 mt-4" isLoading={isLoading} disabled={!isStrong || !token}>
               <span>Update Password</span>
               <ArrowRight className="w-4 h-4" strokeWidth={1.75} />
             </Button>
@@ -187,14 +188,14 @@ export const ResetPasswordPage = () => {
           </div>
 
           <div>
-            <h2 className="text-2xl font-black text-slate-900">Password Updated!</h2>
-            <p className="text-xs text-slate-500 mt-2">
-              Your password has been updated successfully. Redirecting to login in 2 seconds...
+            <h2 className="text-2xl font-black text-trust-ink">Password Updated!</h2>
+            <p className="text-xs text-trust-slate mt-2">
+              Your password has been updated successfully.
             </p>
           </div>
 
-          <Button variant="primary" size="lg" className="w-full h-12" onClick={() => navigate('/login')}>
-            <span>Sign In Now</span>
+          <Button variant="primary" size="lg" className="w-full h-12" onClick={() => navigate('/login', { replace: true })}>
+            <span>Back to Login</span>
             <ArrowRight className="w-4 h-4" strokeWidth={1.75} />
           </Button>
         </div>

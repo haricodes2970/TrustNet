@@ -11,14 +11,26 @@ export const IdentityUploadCard = ({
   isUrlInput = false,
   urlValue = '',
   onUrlChange,
-  placeholder = 'https://example.com'
+  placeholder = 'https://example.com',
+  file: propFile,
+  progress: propProgress,
+  status: propStatus,
+  errorMessage: propErrorMessage,
+  onRemove
 }) => {
   const [dragActive, setDragActive] = useState(false);
-  const [file, setFile] = useState(null);
-  const [progress, setProgress] = useState(0);
-  const [status, setStatus] = useState('idle'); // 'idle' | 'uploading' | 'success' | 'error'
-  const [errorMessage, setErrorMessage] = useState('');
+  const [localFile, setLocalFile] = useState(null);
+  const [localProgress, setLocalProgress] = useState(0);
+  const [localStatus, setLocalStatus] = useState('idle'); // 'idle' | 'uploading' | 'success' | 'error'
+  const [localErrorMessage, setLocalErrorMessage] = useState('');
   const fileInputRef = useRef(null);
+
+  const isControlled = propStatus !== undefined;
+
+  const file = isControlled ? propFile : localFile;
+  const progress = isControlled ? propProgress : localProgress;
+  const status = isControlled ? propStatus : localStatus;
+  const errorMessage = isControlled ? propErrorMessage : localErrorMessage;
 
   const processFile = (selectedFile) => {
     if (!selectedFile) return;
@@ -31,26 +43,39 @@ export const IdentityUploadCard = ({
       allowedTypes.some(type => type.startsWith('.') && fileExtension === type.toLowerCase());
 
     if (allowedTypes.length > 0 && !isAllowedType) {
-      setStatus('error');
-      setErrorMessage(`Invalid file format. Supported: JPEG, PNG, PDF.`);
-      onFileSelect?.(null);
+      if (isControlled) {
+        onFileSelect?.(null, `Invalid file format. Supported: JPEG, PNG, PDF.`);
+      } else {
+        setLocalStatus('error');
+        setLocalErrorMessage(`Invalid file format. Supported: JPEG, PNG, PDF.`);
+        onFileSelect?.(null);
+      }
       return;
     }
 
     // Validate File Size
     const maxSizeBytes = maxSizeMB * 1024 * 1024;
     if (selectedFile.size > maxSizeBytes) {
-      setStatus('error');
-      setErrorMessage(`File is too large. Max limit is ${maxSizeMB}MB.`);
-      onFileSelect?.(null);
+      if (isControlled) {
+        onFileSelect?.(null, `File is too large. Max limit is ${maxSizeMB}MB.`);
+      } else {
+        setLocalStatus('error');
+        setLocalErrorMessage(`File is too large. Max limit is ${maxSizeMB}MB.`);
+        onFileSelect?.(null);
+      }
+      return;
+    }
+
+    if (isControlled) {
+      onFileSelect?.(selectedFile);
       return;
     }
 
     // Process valid file
-    setFile(selectedFile);
-    setStatus('uploading');
-    setErrorMessage('');
-    setProgress(0);
+    setLocalFile(selectedFile);
+    setLocalStatus('uploading');
+    setLocalErrorMessage('');
+    setLocalProgress(0);
 
     // Simulate upload progress
     const duration = 1200; // 1.2s total duration
@@ -58,10 +83,10 @@ export const IdentityUploadCard = ({
     const step = 100 / (duration / intervalTime);
 
     const timer = setInterval(() => {
-      setProgress((oldProgress) => {
+      setLocalProgress((oldProgress) => {
         if (oldProgress >= 100) {
           clearInterval(timer);
-          setStatus('success');
+          setLocalStatus('success');
           onFileSelect?.(selectedFile);
           return 100;
         }
@@ -73,6 +98,7 @@ export const IdentityUploadCard = ({
   const handleDrag = (e) => {
     e.preventDefault();
     e.stopPropagation();
+    if (status === 'uploading') return;
     if (e.type === "dragenter" || e.type === "dragover") {
       setDragActive(true);
     } else if (e.type === "dragleave") {
@@ -84,6 +110,7 @@ export const IdentityUploadCard = ({
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
+    if (status === 'uploading') return;
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       processFile(e.dataTransfer.files[0]);
     }
@@ -96,6 +123,7 @@ export const IdentityUploadCard = ({
   };
 
   const onButtonClick = () => {
+    if (status === 'uploading') return;
     fileInputRef.current?.click();
   };
 
@@ -108,15 +136,21 @@ export const IdentityUploadCard = ({
 
   const resetFile = (e) => {
     e.stopPropagation();
-    setFile(null);
-    setProgress(0);
-    setStatus('idle');
-    setErrorMessage('');
+    if (isControlled) {
+      onRemove?.();
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+    setLocalFile(null);
+    setLocalProgress(0);
+    setLocalStatus('idle');
+    setLocalErrorMessage('');
     if (fileInputRef.current) fileInputRef.current.value = '';
     onFileSelect?.(null);
   };
 
   const formatBytes = (bytes, decimals = 2) => {
+    if (!bytes) return '';
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
     const dm = decimals < 0 ? 0 : decimals;

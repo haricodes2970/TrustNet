@@ -27,14 +27,18 @@ export const LandingPage = () => {
   const navigate = useNavigate();
   const [activeFaq, setActiveFaq] = useState(null);
   const [startups, setStartups] = useState([]);
+  const [startupsLoading, setStartupsLoading] = useState(true);
   const [startupsError, setStartupsError] = useState('');
 
   useEffect(() => {
     (async () => {
+      setStartupsLoading(true);
       try {
         setStartups(await listStartups({}, { limit: 3 }));
       } catch (error) {
         setStartupsError(error.message || 'Featured startups are unavailable right now.');
+      } finally {
+        setStartupsLoading(false);
       }
     })();
   }, []);
@@ -142,25 +146,44 @@ export const LandingPage = () => {
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {startups.map((startup) => (
-            <Card key={startup._id || startup.id} hoverEffect className="p-5 border-slate-200">
-              <div className="flex items-center gap-3 mb-3">
-                {startup.logoUrl ? <img src={startup.logoUrl} alt={startup.name} className="w-10 h-10 rounded-xl object-cover" /> : <div className="w-10 h-10 rounded-xl bg-trust-verified/10 text-trust-verified flex items-center justify-center font-bold">{startup.name?.charAt(0)}</div>}
-                <div>
-                  <h4 className="text-sm font-bold text-slate-900">{startup.name}</h4>
-                  <p className="text-xs text-slate-500">{startup.stage} • {startup.industry}</p>
+        {startupsLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[0, 1, 2].map((idx) => (
+              <Card key={idx} hoverEffect className="p-5 border-slate-200 animate-pulse">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-xl bg-slate-100" />
+                  <div className="space-y-2">
+                    <div className="h-3 w-24 bg-slate-100 rounded" />
+                    <div className="h-2 w-16 bg-slate-100 rounded" />
+                  </div>
                 </div>
-              </div>
-              <p className="text-xs text-slate-600 line-clamp-2 mb-4">{startup.tagline}</p>
-              <div className="flex items-center justify-between text-xs pt-3 border-t border-slate-100 font-semibold text-emerald-700">
-                <span>{startup.category || 'Startup'}</span>
-                <span className="text-slate-900">{startup.status || 'Active'}</span>
-              </div>
-            </Card>
-          ))}
-        </div>
-        {!startups.length && <p className="mt-4 text-sm text-slate-500">{startupsError || 'No featured startups are available yet.'}</p>}
+                <div className="h-2 w-full bg-slate-100 rounded mb-4" />
+                <div className="h-2 w-1/2 bg-slate-100 rounded pt-3" />
+              </Card>
+            ))}
+          </div>
+        ) : startups.length ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {startups.map((startup) => (
+              <Card key={startup._id || startup.id} hoverEffect className="p-5 border-slate-200">
+                <div className="flex items-center gap-3 mb-3">
+                  {startup.logoUrl ? <img src={startup.logoUrl} alt={startup.name} className="w-10 h-10 rounded-xl object-cover" /> : <div className="w-10 h-10 rounded-xl bg-trust-verified/10 text-trust-verified flex items-center justify-center font-bold">{startup.name?.charAt(0)}</div>}
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-900">{startup.name}</h4>
+                    <p className="text-xs text-slate-500">{startup.stage} • {startup.industry}</p>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-600 line-clamp-2 mb-4">{startup.tagline}</p>
+                <div className="flex items-center justify-between text-xs pt-3 border-t border-slate-100 font-semibold text-emerald-700">
+                  <span>{startup.category || 'Startup'}</span>
+                  <span className="text-slate-900">{startup.status || 'Active'}</span>
+                </div>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-slate-500">{startupsError || 'No featured startups are available yet.'}</p>
+        )}
       </section>
 
 

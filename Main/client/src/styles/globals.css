@@ -43,3 +43,14 @@
 }
 
 .animate-shimmer { background: #e5e7eb; animation: pulse 1.5s infinite; }
+
+/* TrustNet Design System Font Overrides */
+.font-display {
+  font-family: 'Fraunces', serif;
+}
+.font-ui {
+  font-family: 'IBM Plex Sans', 'Plus Jakarta Sans', sans-serif;
+}
+.font-mono {
+  font-family: 'IBM Plex Mono', monospace;
+}

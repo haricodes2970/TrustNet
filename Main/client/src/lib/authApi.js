@@ -1,4 +1,7 @@
-// Calls the real backend Auth module (src/routes/auth.routes.js).
+// Calls the real backend Auth module (src/routes/auth.routes.js). Only
+// wraps endpoints that actually exist and do something — this backend's
+// /auth/verify-email and /auth/resend-verification are now fully active, as
+// are /auth/forgot-password and /auth/reset-password.
 import { apiClient, setToken } from './apiClient';
 
 export async function register({ email, password, fullName, username }) {

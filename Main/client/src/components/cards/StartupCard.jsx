@@ -10,22 +10,21 @@ export const StartupCard = ({ startup }) => {
   const navigate = useNavigate();
   const { toggleBookmark } = useApp();
 
-  const progressPercent = startup.fundingTarget
-    ? Math.min(100, Math.round((startup.fundingRaised / startup.fundingTarget) * 100))
-    : 0;
+  const progressPercent = Math.min(
+    100,
+    Math.round((startup.fundingRaised / startup.fundingTarget) * 100)
+  );
 
   return (
     <Card hoverEffect className="group flex flex-col justify-between h-full border-slate-200/90">
       <div>
         {/* Banner & Logo */}
-        <div className="relative h-28 w-full bg-gradient-to-br from-emerald-500/20 to-slate-200 overflow-hidden">
-          {startup.banner && (
-            <img
-              src={startup.banner}
-              alt={startup.name}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-            />
-          )}
+        <div className="relative h-28 w-full bg-slate-100 overflow-hidden">
+          <img
+            src={startup.banner}
+            alt={startup.name}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+          />
           <div className="absolute inset-0 bg-gradient-to-t from-slate-950/60 via-transparent to-transparent" />
           <button
             onClick={(e) => {
@@ -38,29 +37,21 @@ export const StartupCard = ({ startup }) => {
           </button>
 
           <div className="absolute bottom-3 left-4 flex items-center gap-2">
-            <Badge variant="emerald">{startup.stageLabel || startup.stage}</Badge>
-            {startup.industry && (
-              <Badge variant="slate" className="bg-white/90 text-slate-800 backdrop-blur-sm">
-                {startup.industry}
-              </Badge>
-            )}
+            <Badge variant="emerald">{startup.stage}</Badge>
+            <Badge variant="slate" className="bg-white/90 text-slate-800 backdrop-blur-sm">
+              {startup.industry}
+            </Badge>
           </div>
         </div>
 
         <div className="p-5">
           {/* Logo & Title */}
           <div className="flex items-start gap-3.5 mb-3">
-            {startup.logo ? (
-              <img
-                src={startup.logo}
-                alt={startup.name}
-                className="w-12 h-12 rounded-xl object-cover ring-2 ring-white shadow-soft-sm -mt-8 relative z-10 bg-white"
-              />
-            ) : (
-              <div className="w-12 h-12 rounded-xl ring-2 ring-white shadow-soft-sm -mt-8 relative z-10 bg-emerald-500 text-white flex items-center justify-center text-sm font-bold">
-                {startup.name?.charAt(0) || '?'}
-              </div>
-            )}
+            <img
+              src={startup.logo}
+              alt={startup.name}
+              className="w-12 h-12 rounded-xl object-cover ring-2 ring-white shadow-soft-sm -mt-8 relative z-10 bg-white"
+            />
             <div className="min-w-0 flex-1">
               <h3
                 onClick={() => navigate(`/app/startups/${startup.id}`)}
@@ -93,35 +84,26 @@ export const StartupCard = ({ startup }) => {
             </div>
           </div>
 
-          {/* Tech Stack Pills -- backend has no techStack field; only
-              renders when present (e.g. future data), never fabricated */}
-          {startup.techStack?.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {startup.techStack.slice(0, 3).map((tech, idx) => (
-                <span key={idx} className="px-2 py-0.5 text-[11px] font-medium bg-slate-100 text-slate-600 rounded-md">
-                  {tech}
-                </span>
-              ))}
-              {startup.techStack.length > 3 && (
-                <span className="px-2 py-0.5 text-[11px] font-medium bg-slate-100 text-slate-400 rounded-md">
-                  +{startup.techStack.length - 3}
-                </span>
-              )}
-            </div>
-          )}
+          {/* Tech Stack Pills */}
+          <div className="flex flex-wrap gap-1.5">
+            {startup.techStack.slice(0, 3).map((tech, idx) => (
+              <span key={idx} className="px-2 py-0.5 text-[11px] font-medium bg-slate-100 text-slate-600 rounded-md">
+                {tech}
+              </span>
+            ))}
+            {startup.techStack.length > 3 && (
+              <span className="px-2 py-0.5 text-[11px] font-medium bg-slate-100 text-slate-400 rounded-md">
+                +{startup.techStack.length - 3}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
       <div className="px-5 pb-5 pt-0 flex items-center justify-between gap-2 border-t border-slate-100/60 mt-2">
         <span className="text-xs text-slate-500 font-medium flex items-center gap-1">
-          {startup.teamSize !== undefined ? (
-            <>
-              <Users className="w-3.5 h-3.5 text-slate-400" />
-              {startup.teamSize} members
-            </>
-          ) : (
-            <span className="text-slate-400">{startup.status || ''}</span>
-          )}
+          <Users className="w-3.5 h-3.5 text-slate-400" />
+          {startup.teamSize} members
         </span>
         <Button
           size="sm"

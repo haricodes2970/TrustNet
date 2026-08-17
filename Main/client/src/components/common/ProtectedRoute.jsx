@@ -4,17 +4,17 @@ import { useAuth } from '../../context/AuthContext';
 import { SkeletonPage } from '../ui/SkeletonLoaders';
 
 export const ProtectedRoute = ({ children, allowedRoles = [], requireVerifiedEmail = false, requireApprovedVerification = false }) => {
-  const { currentUser, isAuthenticated, isLoading } = useAuth();
+  const { currentUser, isAuthenticated, isLoading, authState } = useAuth();
   const location = useLocation();
 
   // Still resolving the stored token via GET /auth/me on initial load --
   // don't redirect to /login yet, that would bounce an already-logged-in
   // user on every page refresh.
-  if (isLoading) {
+  if (isLoading || authState === 'initializing') {
     return <SkeletonPage />;
   }
 
-  if (!isAuthenticated && !currentUser) {
+  if (!isAuthenticated || authState === 'unauthenticated' || authState === 'expired') {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
@@ -22,7 +22,7 @@ export const ProtectedRoute = ({ children, allowedRoles = [], requireVerifiedEma
   const userRole = (currentUser?.role || '').toLowerCase();
   const normalizedAllowedRoles = allowedRoles.map(r => r.toLowerCase());
 
-  const hasPermission = normalizedAllowedRoles.length === 0 || 
+  const hasPermission = normalizedAllowedRoles.length === 0 ||
     normalizedAllowedRoles.includes(userRole) ||
     (userRole === 'administrator' && normalizedAllowedRoles.includes('admin')) ||
     (userRole === 'admin' && normalizedAllowedRoles.includes('administrator'));

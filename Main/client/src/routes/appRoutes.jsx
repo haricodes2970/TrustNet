@@ -37,6 +37,17 @@ const AdminDashboardPage = lazy(() => import('../pages/admin/AdminDashboardPage'
 const AccessDeniedPage = lazy(() => import('../pages/auth/AccessDeniedPage').then(m => ({ default: m.AccessDeniedPage })));
 const VerificationPage = lazy(() => import('../pages/verification/VerificationPage').then(m => ({ default: m.VerificationPage })));
 
+// Upstream-only pages (teammate features) preserved alongside P0 routes.
+const SearchPage = lazy(() => import('../pages/search/SearchPage').then(m => ({ default: m.SearchPage })));
+const StartupTeamPage = lazy(() => import('../pages/startups/StartupTeamPage').then(m => ({ default: m.StartupTeamPage })));
+const ProjectDetailPage = lazy(() => import('../pages/workspace/ProjectDetailPage').then(m => ({ default: m.ProjectDetailPage })));
+const InvestmentReadinessPage = lazy(() => import('../pages/ai/InvestmentReadinessPage').then(m => ({ default: m.InvestmentReadinessPage })));
+const MyServicesPage = lazy(() => import('../pages/provider/MyServicesPage').then(m => ({ default: m.MyServicesPage })));
+const EngagementRequestsPage = lazy(() => import('../pages/engagementRequests/EngagementRequestsPage').then(m => ({ default: m.EngagementRequestsPage })));
+const FundingMarketplacePage = lazy(() => import('../pages/marketplace/FundingMarketplacePage').then(m => ({ default: m.FundingMarketplacePage })));
+const ServiceDetailPage = lazy(() => import('../pages/marketplace/ServiceDetailPage').then(m => ({ default: m.ServiceDetailPage })));
+const StartupMarketplacePage = lazy(() => import('../pages/marketplace/StartupMarketplacePage').then(m => ({ default: m.StartupMarketplacePage })));
+
 // System / fallback
 const MaintenancePage = lazy(() => import('../components/common/SystemStates').then(m => ({ default: m.MaintenancePage })));
 const ComingSoonPage = lazy(() => import('../components/common/SystemStates').then(m => ({ default: m.ComingSoonPage })));
@@ -84,6 +95,7 @@ export const appRoutes = (
         path="startups/:id/manage"
         element={<StartupManagementDashboard />}
       />
+      <Route path="startups/:id/team" element={<StartupTeamPage />} />
 
       <Route path="investor" element={<DashboardPage />} />
       <Route path="mentor" element={<DashboardPage />} />
@@ -104,12 +116,22 @@ export const appRoutes = (
 
       {/* Workspace / Tools */}
       <Route path="workspace" element={<WorkspacePage />} />
+      <Route path="workspace/:id" element={<WorkspacePage />} />
+      <Route path="projects/:id" element={<ProjectDetailPage />} />
       <Route path="marketplace" element={<MarketplacePage />} />
+      <Route path="discover/marketplace" element={<MarketplacePage />} />
+      <Route path="marketplace/funding" element={<FundingMarketplacePage />} />
+      <Route path="marketplace/startups" element={<StartupMarketplacePage />} />
+      <Route path="service-listings/:id" element={<ServiceDetailPage />} />
+      <Route path="provider/services" element={<MyServicesPage />} />
+      <Route path="engagement-requests" element={<EngagementRequestsPage />} />
       <Route path="reports" element={<ReportsPage />} />
       <Route path="ai" element={<AIInsightsPage />} />
+      <Route path="ai/investment-readiness" element={<InvestmentReadinessPage />} />
 
       <Route path="connections" element={<ComingSoonPage />} />
       <Route path="saved" element={<ComingSoonPage />} />
+      <Route path="search" element={<SearchPage />} />
       <Route path="analytics" element={<AnalyticsPage />} />
       <Route path="files" element={<FilesPage />} />
       <Route path="activity" element={<ComingSoonPage />} />
@@ -140,8 +162,21 @@ export const appRoutes = (
           </ProtectedRoute>
         }
       />
-    </Route>
+     </Route>
 
+
+    {/* =========================================================
+        ROOT-LEVEL REDIRECTS (legacy deep-link compatibility).
+        Upstream routed these directly under /; the app layout lives
+        under /app, so redirect for a single canonical home.
+        ========================================================= */}
+    <Route path="/feed" element={<Navigate to="/app/feed" replace />} />
+    <Route path="/search" element={<Navigate to="/app/search" replace />} />
+    <Route path="/notifications" element={<Navigate to="/app/notifications" replace />} />
+    <Route path="/discover/marketplace" element={<Navigate to="/app/discover/marketplace" replace />} />
+    <Route path="/service-listings/:id" element={<Navigate to="/app/service-listings/:id" replace />} />
+    <Route path="/provider/services" element={<Navigate to="/app/provider/services" replace />} />
+    <Route path="/engagement-requests" element={<Navigate to="/app/engagement-requests" replace />} />
 
     {/* =========================================================
         VERIFICATION FLOW
