@@ -7,7 +7,22 @@ import { useAuth } from '../../context/AuthContext';
 
 export const SignupPage = () => {
   const navigate = useNavigate();
-  const { register } = useAuth();
+  const { register, currentUser, isAuthenticated } = useAuth();
+
+  // Redirect already logged-in users to their appropriate stage
+  useEffect(() => {
+    if (isAuthenticated && currentUser) {
+      if (!currentUser.emailVerified) {
+        navigate('/verify-otp', { replace: true, state: { email: currentUser.email } });
+      } else if (!currentUser.onboardingCompleted) {
+        navigate('/onboarding', { replace: true });
+      } else if (!currentUser.isVerified && currentUser.role !== 'admin' && currentUser.role !== 'administrator') {
+        navigate('/verification', { replace: true });
+      } else {
+        navigate('/app/dashboard', { replace: true });
+      }
+    }
+  }, [isAuthenticated, currentUser, navigate]);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

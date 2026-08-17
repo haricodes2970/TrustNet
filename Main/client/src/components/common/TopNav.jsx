@@ -47,7 +47,7 @@ export const TopNav = () => {
             onClick={() => navigate('/app/profile')}
             className="flex items-center gap-2 cursor-pointer p-1 rounded hover:bg-trust-verified/5 transition-colors focus-ring"
           >
-            <Avatar src={currentUser?.avatar} alt={currentUser?.name} size="sm" isVerified />
+            <Avatar src={currentUser?.avatar} alt={currentUser?.name} size="sm" isVerified={currentUser?.isVerified || false} />
           </div>
         </div>
       </div>

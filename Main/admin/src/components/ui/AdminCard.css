@@ -1,0 +1,49 @@
+.admin-card {
+  background-color: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-normal);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.admin-card.interactive {
+  cursor: pointer;
+}
+
+.admin-card.interactive:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--color-emerald);
+}
+
+.admin-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem 0.75rem 1.5rem;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.admin-card-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-text-dark);
+  margin: 0;
+}
+
+.admin-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.admin-card-body {
+  padding: 1.5rem;
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+}

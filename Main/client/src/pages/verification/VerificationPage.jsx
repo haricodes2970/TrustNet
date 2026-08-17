@@ -24,7 +24,7 @@ import { BASE_URL, getToken } from '../../lib/apiClient';
 
 export const VerificationPage = () => {
   const { showToast } = useApp();
-  const { currentUser } = useAuth();
+  const { currentUser, refreshUser } = useAuth();
 
   const [docsState, setDocsState] = useState({
     government_id: { file: null, progress: 0, status: 'idle', errorMessage: '' },
@@ -58,6 +58,12 @@ export const VerificationPage = () => {
       setVerificationStatus(data.status);
       setAccountStatus(data.accountStatus);
       setSubmittedAt(data.submittedAt);
+
+      if (data.status === 'approved') {
+        await refreshUser();
+        showToast('Ecosystem Verified', 'Your identity has been verified successfully. Welcome to TrustNet!', 'success');
+        return;
+      }
 
       // Map backend documents array back to docsState
       const nextDocs = {
@@ -373,6 +379,26 @@ export const VerificationPage = () => {
                 <span>Submit Verification Review</span>
               </Button>
             </div>
+          </div>
+        </Card>
+      )}
+
+      {verificationStatus === 'pending' && (
+        <Card className="p-6 border-slate-200 dark:border-slate-800 text-center space-y-4 bg-white dark:bg-slate-900 rounded-3xl shadow-soft-sm">
+          <div className="space-y-1">
+            <h3 className="text-sm font-bold text-slate-850 dark:text-white">Review in Progress</h3>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto">
+              An administrator is reviewing your uploaded documents. Check back shortly to refresh your status.
+            </p>
+          </div>
+          <div className="pt-2">
+            <Button 
+              variant="primary" 
+              size="md" 
+              onClick={fetchStatus}
+            >
+              <span>Check Verification Status</span>
+            </Button>
           </div>
         </Card>
       )}

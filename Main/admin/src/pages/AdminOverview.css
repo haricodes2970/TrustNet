@@ -1,0 +1,142 @@
+.admin-overview-container {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+/* KPI Cards Layout */
+.overview-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.25rem;
+}
+
+/* Two-Column Middle Section Layout */
+.overview-main-content-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+  align-items: start;
+}
+
+.section-title-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.dashboard-section-title {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--color-text-dark);
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.priority-badge-count {
+  font-size: 0.8rem;
+  font-weight: 700;
+  background-color: var(--color-status-pending-bg);
+  color: var(--color-status-pending);
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
+  border: 1px solid var(--color-status-pending-border);
+}
+
+.priority-actions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* Bottom Charts Section */
+.platform-growth-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-top: 1rem;
+}
+
+/* Skeletons */
+.kpi-card-skeleton {
+  background-color: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-height: 120px;
+}
+
+.skeleton-title {
+  width: 40%;
+  height: 14px;
+  background-color: var(--color-border-light);
+  border-radius: 4px;
+}
+
+.skeleton-value {
+  width: 60%;
+  height: 32px;
+  background-color: var(--color-border-light);
+  border-radius: 4px;
+}
+
+.skeleton-context {
+  width: 50%;
+  height: 12px;
+  background-color: var(--color-border-light);
+  border-radius: 4px;
+}
+
+/* Error Banner */
+.overview-error-banner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  background-color: var(--color-status-danger-bg);
+  border: 1px solid var(--color-status-danger-border);
+  border-radius: 12px;
+  color: var(--color-status-danger);
+  margin-bottom: 1.5rem;
+}
+
+.error-banner-content {
+  flex-grow: 1;
+}
+
+.error-banner-content h4 {
+  font-weight: 700;
+  margin: 0 0 0.25rem 0;
+  color: var(--color-status-danger);
+}
+
+.error-banner-content p {
+  font-size: 0.88rem;
+  margin: 0;
+  color: var(--color-status-danger);
+}
+
+.retry-btn {
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  background-color: var(--color-status-danger) !important;
+}
+
+.refresh-btn {
+  height: 38px;
+}
+
+/* Responsiveness upgrades */
+@media (min-width: 1200px) {
+  .overview-main-content-layout {
+    grid-template-columns: 1.2fr 1fr; /* Priority Actions slightly wider than Activity log on wide screens */
+  }
+}
+
