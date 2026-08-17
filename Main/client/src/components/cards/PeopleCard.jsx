@@ -89,11 +89,12 @@ export const PeopleCard = ({ user }) => {
         ) : (
           <Button
             size="sm"
-            variant="primary"
-            className="w-full"
-            onClick={() => updateConnectionStatus(user.id, 'pending_sent')}
+            variant="outline"
+            className="w-full text-slate-400 cursor-not-allowed hover:bg-white hover:border-slate-200"
+            disabled
+            title="Connection system is pending backend deployment"
           >
-            <UserPlus className="w-3.5 h-3.5" />
+            <UserPlus className="w-3.5 h-3.5 text-slate-400" />
             <span>Connect</span>
           </Button>
         )}
